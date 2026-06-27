@@ -79,18 +79,18 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
+      { title: "Smart Email Sender" },
       { name: "description", content: "Smart Email Sender is a SaaS web app for sending personalized emails directly from your Gmail." },
       { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
+      { property: "og:title", content: "Smart Email Sender" },
       { property: "og:description", content: "Smart Email Sender is a SaaS web app for sending personalized emails directly from your Gmail." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
-      { name: "twitter:title", content: "Lovable App" },
+      { name: "twitter:title", content: "Smart Email Sender" },
       { name: "twitter:description", content: "Smart Email Sender is a SaaS web app for sending personalized emails directly from your Gmail." },
-      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/y4RpFYolNdSKudqN40lYoIFWvKA3/social-images/social-1782564238597-52531a06-314d-4ef0-b0df-fb61d17b0e7b.webp" },
-      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/y4RpFYolNdSKudqN40lYoIFWvKA3/social-images/social-1782564238597-52531a06-314d-4ef0-b0df-fb61d17b0e7b.webp" },
+      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/y4RpFYolNdSKudqN40lYoIFWvKA3/social-images/social-1782564396698-e442d0e3-12a3-4c31-bcba-37361f4ceafd.webp" },
+      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/y4RpFYolNdSKudqN40lYoIFWvKA3/social-images/social-1782564396698-e442d0e3-12a3-4c31-bcba-37361f4ceafd.webp" },
     ],
     links: [
       {
