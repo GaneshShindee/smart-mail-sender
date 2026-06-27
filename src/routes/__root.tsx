@@ -79,18 +79,17 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
+      { title: "Smart Email Sender" },
       { name: "description", content: "Smart Email Sender is a SaaS web app for sending personalized emails directly from your Gmail." },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
+      { property: "og:title", content: "Smart Email Sender" },
       { property: "og:description", content: "Smart Email Sender is a SaaS web app for sending personalized emails directly from your Gmail." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
-      { name: "twitter:site", content: "@Lovable" },
-      { name: "twitter:title", content: "Lovable App" },
+      { name: "twitter:title", content: "Smart Email Sender" },
       { name: "twitter:description", content: "Smart Email Sender is a SaaS web app for sending personalized emails directly from your Gmail." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/81fdc789-10a6-4a81-af8d-82c4393a087f/id-preview-c69a4f58--078993fe-2028-43ab-996a-59a48df8cfcd.lovable.app-1782561268229.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/81fdc789-10a6-4a81-af8d-82c4393a087f/id-preview-c69a4f58--078993fe-2028-43ab-996a-59a48df8cfcd.lovable.app-1782561268229.png" },
+    ],
+    links: [
+      { rel: "icon", type: "image/png", href: logoAsset.url },
     ],
     links: [
       {
