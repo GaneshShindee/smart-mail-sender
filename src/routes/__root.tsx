@@ -13,7 +13,6 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { supabase } from "@/integrations/supabase/client";
 import { Toaster } from "@/components/ui/sonner";
-import logoAsset from "@/assets/logo.png.asset.json";
 
 function NotFoundComponent() {
   return (
@@ -80,17 +79,20 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Smart Email Sender" },
+      { title: "Lovable App" },
       { name: "description", content: "Smart Email Sender is a SaaS web app for sending personalized emails directly from your Gmail." },
-      { property: "og:title", content: "Smart Email Sender" },
+      { name: "author", content: "Lovable" },
+      { property: "og:title", content: "Lovable App" },
       { property: "og:description", content: "Smart Email Sender is a SaaS web app for sending personalized emails directly from your Gmail." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
-      { name: "twitter:title", content: "Smart Email Sender" },
+      { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:title", content: "Lovable App" },
       { name: "twitter:description", content: "Smart Email Sender is a SaaS web app for sending personalized emails directly from your Gmail." },
+      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/y4RpFYolNdSKudqN40lYoIFWvKA3/social-images/social-1782564238597-52531a06-314d-4ef0-b0df-fb61d17b0e7b.webp" },
+      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/y4RpFYolNdSKudqN40lYoIFWvKA3/social-images/social-1782564238597-52531a06-314d-4ef0-b0df-fb61d17b0e7b.webp" },
     ],
     links: [
-      { rel: "icon", type: "image/png", href: logoAsset.url },
       {
         rel: "stylesheet",
         href: appCss,
