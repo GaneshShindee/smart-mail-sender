@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 import { lovable } from "@/integrations/lovable";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Mail, ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
+import logoAsset from "@/assets/logo.png.asset.json";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/auth")({

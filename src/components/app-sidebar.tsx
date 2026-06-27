@@ -1,5 +1,6 @@
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
-import { LayoutDashboard, LayoutTemplate, Send, History, Settings, LogOut, Mail } from "lucide-react";
+import { LayoutDashboard, LayoutTemplate, Send, History, Settings, LogOut } from "lucide-react";
+import logoAsset from "@/assets/logo.png.asset.json";
 import {
   Sidebar,
   SidebarContent,
