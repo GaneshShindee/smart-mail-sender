@@ -43,7 +43,7 @@ function AuthPage() {
       </Link>
       <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-8 shadow-xl">
         <div className="mb-6 flex items-center gap-2">
-          <div className="grid h-9 w-9 place-items-center rounded-lg bg-primary text-primary-foreground"><Mail className="h-4 w-4" /></div>
+          <img src={logoAsset.url} alt="Logo" className="h-9 w-9 rounded-lg" />
           <div>
             <div className="font-semibold">Smart Email Sender</div>
             <div className="text-xs text-muted-foreground">Sign in to continue</div>

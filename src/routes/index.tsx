@@ -22,7 +22,7 @@ function Index() {
       <header className="border-b border-border/50 backdrop-blur-sm">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-2 font-semibold">
-            <div className="grid h-8 w-8 place-items-center rounded-lg bg-primary text-primary-foreground"><Mail className="h-4 w-4" /></div>
+            <img src={logoAsset.url} alt="Logo" className="h-8 w-8 rounded-lg" />
             Smart Email Sender
           </div>
           <Button asChild size="sm"><Link to="/auth">Sign in</Link></Button>

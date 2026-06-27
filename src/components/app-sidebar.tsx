@@ -43,9 +43,7 @@ export function AppSidebar() {
     <Sidebar collapsible="icon">
       <SidebarHeader>
         <div className="flex items-center gap-2 px-2 py-1.5">
-          <div className="grid h-8 w-8 place-items-center rounded-lg bg-primary text-primary-foreground shrink-0">
-            <Mail className="h-4 w-4" />
-          </div>
+          <img src={logoAsset.url} alt="Logo" className="h-8 w-8 shrink-0 rounded-lg" />
           {!collapsed && <div className="font-semibold text-sm">Email Sender</div>}
         </div>
       </SidebarHeader>
