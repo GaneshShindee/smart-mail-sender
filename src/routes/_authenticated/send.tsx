@@ -13,7 +13,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useMemo, useState } from "react";
 import { extractVariables, applyTemplate } from "@/lib/templating";
 import { toast } from "sonner";
-import { Send } from "lucide-react";
+import { Send, Sparkles } from "lucide-react";
+import { EmailGeneratorDialog } from "@/components/email-generator-dialog";
 
 export const Route = createFileRoute("/_authenticated/send")({
   head: () => ({ meta: [{ title: "Send Email — Smart Email Sender" }] }),
@@ -34,6 +35,7 @@ function SendPage() {
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [vars, setVars] = useState<Record<string, string>>({});
+  const [genOpen, setGenOpen] = useState(false);
 
   const variables = useMemo(() => extractVariables(`${subject}\n${body}`), [subject, body]);
   const previewSubject = applyTemplate(subject, vars);
@@ -91,7 +93,12 @@ function SendPage() {
               </Select>
             </div>
             <div>
-              <Label>Recipient(s)</Label>
+              <div className="flex items-center justify-between">
+                <Label>Recipient(s)</Label>
+                <Button type="button" variant="outline" size="sm" onClick={() => setGenOpen(true)}>
+                  <Sparkles className="h-3.5 w-3.5 mr-1" /> Generate Emails
+                </Button>
+              </div>
               <Input value={recipient} onChange={(e) => setRecipient(e.target.value)} placeholder="hr@company.com, recruiter@company.com" />
               <p className="text-xs text-muted-foreground mt-1">Comma-separate to send to multiple addresses. Your Gmail will be BCC'd automatically.</p>
             </div>
@@ -135,6 +142,15 @@ function SendPage() {
           </CardContent>
         </Card>
       </div>
+      <EmailGeneratorDialog
+        open={genOpen}
+        onOpenChange={setGenOpen}
+        onUse={(emails) => {
+          const existing = recipient.split(",").map((s) => s.trim()).filter(Boolean);
+          const merged = Array.from(new Set([...existing, ...emails]));
+          setRecipient(merged.join(", "));
+        }}
+      />
     </div>
   );
 }
