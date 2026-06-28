@@ -88,11 +88,21 @@ export const duplicateInstructionTemplate = createServerFn({ method: "POST" })
       .eq("user_id", context.userId)
       .single();
     if (e1 || !src) throw new Error(e1?.message ?? "Template not found");
-    const { id: _id, created_at: _c, updated_at: _u, ...rest } = src as Record<string, unknown>;
-    void _id; void _c; void _u;
+    const s = src as InstructionTemplate;
     const { data: row, error } = await context.supabase
       .from("instruction_templates")
-      .insert({ ...rest, name: `${(src as { name: string }).name} (copy)` })
+      .insert({
+        user_id: context.userId,
+        name: `${s.name} (copy)`,
+        email_pattern: s.email_pattern,
+        custom_pattern: s.custom_pattern,
+        company_domain: s.company_domain,
+        batch_size: s.batch_size,
+        rules: s.rules,
+        prefixes: s.prefixes,
+        custom_rules: s.custom_rules,
+        surname_min_length: s.surname_min_length,
+      })
       .select()
       .single();
     if (error) throw new Error(error.message);
