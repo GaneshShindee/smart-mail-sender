@@ -97,6 +97,54 @@ export type Database = {
         }
         Relationships: []
       }
+      instruction_templates: {
+        Row: {
+          batch_size: number
+          company_domain: string
+          created_at: string
+          custom_pattern: string
+          custom_rules: Json
+          email_pattern: string
+          id: string
+          name: string
+          prefixes: Json
+          rules: Json
+          surname_min_length: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          batch_size?: number
+          company_domain?: string
+          created_at?: string
+          custom_pattern?: string
+          custom_rules?: Json
+          email_pattern?: string
+          id?: string
+          name: string
+          prefixes?: Json
+          rules?: Json
+          surname_min_length?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          batch_size?: number
+          company_domain?: string
+          created_at?: string
+          custom_pattern?: string
+          custom_rules?: Json
+          email_pattern?: string
+          id?: string
+          name?: string
+          prefixes?: Json
+          rules?: Json
+          surname_min_length?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
