@@ -19,7 +19,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 const items = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
-  { title: "Templates", url: "/templates", icon: LayoutTemplate },
+  { title: "My Templates", url: "/templates", icon: LayoutTemplate },
   { title: "Send Email", url: "/send", icon: Send },
   { title: "History", url: "/history", icon: History },
   { title: "Settings", url: "/settings", icon: Settings },

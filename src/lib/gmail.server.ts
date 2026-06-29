@@ -102,12 +102,17 @@ export async function refreshAccessToken(refreshToken: string) {
 }
 
 export async function fetchUserEmail(accessToken: string): Promise<string> {
+  const info = await fetchUserInfo(accessToken);
+  return info.email;
+}
+
+export async function fetchUserInfo(accessToken: string): Promise<{ email: string; name?: string; picture?: string }> {
   const res = await fetch("https://openidconnect.googleapis.com/v1/userinfo", {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!res.ok) throw new Error("Failed to fetch userinfo");
-  const json = (await res.json()) as { email: string };
-  return json.email;
+  const json = (await res.json()) as { email: string; name?: string; picture?: string };
+  return { email: json.email, name: json.name, picture: json.picture };
 }
 
 function base64url(input: string) {
