@@ -19,8 +19,10 @@ export type Database = {
           bcc: string | null
           body: string
           error: string | null
+          gmail_account_id: string | null
           id: string
           recipient: string
+          sender_email: string | null
           sent_at: string
           status: string
           subject: string
@@ -32,8 +34,10 @@ export type Database = {
           bcc?: string | null
           body: string
           error?: string | null
+          gmail_account_id?: string | null
           id?: string
           recipient: string
+          sender_email?: string | null
           sent_at?: string
           status?: string
           subject: string
@@ -45,8 +49,10 @@ export type Database = {
           bcc?: string | null
           body?: string
           error?: string | null
+          gmail_account_id?: string | null
           id?: string
           recipient?: string
+          sender_email?: string | null
           sent_at?: string
           status?: string
           subject?: string
@@ -55,6 +61,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "email_history_gmail_account_id_fkey"
+            columns: ["gmail_account_id"]
+            isOneToOne: false
+            referencedRelation: "gmail_connections"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "email_history_template_id_fkey"
             columns: ["template_id"]
@@ -67,9 +80,14 @@ export type Database = {
       gmail_connections: {
         Row: {
           access_token: string | null
+          avatar_url: string | null
           connected_at: string
           expires_at: string | null
+          full_name: string | null
           gmail_email: string
+          id: string
+          is_default: boolean
+          label: string | null
           refresh_token: string
           scope: string | null
           updated_at: string
@@ -77,9 +95,14 @@ export type Database = {
         }
         Insert: {
           access_token?: string | null
+          avatar_url?: string | null
           connected_at?: string
           expires_at?: string | null
+          full_name?: string | null
           gmail_email: string
+          id?: string
+          is_default?: boolean
+          label?: string | null
           refresh_token: string
           scope?: string | null
           updated_at?: string
@@ -87,9 +110,14 @@ export type Database = {
         }
         Update: {
           access_token?: string | null
+          avatar_url?: string | null
           connected_at?: string
           expires_at?: string | null
+          full_name?: string | null
           gmail_email?: string
+          id?: string
+          is_default?: boolean
+          label?: string | null
           refresh_token?: string
           scope?: string | null
           updated_at?: string
