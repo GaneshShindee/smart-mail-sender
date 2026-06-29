@@ -16,7 +16,7 @@ import { EmptyState } from "./dashboard";
 import { extractVariables } from "@/lib/templating";
 
 export const Route = createFileRoute("/_authenticated/templates")({
-  head: () => ({ meta: [{ title: "Templates — Smart Email Sender" }] }),
+  head: () => ({ meta: [{ title: "My Templates — Smart Email Sender" }] }),
   component: TemplatesPage,
 });
 
@@ -50,7 +50,7 @@ function TemplatesPage() {
     <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Templates</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">My Templates</h1>
           <p className="text-sm text-muted-foreground">Use <code className="text-xs bg-muted px-1 py-0.5 rounded">{`{{placeholder}}`}</code> syntax to insert dynamic fields.</p>
         </div>
         <Button onClick={() => setEditing({ name: "", subject: "", body: "" })}><Plus className="h-4 w-4 mr-2" />New template</Button>
