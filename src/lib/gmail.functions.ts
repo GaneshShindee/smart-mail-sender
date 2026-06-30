@@ -144,6 +144,13 @@ const sendSchema = z.object({
   subject: z.string().min(1).max(998),
   body: z.string().min(1).max(100_000),
   variables: z.record(z.string()).optional(),
+  resumeIds: z.array(z.string().uuid()).max(10).optional(),
+  uploads: z.array(z.object({
+    filename: z.string().min(1).max(255),
+    mimeType: z.string().min(1).max(128),
+    base64: z.string().min(1),
+    size: z.number().int().positive().max(25 * 1024 * 1024),
+  })).max(10).optional(),
 });
 
 export const sendEmail = createServerFn({ method: "POST" })
@@ -162,7 +169,7 @@ export const sendEmail = createServerFn({ method: "POST" })
     if (connErr) throw new Error(connErr.message);
     if (!conn) throw new Error("Gmail is not connected. Connect Gmail in Settings.");
 
-    const { refreshAccessToken, buildRawEmail, gmailSend } = await import("./gmail.server");
+    const { refreshAccessToken, buildRawEmailWithAttachments, gmailSend } = await import("./gmail.server");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     let accessToken = conn.access_token ?? "";
@@ -196,13 +203,50 @@ export const sendEmail = createServerFn({ method: "POST" })
       templateName = t?.name ?? null;
     }
 
+    // Resolve attachments: saved resumes fetched server-side from storage, plus inline uploads.
+    type Att = { filename: string; mimeType: string; data: Buffer; size: number; source: "resume" | "upload" };
+    const attachments: Att[] = [];
+    const attachmentMeta: Array<{ name: string; size: number; source: "resume" | "upload" }> = [];
+
+    if (data.resumeIds && data.resumeIds.length > 0) {
+      const { data: rows, error: rErr } = await supabase
+        .from("resumes")
+        .select("id, storage_path, original_filename, mime_type, size_bytes")
+        .in("id", data.resumeIds)
+        .eq("user_id", userId);
+      if (rErr) throw new Error(rErr.message);
+      for (const r of rows ?? []) {
+        const { data: blob, error: dErr } = await supabaseAdmin.storage.from("resumes").download(r.storage_path);
+        if (dErr || !blob) throw new Error(`Failed to read resume: ${dErr?.message ?? "missing"}`);
+        const ab = await blob.arrayBuffer();
+        attachments.push({
+          filename: r.original_filename,
+          mimeType: r.mime_type,
+          data: Buffer.from(ab),
+          size: r.size_bytes,
+          source: "resume",
+        });
+        attachmentMeta.push({ name: r.original_filename, size: r.size_bytes, source: "resume" });
+      }
+    }
+    for (const u of data.uploads ?? []) {
+      const buf = Buffer.from(u.base64, "base64");
+      attachments.push({ filename: u.filename, mimeType: u.mimeType, data: buf, size: u.size, source: "upload" });
+      attachmentMeta.push({ name: u.filename, size: u.size, source: "upload" });
+    }
+    const totalAttachSize = attachments.reduce((n, a) => n + a.size, 0);
+    if (totalAttachSize > 25 * 1024 * 1024) {
+      throw new Error("Attachments exceed 25 MB total.");
+    }
+
     try {
-      const raw = buildRawEmail({
+      const raw = buildRawEmailWithAttachments({
         from: conn.gmail_email,
         to,
         bcc,
         subject,
         body,
+        attachments,
       });
       const result = await gmailSend(accessToken, raw);
       await supabaseAdmin.from("email_history").insert({
@@ -216,6 +260,8 @@ export const sendEmail = createServerFn({ method: "POST" })
         status: "sent",
         gmail_account_id: conn.id,
         sender_email: conn.gmail_email,
+        attachments: attachmentMeta,
+        recipient_count: deduped.length,
       });
       return { ok: true, messageId: result.id, recipientCount: deduped.length };
     } catch (err) {
@@ -232,6 +278,8 @@ export const sendEmail = createServerFn({ method: "POST" })
         error: msg.slice(0, 1000),
         gmail_account_id: conn.id,
         sender_email: conn.gmail_email,
+        attachments: attachmentMeta,
+        recipient_count: deduped.length,
       });
       throw new Error(msg);
     }
