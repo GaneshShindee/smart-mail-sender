@@ -17,7 +17,7 @@ export const Route = createFileRoute("/api/public/gmail/callback")({
         if (error) return finish(`Google returned: ${error}`, false);
         if (!code || !state) return finish("Missing code or state.", false);
 
-        const { verifyState, exchangeCode, fetchUserEmail, callbackRedirectUri } = await import("@/lib/gmail.server");
+        const { verifyState, exchangeCode, fetchUserInfo, callbackRedirectUri } = await import("@/lib/gmail.server");
         const parsed = verifyState(state);
         if (!parsed) return finish("Invalid or expired authorization state.", false);
 
@@ -26,16 +26,33 @@ export const Route = createFileRoute("/api/public/gmail/callback")({
           if (!tokens.refresh_token) {
             return finish("Google did not return a refresh token. Try again and approve all requested permissions.", false);
           }
-          const email = await fetchUserEmail(tokens.access_token);
+          const info = await fetchUserInfo(tokens.access_token);
+          const email = info.email;
           const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-          const { error: upErr } = await supabaseAdmin.from("gmail_connections").upsert({
-            user_id: parsed.userId,
-            gmail_email: email,
-            refresh_token: tokens.refresh_token,
-            access_token: tokens.access_token,
-            expires_at: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
-            scope: tokens.scope,
-          });
+
+          // Does this user already have any accounts? If not, this one becomes default.
+          const { count: existingCount } = await supabaseAdmin
+            .from("gmail_connections")
+            .select("id", { count: "exact", head: true })
+            .eq("user_id", parsed.userId);
+          const shouldBeDefault = !existingCount || existingCount === 0;
+
+          const { error: upErr } = await supabaseAdmin
+            .from("gmail_connections")
+            .upsert(
+              {
+                user_id: parsed.userId,
+                gmail_email: email,
+                refresh_token: tokens.refresh_token,
+                access_token: tokens.access_token,
+                expires_at: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
+                scope: tokens.scope,
+                full_name: info.name ?? null,
+                avatar_url: info.picture ?? null,
+                is_default: shouldBeDefault,
+              },
+              { onConflict: "user_id,gmail_email" },
+            );
           if (upErr) return finish(`Failed to save Gmail connection: ${upErr.message}`, false);
           return finish(`Connected ${email}. You can close this tab.`, true);
         } catch (e) {

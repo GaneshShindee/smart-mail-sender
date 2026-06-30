@@ -2,12 +2,14 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { listTemplates, upsertTemplate, deleteTemplate, duplicateTemplate } from "@/lib/templates.functions";
+import { listResumes } from "@/lib/resumes.functions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Pencil, Trash2, Copy, LayoutTemplate } from "lucide-react";
 import { useState } from "react";
@@ -16,11 +18,11 @@ import { EmptyState } from "./dashboard";
 import { extractVariables } from "@/lib/templating";
 
 export const Route = createFileRoute("/_authenticated/templates")({
-  head: () => ({ meta: [{ title: "Templates — Smart Email Sender" }] }),
+  head: () => ({ meta: [{ title: "My Templates — Smart Email Sender" }] }),
   component: TemplatesPage,
 });
 
-type Tpl = { id: string; name: string; subject: string; body: string };
+type Tpl = { id: string; name: string; subject: string; body: string; preferred_resume_id?: string | null };
 
 function TemplatesPage() {
   const qc = useQueryClient();
@@ -28,12 +30,20 @@ function TemplatesPage() {
   const upsertFn = useServerFn(upsertTemplate);
   const delFn = useServerFn(deleteTemplate);
   const dupFn = useServerFn(duplicateTemplate);
+  const resumesFn = useServerFn(listResumes);
   const { data, isLoading } = useQuery({ queryKey: ["templates"], queryFn: () => listFn() });
+  const { data: resumes } = useQuery({ queryKey: ["resumes"], queryFn: () => resumesFn() });
 
   const [editing, setEditing] = useState<Partial<Tpl> | null>(null);
 
   const save = useMutation({
-    mutationFn: (input: Partial<Tpl>) => upsertFn({ data: { id: input.id ?? null, name: input.name ?? "", subject: input.subject ?? "", body: input.body ?? "" } }),
+    mutationFn: (input: Partial<Tpl>) => upsertFn({ data: {
+      id: input.id ?? null,
+      name: input.name ?? "",
+      subject: input.subject ?? "",
+      body: input.body ?? "",
+      preferredResumeId: input.preferred_resume_id ?? null,
+    } }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["templates"] }); toast.success("Template saved"); setEditing(null); },
     onError: (e) => toast.error("Save failed", { description: (e as Error).message }),
   });
@@ -50,7 +60,7 @@ function TemplatesPage() {
     <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Templates</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">My Templates</h1>
           <p className="text-sm text-muted-foreground">Use <code className="text-xs bg-muted px-1 py-0.5 rounded">{`{{placeholder}}`}</code> syntax to insert dynamic fields.</p>
         </div>
         <Button onClick={() => setEditing({ name: "", subject: "", body: "" })}><Plus className="h-4 w-4 mr-2" />New template</Button>
@@ -100,6 +110,22 @@ function TemplatesPage() {
               <div>
                 <Label>Body</Label>
                 <Textarea rows={10} value={editing.body ?? ""} onChange={(e) => setEditing({ ...editing, body: e.target.value })} placeholder={"Hello {{name}},\n\nI'm interested in the {{position}} role at {{company}}.\n\nThanks,\n{{sender_name}}"} />
+              </div>
+              <div>
+                <Label>Preferred resume (optional)</Label>
+                <Select
+                  value={editing.preferred_resume_id ?? "none"}
+                  onValueChange={(v) => setEditing({ ...editing, preferred_resume_id: v === "none" ? null : v })}
+                >
+                  <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {resumes?.map((r) => (
+                      <SelectItem key={r.id} value={r.id}>{r.name}{r.is_default ? " · Default" : ""}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">Auto-attaches on the Send page when this template is selected.</p>
               </div>
               <p className="text-xs text-muted-foreground">Detected variables: {extractVariables(`${editing.subject ?? ""}\n${editing.body ?? ""}`).map((v) => `{{${v}}}`).join(", ") || "none"}</p>
             </div>

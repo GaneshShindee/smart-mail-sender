@@ -16,11 +16,15 @@ export type Database = {
     Tables: {
       email_history: {
         Row: {
+          attachments: Json
           bcc: string | null
           body: string
           error: string | null
+          gmail_account_id: string | null
           id: string
           recipient: string
+          recipient_count: number
+          sender_email: string | null
           sent_at: string
           status: string
           subject: string
@@ -29,11 +33,15 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          attachments?: Json
           bcc?: string | null
           body: string
           error?: string | null
+          gmail_account_id?: string | null
           id?: string
           recipient: string
+          recipient_count?: number
+          sender_email?: string | null
           sent_at?: string
           status?: string
           subject: string
@@ -42,11 +50,15 @@ export type Database = {
           user_id: string
         }
         Update: {
+          attachments?: Json
           bcc?: string | null
           body?: string
           error?: string | null
+          gmail_account_id?: string | null
           id?: string
           recipient?: string
+          recipient_count?: number
+          sender_email?: string | null
           sent_at?: string
           status?: string
           subject?: string
@@ -55,6 +67,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "email_history_gmail_account_id_fkey"
+            columns: ["gmail_account_id"]
+            isOneToOne: false
+            referencedRelation: "gmail_connections"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "email_history_template_id_fkey"
             columns: ["template_id"]
@@ -67,9 +86,14 @@ export type Database = {
       gmail_connections: {
         Row: {
           access_token: string | null
+          avatar_url: string | null
           connected_at: string
           expires_at: string | null
+          full_name: string | null
           gmail_email: string
+          id: string
+          is_default: boolean
+          label: string | null
           refresh_token: string
           scope: string | null
           updated_at: string
@@ -77,9 +101,14 @@ export type Database = {
         }
         Insert: {
           access_token?: string | null
+          avatar_url?: string | null
           connected_at?: string
           expires_at?: string | null
+          full_name?: string | null
           gmail_email: string
+          id?: string
+          is_default?: boolean
+          label?: string | null
           refresh_token: string
           scope?: string | null
           updated_at?: string
@@ -87,11 +116,64 @@ export type Database = {
         }
         Update: {
           access_token?: string | null
+          avatar_url?: string | null
           connected_at?: string
           expires_at?: string | null
+          full_name?: string | null
           gmail_email?: string
+          id?: string
+          is_default?: boolean
+          label?: string | null
           refresh_token?: string
           scope?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      instruction_templates: {
+        Row: {
+          batch_size: number
+          company_domain: string
+          created_at: string
+          custom_pattern: string
+          custom_rules: Json
+          email_pattern: string
+          id: string
+          name: string
+          prefixes: Json
+          rules: Json
+          surname_min_length: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          batch_size?: number
+          company_domain?: string
+          created_at?: string
+          custom_pattern?: string
+          custom_rules?: Json
+          email_pattern?: string
+          id?: string
+          name: string
+          prefixes?: Json
+          rules?: Json
+          surname_min_length?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          batch_size?: number
+          company_domain?: string
+          created_at?: string
+          custom_pattern?: string
+          custom_rules?: Json
+          email_pattern?: string
+          id?: string
+          name?: string
+          prefixes?: Json
+          rules?: Json
+          surname_min_length?: number
           updated_at?: string
           user_id?: string
         }
@@ -124,12 +206,55 @@ export type Database = {
         }
         Relationships: []
       }
+      resumes: {
+        Row: {
+          created_at: string
+          id: string
+          is_default: boolean
+          mime_type: string
+          name: string
+          original_filename: string
+          size_bytes: number
+          storage_path: string
+          updated_at: string
+          user_id: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          mime_type: string
+          name: string
+          original_filename: string
+          size_bytes: number
+          storage_path: string
+          updated_at?: string
+          user_id: string
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          mime_type?: string
+          name?: string
+          original_filename?: string
+          size_bytes?: number
+          storage_path?: string
+          updated_at?: string
+          user_id?: string
+          version?: number
+        }
+        Relationships: []
+      }
       templates: {
         Row: {
           body: string
           created_at: string
           id: string
           name: string
+          preferred_resume_id: string | null
           subject: string
           updated_at: string
           user_id: string
@@ -139,6 +264,7 @@ export type Database = {
           created_at?: string
           id?: string
           name: string
+          preferred_resume_id?: string | null
           subject?: string
           updated_at?: string
           user_id: string
@@ -148,11 +274,20 @@ export type Database = {
           created_at?: string
           id?: string
           name?: string
+          preferred_resume_id?: string | null
           subject?: string
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "templates_preferred_resume_id_fkey"
+            columns: ["preferred_resume_id"]
+            isOneToOne: false
+            referencedRelation: "resumes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

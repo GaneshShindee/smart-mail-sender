@@ -1,5 +1,5 @@
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
-import { LayoutDashboard, LayoutTemplate, Send, History, Settings, LogOut } from "lucide-react";
+import { LayoutDashboard, LayoutTemplate, Send, History, Settings, LogOut, FileText } from "lucide-react";
 import logoAsset from "@/assets/logo.png.asset.json";
 import {
   Sidebar,
@@ -19,7 +19,8 @@ import { useQueryClient } from "@tanstack/react-query";
 
 const items = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
-  { title: "Templates", url: "/templates", icon: LayoutTemplate },
+  { title: "My Templates", url: "/templates", icon: LayoutTemplate },
+  { title: "Resumes", url: "/resumes", icon: FileText },
   { title: "Send Email", url: "/send", icon: Send },
   { title: "History", url: "/history", icon: History },
   { title: "Settings", url: "/settings", icon: Settings },

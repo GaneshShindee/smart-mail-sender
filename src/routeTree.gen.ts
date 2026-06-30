@@ -15,6 +15,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedTemplatesRouteImport } from './routes/_authenticated/templates'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedSendRouteImport } from './routes/_authenticated/send'
+import { Route as AuthenticatedResumesRouteImport } from './routes/_authenticated/resumes'
 import { Route as AuthenticatedHistoryRouteImport } from './routes/_authenticated/history'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as ApiPublicGmailCallbackRouteImport } from './routes/api/public/gmail/callback'
@@ -48,6 +49,11 @@ const AuthenticatedSendRoute = AuthenticatedSendRouteImport.update({
   path: '/send',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedResumesRoute = AuthenticatedResumesRouteImport.update({
+  id: '/resumes',
+  path: '/resumes',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedHistoryRoute = AuthenticatedHistoryRouteImport.update({
   id: '/history',
   path: '/history',
@@ -69,6 +75,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/history': typeof AuthenticatedHistoryRoute
+  '/resumes': typeof AuthenticatedResumesRoute
   '/send': typeof AuthenticatedSendRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/templates': typeof AuthenticatedTemplatesRoute
@@ -79,6 +86,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/history': typeof AuthenticatedHistoryRoute
+  '/resumes': typeof AuthenticatedResumesRoute
   '/send': typeof AuthenticatedSendRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/templates': typeof AuthenticatedTemplatesRoute
@@ -91,6 +99,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/history': typeof AuthenticatedHistoryRoute
+  '/_authenticated/resumes': typeof AuthenticatedResumesRoute
   '/_authenticated/send': typeof AuthenticatedSendRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/templates': typeof AuthenticatedTemplatesRoute
@@ -103,6 +112,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/dashboard'
     | '/history'
+    | '/resumes'
     | '/send'
     | '/settings'
     | '/templates'
@@ -113,6 +123,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/dashboard'
     | '/history'
+    | '/resumes'
     | '/send'
     | '/settings'
     | '/templates'
@@ -124,6 +135,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/_authenticated/dashboard'
     | '/_authenticated/history'
+    | '/_authenticated/resumes'
     | '/_authenticated/send'
     | '/_authenticated/settings'
     | '/_authenticated/templates'
@@ -181,6 +193,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSendRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/resumes': {
+      id: '/_authenticated/resumes'
+      path: '/resumes'
+      fullPath: '/resumes'
+      preLoaderRoute: typeof AuthenticatedResumesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/history': {
       id: '/_authenticated/history'
       path: '/history'
@@ -208,6 +227,7 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedHistoryRoute: typeof AuthenticatedHistoryRoute
+  AuthenticatedResumesRoute: typeof AuthenticatedResumesRoute
   AuthenticatedSendRoute: typeof AuthenticatedSendRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedTemplatesRoute: typeof AuthenticatedTemplatesRoute
@@ -216,6 +236,7 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedHistoryRoute: AuthenticatedHistoryRoute,
+  AuthenticatedResumesRoute: AuthenticatedResumesRoute,
   AuthenticatedSendRoute: AuthenticatedSendRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedTemplatesRoute: AuthenticatedTemplatesRoute,
