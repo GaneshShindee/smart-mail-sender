@@ -7,7 +7,7 @@ export const listTemplates = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { data, error } = await context.supabase
       .from("templates")
-      .select("id, name, subject, body, created_at, updated_at")
+      .select("id, name, subject, body, preferred_resume_id, created_at, updated_at")
       .eq("user_id", context.userId)
       .order("updated_at", { ascending: false });
     if (error) throw new Error(error.message);
@@ -19,6 +19,7 @@ const upsertSchema = z.object({
   name: z.string().trim().min(1).max(120),
   subject: z.string().max(998).default(""),
   body: z.string().max(100_000).default(""),
+  preferredResumeId: z.string().uuid().nullable().optional(),
 });
 
 export const upsertTemplate = createServerFn({ method: "POST" })
@@ -28,7 +29,7 @@ export const upsertTemplate = createServerFn({ method: "POST" })
     if (data.id) {
       const { data: row, error } = await context.supabase
         .from("templates")
-        .update({ name: data.name, subject: data.subject, body: data.body })
+        .update({ name: data.name, subject: data.subject, body: data.body, preferred_resume_id: data.preferredResumeId ?? null })
         .eq("id", data.id)
         .eq("user_id", context.userId)
         .select()
@@ -38,7 +39,7 @@ export const upsertTemplate = createServerFn({ method: "POST" })
     } else {
       const { data: row, error } = await context.supabase
         .from("templates")
-        .insert({ user_id: context.userId, name: data.name, subject: data.subject, body: data.body })
+        .insert({ user_id: context.userId, name: data.name, subject: data.subject, body: data.body, preferred_resume_id: data.preferredResumeId ?? null })
         .select()
         .single();
       if (error) throw new Error(error.message);
