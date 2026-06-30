@@ -133,6 +133,70 @@ export function buildRawEmail(opts: { from: string; to: string; bcc?: string; su
   return base64url(lines);
 }
 
+export type EmailAttachment = {
+  filename: string;
+  mimeType: string;
+  /** Raw bytes as a Buffer. */
+  data: Buffer;
+};
+
+function wrapBase64(b64: string, width = 76) {
+  const out: string[] = [];
+  for (let i = 0; i < b64.length; i += width) out.push(b64.slice(i, i + width));
+  return out.join("\r\n");
+}
+
+function encodeHeader(value: string) {
+  // RFC 2047 encoded-word for non-ASCII filenames/subjects.
+  // eslint-disable-next-line no-control-regex
+  return /[^\x00-\x7F]/.test(value)
+    ? `=?UTF-8?B?${Buffer.from(value, "utf8").toString("base64")}?=`
+    : value;
+}
+
+export function buildRawEmailWithAttachments(opts: {
+  from: string;
+  to: string;
+  bcc?: string;
+  subject: string;
+  body: string;
+  attachments: EmailAttachment[];
+}) {
+  if (!opts.attachments || opts.attachments.length === 0) {
+    return buildRawEmail({ from: opts.from, to: opts.to, bcc: opts.bcc, subject: opts.subject, body: opts.body });
+  }
+  const boundary = `=_ses_${Math.random().toString(36).slice(2)}_${Date.now().toString(36)}`;
+  const headers = [
+    `From: ${opts.from}`,
+    `To: ${opts.to}`,
+    opts.bcc ? `Bcc: ${opts.bcc}` : null,
+    `Subject: ${encodeHeader(opts.subject)}`,
+    `MIME-Version: 1.0`,
+    `Content-Type: multipart/mixed; boundary="${boundary}"`,
+  ].filter(Boolean);
+
+  const parts: string[] = [];
+  parts.push(`--${boundary}`);
+  parts.push(`Content-Type: text/plain; charset="UTF-8"`);
+  parts.push(`Content-Transfer-Encoding: 7bit`);
+  parts.push("");
+  parts.push(opts.body);
+
+  for (const att of opts.attachments) {
+    const fname = encodeHeader(att.filename);
+    parts.push(`--${boundary}`);
+    parts.push(`Content-Type: ${att.mimeType}; name="${fname}"`);
+    parts.push(`Content-Disposition: attachment; filename="${fname}"`);
+    parts.push(`Content-Transfer-Encoding: base64`);
+    parts.push("");
+    parts.push(wrapBase64(att.data.toString("base64")));
+  }
+  parts.push(`--${boundary}--`);
+
+  const message = headers.join("\r\n") + "\r\n\r\n" + parts.join("\r\n");
+  return Buffer.from(message, "utf8").toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
 export async function gmailSend(accessToken: string, raw: string) {
   const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
     method: "POST",
