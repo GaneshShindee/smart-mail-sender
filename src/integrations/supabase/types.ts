@@ -312,7 +312,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      record_email_open: { Args: { _token: string }; Returns: undefined }
+      [_ in never]: never
     }
     Enums: {
       [_ in never]: never
