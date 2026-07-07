@@ -10,7 +10,7 @@ export const listHistory = createServerFn({ method: "GET" })
   .handler(async ({ data, context }) => {
     let q = context.supabase
       .from("email_history")
-      .select("id, recipient, subject, template_name, status, sent_at, error, sender_email, bcc, attachments, recipient_count, open_count, last_opened_at, first_opened_at, tracking_enabled")
+      .select("id, recipient, subject, template_name, status, sent_at, error, sender_email, bcc, attachments, recipient_count, open_count, last_opened_at, first_opened_at, tracking_enabled, body")
       .eq("user_id", context.userId)
       .order("sent_at", { ascending: false })
       .limit(data.limit);
