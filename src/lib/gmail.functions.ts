@@ -172,6 +172,14 @@ export const sendEmail = createServerFn({ method: "POST" })
     const { refreshAccessToken, buildRawEmailWithAttachments, gmailSend } = await import("./gmail.server");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
+    // Per-user tracking preference (defaults on).
+    const { data: prof } = await supabase
+      .from("profiles")
+      .select("tracking_open_enabled")
+      .eq("id", userId)
+      .maybeSingle();
+    const trackingEnabled = (prof as { tracking_open_enabled?: boolean } | null)?.tracking_open_enabled ?? true;
+
     let accessToken = conn.access_token ?? "";
     const expired = !conn.expires_at || new Date(conn.expires_at).getTime() < Date.now() + 30_000;
     if (!accessToken || expired) {
@@ -239,6 +247,34 @@ export const sendEmail = createServerFn({ method: "POST" })
       throw new Error("Attachments exceed 25 MB total.");
     }
 
+    // Pre-create the history row so we have a stable tracking token to embed.
+    const proto = getRequestHeader("x-forwarded-proto") ?? "https";
+    const host = getRequestHost();
+    const origin = `${proto}://${host}`;
+    const { data: historyRow, error: hErr } = await supabaseAdmin
+      .from("email_history")
+      .insert({
+        user_id: userId,
+        template_id: data.templateId ?? null,
+        template_name: templateName,
+        recipient: deduped.join(", "),
+        bcc,
+        subject,
+        body,
+        status: "pending",
+        gmail_account_id: conn.id,
+        sender_email: conn.gmail_email,
+        attachments: attachmentMeta,
+        recipient_count: deduped.length,
+        tracking_enabled: trackingEnabled,
+      })
+      .select("id, tracking_token")
+      .single();
+    if (hErr || !historyRow) throw new Error(hErr?.message ?? "Failed to log send");
+    const pixelUrl = trackingEnabled
+      ? `${origin}/api/public/track/open/${historyRow.tracking_token}`
+      : undefined;
+
     try {
       const raw = buildRawEmailWithAttachments({
         from: conn.gmail_email,
@@ -247,40 +283,20 @@ export const sendEmail = createServerFn({ method: "POST" })
         subject,
         body,
         attachments,
+        trackingPixelUrl: pixelUrl,
       });
       const result = await gmailSend(accessToken, raw);
-      await supabaseAdmin.from("email_history").insert({
-        user_id: userId,
-        template_id: data.templateId ?? null,
-        template_name: templateName,
-        recipient: deduped.join(", "),
-        bcc,
-        subject,
-        body,
-        status: "sent",
-        gmail_account_id: conn.id,
-        sender_email: conn.gmail_email,
-        attachments: attachmentMeta,
-        recipient_count: deduped.length,
-      });
+      await supabaseAdmin
+        .from("email_history")
+        .update({ status: "sent" })
+        .eq("id", historyRow.id);
       return { ok: true, messageId: result.id, recipientCount: deduped.length };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      await supabaseAdmin.from("email_history").insert({
-        user_id: userId,
-        template_id: data.templateId ?? null,
-        template_name: templateName,
-        recipient: deduped.join(", "),
-        bcc,
-        subject,
-        body,
-        status: "failed",
-        error: msg.slice(0, 1000),
-        gmail_account_id: conn.id,
-        sender_email: conn.gmail_email,
-        attachments: attachmentMeta,
-        recipient_count: deduped.length,
-      });
+      await supabaseAdmin
+        .from("email_history")
+        .update({ status: "failed", error: msg.slice(0, 1000) })
+        .eq("id", historyRow.id);
       throw new Error(msg);
     }
   });

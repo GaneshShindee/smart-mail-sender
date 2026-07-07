@@ -20,8 +20,11 @@ export type Database = {
           bcc: string | null
           body: string
           error: string | null
+          first_opened_at: string | null
           gmail_account_id: string | null
           id: string
+          last_opened_at: string | null
+          open_count: number
           recipient: string
           recipient_count: number
           sender_email: string | null
@@ -30,6 +33,8 @@ export type Database = {
           subject: string
           template_id: string | null
           template_name: string | null
+          tracking_enabled: boolean
+          tracking_token: string | null
           user_id: string
         }
         Insert: {
@@ -37,8 +42,11 @@ export type Database = {
           bcc?: string | null
           body: string
           error?: string | null
+          first_opened_at?: string | null
           gmail_account_id?: string | null
           id?: string
+          last_opened_at?: string | null
+          open_count?: number
           recipient: string
           recipient_count?: number
           sender_email?: string | null
@@ -47,6 +55,8 @@ export type Database = {
           subject: string
           template_id?: string | null
           template_name?: string | null
+          tracking_enabled?: boolean
+          tracking_token?: string | null
           user_id: string
         }
         Update: {
@@ -54,8 +64,11 @@ export type Database = {
           bcc?: string | null
           body?: string
           error?: string | null
+          first_opened_at?: string | null
           gmail_account_id?: string | null
           id?: string
+          last_opened_at?: string | null
+          open_count?: number
           recipient?: string
           recipient_count?: number
           sender_email?: string | null
@@ -64,6 +77,8 @@ export type Database = {
           subject?: string
           template_id?: string | null
           template_name?: string | null
+          tracking_enabled?: boolean
+          tracking_token?: string | null
           user_id?: string
         }
         Relationships: [
@@ -186,6 +201,7 @@ export type Database = {
           email: string | null
           full_name: string | null
           id: string
+          tracking_open_enabled: boolean
           updated_at: string
         }
         Insert: {
@@ -194,6 +210,7 @@ export type Database = {
           email?: string | null
           full_name?: string | null
           id: string
+          tracking_open_enabled?: boolean
           updated_at?: string
         }
         Update: {
@@ -202,6 +219,7 @@ export type Database = {
           email?: string | null
           full_name?: string | null
           id?: string
+          tracking_open_enabled?: boolean
           updated_at?: string
         }
         Relationships: []

@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Mail, Send, AlertTriangle, LayoutTemplate, ArrowUpRight, CheckCircle2, XCircle } from "lucide-react";
+import { Mail, Send, AlertTriangle, LayoutTemplate, ArrowUpRight, CheckCircle2, XCircle, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
 
@@ -62,9 +62,16 @@ function Dashboard() {
         </Card>
       )}
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-5">
         <StatCard icon={Mail} label="Gmail" value={gmail.data?.connected ? "Connected" : "Not connected"} sub={gmail.data?.email ?? "—"} loading={gmail.isLoading} />
         <StatCard icon={Send} label="Total sent" value={stats.data?.sent ?? 0} loading={stats.isLoading} />
+        <StatCard
+          icon={Eye}
+          label="Opens"
+          value={stats.data?.totalOpens ?? 0}
+          sub={stats.data ? `${Math.round((stats.data.openRate ?? 0) * 100)}% open rate` : undefined}
+          loading={stats.isLoading}
+        />
         <StatCard icon={AlertTriangle} label="Failed" value={stats.data?.failed ?? 0} loading={stats.isLoading} />
         <StatCard icon={LayoutTemplate} label="Templates" value={stats.data?.templates ?? 0} loading={stats.isLoading} />
       </div>
