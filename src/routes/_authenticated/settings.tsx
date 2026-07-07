@@ -15,10 +15,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Mail, CheckCircle2, Star, Plus, Pencil, Trash2, Zap } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Mail, CheckCircle2, Star, Plus, Pencil, Trash2, Zap, Eye } from "lucide-react";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { getUserPreferences, setUserPreferences } from "@/lib/profile.functions";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({ meta: [{ title: "Settings — Smart Email Sender" }] }),
@@ -34,6 +37,15 @@ function SettingsPage() {
   const renameFn = useServerFn(renameGmailAccount);
   const testFn = useServerFn(testGmailConnection);
   const { data: accounts, isLoading } = useQuery({ queryKey: ["gmail-accounts"], queryFn: () => listFn() });
+
+  const prefsGet = useServerFn(getUserPreferences);
+  const prefsSet = useServerFn(setUserPreferences);
+  const prefs = useQuery({ queryKey: ["user-prefs"], queryFn: () => prefsGet() });
+  const updatePref = useMutation({
+    mutationFn: (v: boolean) => prefsSet({ data: { trackingOpenEnabled: v } }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["user-prefs"] }); toast.success("Preference saved"); },
+    onError: (e) => toast.error((e as Error).message),
+  });
 
   const [profile, setProfile] = useState<{ email?: string; name?: string; avatar?: string }>({});
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -95,6 +107,24 @@ function SettingsPage() {
             <div className="font-medium">{profile.name ?? "—"}</div>
             <div className="text-sm text-muted-foreground">{profile.email}</div>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle className="text-base flex items-center gap-2"><Eye className="h-4 w-4" /> Email tracking</CardTitle></CardHeader>
+        <CardContent className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <Label className="text-sm">Track email opens</Label>
+            <p className="text-xs text-muted-foreground">
+              Adds an invisible pixel so we can tell you when a recipient opens your email.
+              Applies to new sends only.
+            </p>
+          </div>
+          <Switch
+            checked={prefs.data?.trackingOpenEnabled ?? true}
+            disabled={prefs.isLoading || updatePref.isPending}
+            onCheckedChange={(v) => updatePref.mutate(!!v)}
+          />
         </CardContent>
       </Card>
 
