@@ -192,6 +192,17 @@ function encodeHeader(value: string) {
     : value;
 }
 
+/** Build an RFC 5322 From header value: `"Display Name" <email@x>`. */
+export function formatFromHeader(email: string, displayName?: string | null) {
+  const name = (displayName ?? "").trim();
+  if (!name) return email;
+  const encoded = encodeHeader(name);
+  // Quote if it has special chars and isn't already RFC 2047 encoded.
+  const isEncoded = encoded.startsWith("=?");
+  const safe = isEncoded ? encoded : `"${name.replace(/[\\"]/g, "\\$&")}"`;
+  return `${safe} <${email}>`;
+}
+
 export function buildRawEmailWithAttachments(opts: {
   from: string;
   to: string;
