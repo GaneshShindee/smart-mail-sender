@@ -326,8 +326,7 @@ export const sendEmail = createServerFn({ method: "POST" })
     const CONCURRENCY = 4;
     let sentCount = 0;
     let failedCount = 0;
-    let firstError: string | null = null;
-    const setFirstError = (m: string) => { if (!firstError) firstError = m; };
+    const errorRef: { value: string | null } = { value: null };
 
     const send = async (row: { id: string; email: string; tracking_token: string | null }) => {
       const pixelUrl = trackingEnabled && row.tracking_token
@@ -352,7 +351,7 @@ export const sendEmail = createServerFn({ method: "POST" })
       } catch (err) {
         failedCount += 1;
         const msg = err instanceof Error ? err.message : String(err);
-        setFirstError(msg);
+        if (!errorRef.value) errorRef.value = msg;
         await supabaseAdmin
           .from("email_recipients")
           .update({ status: "failed" })
@@ -376,11 +375,11 @@ export const sendEmail = createServerFn({ method: "POST" })
       .from("email_history")
       .update({
         status: finalStatus,
-        error: firstError ? firstError.slice(0, 1000) : null,
+        error: errorRef.value ? errorRef.value.slice(0, 1000) : null,
       })
       .eq("id", historyRow.id);
 
-    if (sentCount === 0) throw new Error(firstError ?? "All sends failed");
+    if (sentCount === 0) throw new Error(errorRef.value ?? "All sends failed");
     return {
       ok: true,
       historyId: historyRow.id,
