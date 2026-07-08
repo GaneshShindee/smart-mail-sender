@@ -9,6 +9,7 @@ export type GmailAccount = {
   gmail_email: string;
   label: string | null;
   full_name: string | null;
+  display_name: string | null;
   avatar_url: string | null;
   is_default: boolean;
   connected_at: string;
@@ -19,7 +20,7 @@ export const listGmailAccounts = createServerFn({ method: "GET" })
   .handler(async ({ context }): Promise<GmailAccount[]> => {
     const { data, error } = await context.supabase
       .from("gmail_connections")
-      .select("id, gmail_email, label, full_name, avatar_url, is_default, connected_at")
+      .select("id, gmail_email, label, full_name, display_name, avatar_url, is_default, connected_at")
       .eq("user_id", context.userId)
       .order("is_default", { ascending: false })
       .order("connected_at", { ascending: true });
@@ -107,6 +108,21 @@ export const renameGmailAccount = createServerFn({ method: "POST" })
     const { error } = await context.supabase
       .from("gmail_connections")
       .update({ label: data.label?.trim() || null })
+      .eq("id", data.id)
+      .eq("user_id", context.userId);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const updateGmailDisplayName = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ id: z.string().uuid(), displayName: z.string().trim().max(120).nullable() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase
+      .from("gmail_connections")
+      .update({ display_name: data.displayName?.trim() || null })
       .eq("id", data.id)
       .eq("user_id", context.userId);
     if (error) throw new Error(error.message);
