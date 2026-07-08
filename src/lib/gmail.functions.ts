@@ -233,13 +233,6 @@ export const sendEmail = createServerFn({ method: "POST" })
     if (data.templateId) {
       const { data: t } = await supabase.from("templates").select("name").eq("id", data.templateId).maybeSingle();
       templateName = t?.name ?? null;
-      // Bump usage counter (best-effort).
-      await supabaseAdmin.rpc as unknown;
-      await supabaseAdmin
-        .from("templates")
-        .update({ uses_count: undefined as unknown as number })
-        .eq("id", data.templateId)
-        .then(() => undefined, () => undefined);
     }
 
     // Resolve attachments: saved resumes fetched server-side from storage, plus inline uploads.
