@@ -156,7 +156,11 @@ export const testGmailConnection = createServerFn({ method: "POST" })
 const sendSchema = z.object({
   templateId: z.string().uuid().optional().nullable(),
   gmailAccountId: z.string().uuid().optional().nullable(),
-  recipients: z.array(z.string().email()).min(1).max(500),
+  recipients: z.array(z.string().email()).min(1).max(2000),
+  recipientMeta: z
+    .array(z.object({ email: z.string().email(), name: z.string().max(200).optional(), company: z.string().max(200).optional() }))
+    .max(2000)
+    .optional(),
   subject: z.string().min(1).max(998),
   body: z.string().min(1).max(100_000),
   variables: z.record(z.string()).optional(),
@@ -177,7 +181,7 @@ export const sendEmail = createServerFn({ method: "POST" })
     // Pick the requested Gmail account, or fall back to the user's default.
     const baseSelect = supabase
       .from("gmail_connections")
-      .select("id, gmail_email, refresh_token, access_token, expires_at")
+      .select("id, gmail_email, display_name, full_name, refresh_token, access_token, expires_at")
       .eq("user_id", userId);
     const { data: conn, error: connErr } = data.gmailAccountId
       ? await baseSelect.eq("id", data.gmailAccountId).maybeSingle()
@@ -185,7 +189,7 @@ export const sendEmail = createServerFn({ method: "POST" })
     if (connErr) throw new Error(connErr.message);
     if (!conn) throw new Error("Gmail is not connected. Connect Gmail in Settings.");
 
-    const { refreshAccessToken, buildRawEmailWithAttachments, gmailSend } = await import("./gmail.server");
+    const { refreshAccessToken, buildRawEmailWithAttachments, gmailSend, formatFromHeader } = await import("./gmail.server");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     // Per-user tracking preference (defaults on).
@@ -214,17 +218,28 @@ export const sendEmail = createServerFn({ method: "POST" })
     const subject = applyTemplate(data.subject, vars);
     const body = applyTemplate(data.body, vars);
 
-    // New TO/BCC flow:
-    //   TO  = the connected Gmail account (sender)
-    //   BCC = all pasted recipients
+    // TO = sender (with display name); each recipient receives an individual message
+    // via BCC so we can attach a unique tracking pixel per recipient.
     const deduped = Array.from(new Set(data.recipients.map((r) => r.trim().toLowerCase()).filter(Boolean)));
-    const to = conn.gmail_email;
-    const bcc = deduped.join(", ");
+    const metaByEmail = new Map<string, { name?: string; company?: string }>();
+    for (const m of data.recipientMeta ?? []) {
+      metaByEmail.set(m.email.trim().toLowerCase(), { name: m.name, company: m.company });
+    }
+    const displayName = (conn.display_name ?? conn.full_name ?? "").trim() || null;
+    const fromHeader = formatFromHeader(conn.gmail_email, displayName);
+    const toHeader = fromHeader;
 
     let templateName: string | null = null;
     if (data.templateId) {
       const { data: t } = await supabase.from("templates").select("name").eq("id", data.templateId).maybeSingle();
       templateName = t?.name ?? null;
+      // Bump usage counter (best-effort).
+      await supabaseAdmin.rpc as unknown;
+      await supabaseAdmin
+        .from("templates")
+        .update({ uses_count: undefined as unknown as number })
+        .eq("id", data.templateId)
+        .then(() => undefined, () => undefined);
     }
 
     // Resolve attachments: saved resumes fetched server-side from storage, plus inline uploads.
@@ -263,7 +278,7 @@ export const sendEmail = createServerFn({ method: "POST" })
       throw new Error("Attachments exceed 25 MB total.");
     }
 
-    // Pre-create the history row so we have a stable tracking token to embed.
+    // Pre-create the campaign history row.
     const proto = getRequestHeader("x-forwarded-proto") ?? "https";
     const host = getRequestHost();
     const origin = `${proto}://${host}`;
@@ -274,45 +289,102 @@ export const sendEmail = createServerFn({ method: "POST" })
         template_id: data.templateId ?? null,
         template_name: templateName,
         recipient: deduped.join(", "),
-        bcc,
+        bcc: deduped.join(", "),
         subject,
         body,
-        status: "pending",
+        status: "sending",
         gmail_account_id: conn.id,
         sender_email: conn.gmail_email,
         attachments: attachmentMeta,
         recipient_count: deduped.length,
         tracking_enabled: trackingEnabled,
       })
-      .select("id, tracking_token")
+      .select("id")
       .single();
     if (hErr || !historyRow) throw new Error(hErr?.message ?? "Failed to log send");
-    const pixelUrl = trackingEnabled
-      ? `${origin}/api/public/track/open/${historyRow.tracking_token}`
-      : undefined;
 
-    try {
-      const raw = buildRawEmailWithAttachments({
-        from: conn.gmail_email,
-        to,
-        bcc,
-        subject,
-        body,
-        attachments,
-        trackingPixelUrl: pixelUrl,
-      });
-      const result = await gmailSend(accessToken, raw);
-      await supabaseAdmin
-        .from("email_history")
-        .update({ status: "sent" })
-        .eq("id", historyRow.id);
-      return { ok: true, messageId: result.id, recipientCount: deduped.length };
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      await supabaseAdmin
-        .from("email_history")
-        .update({ status: "failed", error: msg.slice(0, 1000) })
-        .eq("id", historyRow.id);
-      throw new Error(msg);
-    }
+    // Insert per-recipient rows (with tracking tokens) up-front.
+    const recipientRows = deduped.map((email) => {
+      const m = metaByEmail.get(email) ?? {};
+      return {
+        user_id: userId,
+        email_history_id: historyRow.id,
+        email,
+        name: m.name ?? null,
+        company: m.company ?? null,
+        status: "pending" as const,
+        tracking_token: trackingEnabled ? crypto.randomUUID() : null,
+      };
+    });
+    const { data: inserted, error: rInsErr } = await supabaseAdmin
+      .from("email_recipients")
+      .insert(recipientRows)
+      .select("id, email, tracking_token");
+    if (rInsErr || !inserted) throw new Error(rInsErr?.message ?? "Failed to prepare recipients");
+
+    // Send one message per recipient with a unique pixel — limited concurrency.
+    const CONCURRENCY = 4;
+    let sentCount = 0;
+    let failedCount = 0;
+    let firstError: string | null = null;
+
+    const send = async (row: { id: string; email: string; tracking_token: string | null }) => {
+      const pixelUrl = trackingEnabled && row.tracking_token
+        ? `${origin}/api/public/track/open/${row.tracking_token}`
+        : undefined;
+      try {
+        const raw = buildRawEmailWithAttachments({
+          from: fromHeader,
+          to: toHeader,
+          bcc: row.email,
+          subject,
+          body,
+          attachments,
+          trackingPixelUrl: pixelUrl,
+        });
+        await gmailSend(accessToken, raw);
+        sentCount += 1;
+        await supabaseAdmin
+          .from("email_recipients")
+          .update({ status: "sent" })
+          .eq("id", row.id);
+      } catch (err) {
+        failedCount += 1;
+        const msg = err instanceof Error ? err.message : String(err);
+        if (!firstError) firstError = msg;
+        await supabaseAdmin
+          .from("email_recipients")
+          .update({ status: "failed" })
+          .eq("id", row.id);
+      }
+    };
+
+    // Simple concurrency-limited worker pool.
+    const queue = [...inserted];
+    const workers = Array.from({ length: Math.min(CONCURRENCY, queue.length) }, async () => {
+      while (queue.length > 0) {
+        const next = queue.shift();
+        if (!next) return;
+        await send(next as { id: string; email: string; tracking_token: string | null });
+      }
+    });
+    await Promise.all(workers);
+
+    const finalStatus = failedCount === 0 ? "sent" : sentCount === 0 ? "failed" : "partial";
+    await supabaseAdmin
+      .from("email_history")
+      .update({
+        status: finalStatus,
+        error: firstError ? firstError.slice(0, 1000) : null,
+      })
+      .eq("id", historyRow.id);
+
+    if (sentCount === 0) throw new Error(firstError ?? "All sends failed");
+    return {
+      ok: true,
+      historyId: historyRow.id,
+      sent: sentCount,
+      failed: failedCount,
+      recipientCount: deduped.length,
+    };
   });
