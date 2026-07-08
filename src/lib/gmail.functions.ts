@@ -327,6 +327,7 @@ export const sendEmail = createServerFn({ method: "POST" })
     let sentCount = 0;
     let failedCount = 0;
     let firstError: string | null = null;
+    const setFirstError = (m: string) => { if (!firstError) firstError = m; };
 
     const send = async (row: { id: string; email: string; tracking_token: string | null }) => {
       const pixelUrl = trackingEnabled && row.tracking_token
@@ -351,7 +352,7 @@ export const sendEmail = createServerFn({ method: "POST" })
       } catch (err) {
         failedCount += 1;
         const msg = err instanceof Error ? err.message : String(err);
-        if (!firstError) firstError = msg;
+        setFirstError(msg);
         await supabaseAdmin
           .from("email_recipients")
           .update({ status: "failed" })
