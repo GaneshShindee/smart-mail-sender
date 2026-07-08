@@ -18,7 +18,9 @@ import { Route as AuthenticatedSendRouteImport } from './routes/_authenticated/s
 import { Route as AuthenticatedResumesRouteImport } from './routes/_authenticated/resumes'
 import { Route as AuthenticatedHistoryRouteImport } from './routes/_authenticated/history'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedAnalyticsRouteImport } from './routes/_authenticated/analytics'
 import { Route as ApiPublicGmailCallbackRouteImport } from './routes/api/public/gmail/callback'
+import { Route as ApiPublicTrackOpenTokenRouteImport } from './routes/api/public/track/open/$token'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -64,15 +66,26 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedAnalyticsRoute = AuthenticatedAnalyticsRouteImport.update({
+  id: '/analytics',
+  path: '/analytics',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const ApiPublicGmailCallbackRoute = ApiPublicGmailCallbackRouteImport.update({
   id: '/api/public/gmail/callback',
   path: '/api/public/gmail/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicTrackOpenTokenRoute = ApiPublicTrackOpenTokenRouteImport.update({
+  id: '/api/public/track/open/$token',
+  path: '/api/public/track/open/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/analytics': typeof AuthenticatedAnalyticsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/history': typeof AuthenticatedHistoryRoute
   '/resumes': typeof AuthenticatedResumesRoute
@@ -80,10 +93,12 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AuthenticatedSettingsRoute
   '/templates': typeof AuthenticatedTemplatesRoute
   '/api/public/gmail/callback': typeof ApiPublicGmailCallbackRoute
+  '/api/public/track/open/$token': typeof ApiPublicTrackOpenTokenRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/analytics': typeof AuthenticatedAnalyticsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/history': typeof AuthenticatedHistoryRoute
   '/resumes': typeof AuthenticatedResumesRoute
@@ -91,12 +106,14 @@ export interface FileRoutesByTo {
   '/settings': typeof AuthenticatedSettingsRoute
   '/templates': typeof AuthenticatedTemplatesRoute
   '/api/public/gmail/callback': typeof ApiPublicGmailCallbackRoute
+  '/api/public/track/open/$token': typeof ApiPublicTrackOpenTokenRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/_authenticated/analytics': typeof AuthenticatedAnalyticsRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/history': typeof AuthenticatedHistoryRoute
   '/_authenticated/resumes': typeof AuthenticatedResumesRoute
@@ -104,12 +121,14 @@ export interface FileRoutesById {
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/templates': typeof AuthenticatedTemplatesRoute
   '/api/public/gmail/callback': typeof ApiPublicGmailCallbackRoute
+  '/api/public/track/open/$token': typeof ApiPublicTrackOpenTokenRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/auth'
+    | '/analytics'
     | '/dashboard'
     | '/history'
     | '/resumes'
@@ -117,10 +136,12 @@ export interface FileRouteTypes {
     | '/settings'
     | '/templates'
     | '/api/public/gmail/callback'
+    | '/api/public/track/open/$token'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/auth'
+    | '/analytics'
     | '/dashboard'
     | '/history'
     | '/resumes'
@@ -128,11 +149,13 @@ export interface FileRouteTypes {
     | '/settings'
     | '/templates'
     | '/api/public/gmail/callback'
+    | '/api/public/track/open/$token'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
     | '/auth'
+    | '/_authenticated/analytics'
     | '/_authenticated/dashboard'
     | '/_authenticated/history'
     | '/_authenticated/resumes'
@@ -140,6 +163,7 @@ export interface FileRouteTypes {
     | '/_authenticated/settings'
     | '/_authenticated/templates'
     | '/api/public/gmail/callback'
+    | '/api/public/track/open/$token'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -147,6 +171,7 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
   ApiPublicGmailCallbackRoute: typeof ApiPublicGmailCallbackRoute
+  ApiPublicTrackOpenTokenRoute: typeof ApiPublicTrackOpenTokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -214,6 +239,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/analytics': {
+      id: '/_authenticated/analytics'
+      path: '/analytics'
+      fullPath: '/analytics'
+      preLoaderRoute: typeof AuthenticatedAnalyticsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/api/public/gmail/callback': {
       id: '/api/public/gmail/callback'
       path: '/api/public/gmail/callback'
@@ -221,10 +253,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicGmailCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/track/open/$token': {
+      id: '/api/public/track/open/$token'
+      path: '/api/public/track/open/$token'
+      fullPath: '/api/public/track/open/$token'
+      preLoaderRoute: typeof ApiPublicTrackOpenTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedAnalyticsRoute: typeof AuthenticatedAnalyticsRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedHistoryRoute: typeof AuthenticatedHistoryRoute
   AuthenticatedResumesRoute: typeof AuthenticatedResumesRoute
@@ -234,6 +274,7 @@ interface AuthenticatedRouteRouteChildren {
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedAnalyticsRoute: AuthenticatedAnalyticsRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedHistoryRoute: AuthenticatedHistoryRoute,
   AuthenticatedResumesRoute: AuthenticatedResumesRoute,
@@ -250,6 +291,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   ApiPublicGmailCallbackRoute: ApiPublicGmailCallbackRoute,
+  ApiPublicTrackOpenTokenRoute: ApiPublicTrackOpenTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

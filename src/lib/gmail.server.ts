@@ -119,16 +119,54 @@ function base64url(input: string) {
   return Buffer.from(input, "utf8").toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-export function buildRawEmail(opts: { from: string; to: string; bcc?: string; subject: string; body: string }) {
+function htmlEscape(s: string) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function textToHtml(text: string, pixelUrl?: string) {
+  const body = htmlEscape(text).replace(/\r?\n/g, "<br>\n");
+  const pixel = pixelUrl
+    ? `\n<img src="${pixelUrl}" width="1" height="1" alt="" style="display:none;border:0;height:1px;width:1px" />`
+    : "";
+  return `<!doctype html><html><body style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111;white-space:normal">${body}${pixel}</body></html>`;
+}
+
+/** Returns headers + body for the message body — plain text, or multipart/alternative when a pixel is present. */
+function buildBodyMime(text: string, pixelUrl?: string): { contentType: string; body: string } {
+  if (!pixelUrl) {
+    return { contentType: `text/plain; charset="UTF-8"`, body: text };
+  }
+  const boundary = `=_alt_${Math.random().toString(36).slice(2)}_${Date.now().toString(36)}`;
+  const html = textToHtml(text, pixelUrl);
+  const body = [
+    `--${boundary}`,
+    `Content-Type: text/plain; charset="UTF-8"`,
+    `Content-Transfer-Encoding: 7bit`,
+    ``,
+    text,
+    `--${boundary}`,
+    `Content-Type: text/html; charset="UTF-8"`,
+    `Content-Transfer-Encoding: 7bit`,
+    ``,
+    html,
+    `--${boundary}--`,
+  ].join("\r\n");
+  return { contentType: `multipart/alternative; boundary="${boundary}"`, body };
+}
+
+export function buildRawEmail(opts: {
+  from: string; to: string; bcc?: string; subject: string; body: string; trackingPixelUrl?: string;
+}) {
+  const mime = buildBodyMime(opts.body, opts.trackingPixelUrl);
   const lines = [
     `From: ${opts.from}`,
     `To: ${opts.to}`,
     opts.bcc ? `Bcc: ${opts.bcc}` : null,
-    `Subject: ${opts.subject}`,
+    `Subject: ${encodeHeader(opts.subject)}`,
     `MIME-Version: 1.0`,
-    `Content-Type: text/plain; charset="UTF-8"`,
+    `Content-Type: ${mime.contentType}`,
     ``,
-    opts.body,
+    mime.body,
   ].filter(Boolean).join("\r\n");
   return base64url(lines);
 }
@@ -154,6 +192,17 @@ function encodeHeader(value: string) {
     : value;
 }
 
+/** Build an RFC 5322 From header value: `"Display Name" <email@x>`. */
+export function formatFromHeader(email: string, displayName?: string | null) {
+  const name = (displayName ?? "").trim();
+  if (!name) return email;
+  const encoded = encodeHeader(name);
+  // Quote if it has special chars and isn't already RFC 2047 encoded.
+  const isEncoded = encoded.startsWith("=?");
+  const safe = isEncoded ? encoded : `"${name.replace(/[\\"]/g, "\\$&")}"`;
+  return `${safe} <${email}>`;
+}
+
 export function buildRawEmailWithAttachments(opts: {
   from: string;
   to: string;
@@ -161,9 +210,13 @@ export function buildRawEmailWithAttachments(opts: {
   subject: string;
   body: string;
   attachments: EmailAttachment[];
+  trackingPixelUrl?: string;
 }) {
   if (!opts.attachments || opts.attachments.length === 0) {
-    return buildRawEmail({ from: opts.from, to: opts.to, bcc: opts.bcc, subject: opts.subject, body: opts.body });
+    return buildRawEmail({
+      from: opts.from, to: opts.to, bcc: opts.bcc, subject: opts.subject, body: opts.body,
+      trackingPixelUrl: opts.trackingPixelUrl,
+    });
   }
   const boundary = `=_ses_${Math.random().toString(36).slice(2)}_${Date.now().toString(36)}`;
   const headers = [
@@ -175,12 +228,13 @@ export function buildRawEmailWithAttachments(opts: {
     `Content-Type: multipart/mixed; boundary="${boundary}"`,
   ].filter(Boolean);
 
+  const bodyMime = buildBodyMime(opts.body, opts.trackingPixelUrl);
   const parts: string[] = [];
   parts.push(`--${boundary}`);
-  parts.push(`Content-Type: text/plain; charset="UTF-8"`);
-  parts.push(`Content-Transfer-Encoding: 7bit`);
+  parts.push(`Content-Type: ${bodyMime.contentType}`);
+  if (!opts.trackingPixelUrl) parts.push(`Content-Transfer-Encoding: 7bit`);
   parts.push("");
-  parts.push(opts.body);
+  parts.push(bodyMime.body);
 
   for (const att of opts.attachments) {
     const fname = encodeHeader(att.filename);

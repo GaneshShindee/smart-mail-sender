@@ -20,8 +20,11 @@ export type Database = {
           bcc: string | null
           body: string
           error: string | null
+          first_opened_at: string | null
           gmail_account_id: string | null
           id: string
+          last_opened_at: string | null
+          open_count: number
           recipient: string
           recipient_count: number
           sender_email: string | null
@@ -30,6 +33,8 @@ export type Database = {
           subject: string
           template_id: string | null
           template_name: string | null
+          tracking_enabled: boolean
+          tracking_token: string | null
           user_id: string
         }
         Insert: {
@@ -37,8 +42,11 @@ export type Database = {
           bcc?: string | null
           body: string
           error?: string | null
+          first_opened_at?: string | null
           gmail_account_id?: string | null
           id?: string
+          last_opened_at?: string | null
+          open_count?: number
           recipient: string
           recipient_count?: number
           sender_email?: string | null
@@ -47,6 +55,8 @@ export type Database = {
           subject: string
           template_id?: string | null
           template_name?: string | null
+          tracking_enabled?: boolean
+          tracking_token?: string | null
           user_id: string
         }
         Update: {
@@ -54,8 +64,11 @@ export type Database = {
           bcc?: string | null
           body?: string
           error?: string | null
+          first_opened_at?: string | null
           gmail_account_id?: string | null
           id?: string
+          last_opened_at?: string | null
+          open_count?: number
           recipient?: string
           recipient_count?: number
           sender_email?: string | null
@@ -64,6 +77,8 @@ export type Database = {
           subject?: string
           template_id?: string | null
           template_name?: string | null
+          tracking_enabled?: boolean
+          tracking_token?: string | null
           user_id?: string
         }
         Relationships: [
@@ -83,11 +98,71 @@ export type Database = {
           },
         ]
       }
+      email_recipients: {
+        Row: {
+          click_count: number
+          company: string | null
+          created_at: string
+          email: string
+          email_history_id: string
+          first_opened_at: string | null
+          id: string
+          last_clicked_at: string | null
+          last_opened_at: string | null
+          name: string | null
+          open_count: number
+          status: string
+          tracking_token: string | null
+          user_id: string
+        }
+        Insert: {
+          click_count?: number
+          company?: string | null
+          created_at?: string
+          email: string
+          email_history_id: string
+          first_opened_at?: string | null
+          id?: string
+          last_clicked_at?: string | null
+          last_opened_at?: string | null
+          name?: string | null
+          open_count?: number
+          status?: string
+          tracking_token?: string | null
+          user_id: string
+        }
+        Update: {
+          click_count?: number
+          company?: string | null
+          created_at?: string
+          email?: string
+          email_history_id?: string
+          first_opened_at?: string | null
+          id?: string
+          last_clicked_at?: string | null
+          last_opened_at?: string | null
+          name?: string | null
+          open_count?: number
+          status?: string
+          tracking_token?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_recipients_email_history_id_fkey"
+            columns: ["email_history_id"]
+            isOneToOne: false
+            referencedRelation: "email_history"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gmail_connections: {
         Row: {
           access_token: string | null
           avatar_url: string | null
           connected_at: string
+          display_name: string | null
           expires_at: string | null
           full_name: string | null
           gmail_email: string
@@ -103,6 +178,7 @@ export type Database = {
           access_token?: string | null
           avatar_url?: string | null
           connected_at?: string
+          display_name?: string | null
           expires_at?: string | null
           full_name?: string | null
           gmail_email: string
@@ -118,6 +194,7 @@ export type Database = {
           access_token?: string | null
           avatar_url?: string | null
           connected_at?: string
+          display_name?: string | null
           expires_at?: string | null
           full_name?: string | null
           gmail_email?: string
@@ -182,29 +259,56 @@ export type Database = {
       profiles: {
         Row: {
           avatar_url: string | null
+          compose_prefs: Json
           created_at: string
+          default_template_id: string | null
           email: string | null
+          follow_up_template_id: string | null
           full_name: string | null
           id: string
+          tracking_open_enabled: boolean
           updated_at: string
         }
         Insert: {
           avatar_url?: string | null
+          compose_prefs?: Json
           created_at?: string
+          default_template_id?: string | null
           email?: string | null
+          follow_up_template_id?: string | null
           full_name?: string | null
           id: string
+          tracking_open_enabled?: boolean
           updated_at?: string
         }
         Update: {
           avatar_url?: string | null
+          compose_prefs?: Json
           created_at?: string
+          default_template_id?: string | null
           email?: string | null
+          follow_up_template_id?: string | null
           full_name?: string | null
           id?: string
+          tracking_open_enabled?: boolean
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_default_template_id_fkey"
+            columns: ["default_template_id"]
+            isOneToOne: false
+            referencedRelation: "templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profiles_follow_up_template_id_fkey"
+            columns: ["follow_up_template_id"]
+            isOneToOne: false
+            referencedRelation: "templates"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       resumes: {
         Row: {
@@ -248,43 +352,120 @@ export type Database = {
         }
         Relationships: []
       }
-      templates: {
+      template_saves: {
         Row: {
-          body: string
           created_at: string
           id: string
-          name: string
-          preferred_resume_id: string | null
-          subject: string
-          updated_at: string
+          template_id: string
           user_id: string
         }
         Insert: {
-          body?: string
           created_at?: string
           id?: string
-          name: string
-          preferred_resume_id?: string | null
-          subject?: string
-          updated_at?: string
+          template_id: string
           user_id: string
         }
         Update: {
-          body?: string
           created_at?: string
           id?: string
-          name?: string
-          preferred_resume_id?: string | null
-          subject?: string
-          updated_at?: string
+          template_id?: string
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "template_saves_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      templates: {
+        Row: {
+          body: string
+          category: string | null
+          created_at: string
+          default_sender_id: string | null
+          follow_up_template_id: string | null
+          id: string
+          is_default: boolean
+          is_public: boolean
+          name: string
+          preferred_resume_id: string | null
+          published_at: string | null
+          saves_count: number
+          source_template_id: string | null
+          subject: string
+          updated_at: string
+          user_id: string
+          uses_count: number
+        }
+        Insert: {
+          body?: string
+          category?: string | null
+          created_at?: string
+          default_sender_id?: string | null
+          follow_up_template_id?: string | null
+          id?: string
+          is_default?: boolean
+          is_public?: boolean
+          name: string
+          preferred_resume_id?: string | null
+          published_at?: string | null
+          saves_count?: number
+          source_template_id?: string | null
+          subject?: string
+          updated_at?: string
+          user_id: string
+          uses_count?: number
+        }
+        Update: {
+          body?: string
+          category?: string | null
+          created_at?: string
+          default_sender_id?: string | null
+          follow_up_template_id?: string | null
+          id?: string
+          is_default?: boolean
+          is_public?: boolean
+          name?: string
+          preferred_resume_id?: string | null
+          published_at?: string | null
+          saves_count?: number
+          source_template_id?: string | null
+          subject?: string
+          updated_at?: string
+          user_id?: string
+          uses_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "templates_default_sender_id_fkey"
+            columns: ["default_sender_id"]
+            isOneToOne: false
+            referencedRelation: "gmail_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "templates_follow_up_template_id_fkey"
+            columns: ["follow_up_template_id"]
+            isOneToOne: false
+            referencedRelation: "templates"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "templates_preferred_resume_id_fkey"
             columns: ["preferred_resume_id"]
             isOneToOne: false
             referencedRelation: "resumes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "templates_source_template_id_fkey"
+            columns: ["source_template_id"]
+            isOneToOne: false
+            referencedRelation: "templates"
             referencedColumns: ["id"]
           },
         ]
