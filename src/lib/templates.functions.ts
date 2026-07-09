@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { TablesUpdate } from "@/integrations/supabase/types";
 
 export const listTemplates = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -30,7 +31,7 @@ export const upsertTemplate = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => upsertSchema.parse(d))
   .handler(async ({ data, context }) => {
     if (data.id) {
-      const update: Record<string, unknown> = {
+      const update: TablesUpdate<"templates"> = {
         name: data.name,
         subject: data.subject,
         body: data.body,
@@ -120,7 +121,7 @@ export const setTemplatePublic = createServerFn({ method: "POST" })
     z.object({ id: z.string().uuid(), isPublic: z.boolean(), category: z.string().max(60).nullable().optional() }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    const update: Record<string, unknown> = {
+    const update: TablesUpdate<"templates"> = {
       is_public: data.isPublic,
       published_at: data.isPublic ? new Date().toISOString() : null,
     };
