@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Eye, Mail, Users, ArrowLeft, Send, Flame, Paperclip } from "lucide-react";
+import { Eye, Mail, Users, ArrowLeft, Flame, Paperclip } from "lucide-react";
 import { StatusBadge } from "./dashboard";
 import { relativeTime } from "@/lib/user-agent";
 
@@ -40,7 +40,7 @@ function CampaignDetailsPage() {
     if (campaign.gmail_account_id) sp.set("sender", campaign.gmail_account_id);
     if (r.name) sp.set("name", r.name);
     if (r.company) sp.set("company", r.company);
-    navigate({ to: "/send", search: () => Object.fromEntries(sp.entries()) as Record<string, string> });
+    navigate({ to: "/send", search: Object.fromEntries(sp.entries()) as never });
   };
 
   return (
@@ -138,5 +138,3 @@ function Stat({ label, value, icon: Icon }: { label: string; value: string; icon
     </CardContent></Card>
   );
 }
-
-export { Send };
