@@ -19,6 +19,8 @@ import { Route as AuthenticatedResumesRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedHistoryRouteImport } from './routes/_authenticated/history'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedAnalyticsRouteImport } from './routes/_authenticated/analytics'
+import { Route as AuthenticatedRecipientsIdRouteImport } from './routes/_authenticated/recipients.$id'
+import { Route as AuthenticatedCampaignsIdRouteImport } from './routes/_authenticated/campaigns.$id'
 import { Route as ApiPublicGmailCallbackRouteImport } from './routes/api/public/gmail/callback'
 import { Route as ApiPublicTrackOpenTokenRouteImport } from './routes/api/public/track/open/$token'
 
@@ -71,6 +73,18 @@ const AuthenticatedAnalyticsRoute = AuthenticatedAnalyticsRouteImport.update({
   path: '/analytics',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedRecipientsIdRoute =
+  AuthenticatedRecipientsIdRouteImport.update({
+    id: '/recipients/$id',
+    path: '/recipients/$id',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedCampaignsIdRoute =
+  AuthenticatedCampaignsIdRouteImport.update({
+    id: '/campaigns/$id',
+    path: '/campaigns/$id',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const ApiPublicGmailCallbackRoute = ApiPublicGmailCallbackRouteImport.update({
   id: '/api/public/gmail/callback',
   path: '/api/public/gmail/callback',
@@ -92,6 +106,8 @@ export interface FileRoutesByFullPath {
   '/send': typeof AuthenticatedSendRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/templates': typeof AuthenticatedTemplatesRoute
+  '/campaigns/$id': typeof AuthenticatedCampaignsIdRoute
+  '/recipients/$id': typeof AuthenticatedRecipientsIdRoute
   '/api/public/gmail/callback': typeof ApiPublicGmailCallbackRoute
   '/api/public/track/open/$token': typeof ApiPublicTrackOpenTokenRoute
 }
@@ -105,6 +121,8 @@ export interface FileRoutesByTo {
   '/send': typeof AuthenticatedSendRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/templates': typeof AuthenticatedTemplatesRoute
+  '/campaigns/$id': typeof AuthenticatedCampaignsIdRoute
+  '/recipients/$id': typeof AuthenticatedRecipientsIdRoute
   '/api/public/gmail/callback': typeof ApiPublicGmailCallbackRoute
   '/api/public/track/open/$token': typeof ApiPublicTrackOpenTokenRoute
 }
@@ -120,6 +138,8 @@ export interface FileRoutesById {
   '/_authenticated/send': typeof AuthenticatedSendRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/templates': typeof AuthenticatedTemplatesRoute
+  '/_authenticated/campaigns/$id': typeof AuthenticatedCampaignsIdRoute
+  '/_authenticated/recipients/$id': typeof AuthenticatedRecipientsIdRoute
   '/api/public/gmail/callback': typeof ApiPublicGmailCallbackRoute
   '/api/public/track/open/$token': typeof ApiPublicTrackOpenTokenRoute
 }
@@ -135,6 +155,8 @@ export interface FileRouteTypes {
     | '/send'
     | '/settings'
     | '/templates'
+    | '/campaigns/$id'
+    | '/recipients/$id'
     | '/api/public/gmail/callback'
     | '/api/public/track/open/$token'
   fileRoutesByTo: FileRoutesByTo
@@ -148,6 +170,8 @@ export interface FileRouteTypes {
     | '/send'
     | '/settings'
     | '/templates'
+    | '/campaigns/$id'
+    | '/recipients/$id'
     | '/api/public/gmail/callback'
     | '/api/public/track/open/$token'
   id:
@@ -162,6 +186,8 @@ export interface FileRouteTypes {
     | '/_authenticated/send'
     | '/_authenticated/settings'
     | '/_authenticated/templates'
+    | '/_authenticated/campaigns/$id'
+    | '/_authenticated/recipients/$id'
     | '/api/public/gmail/callback'
     | '/api/public/track/open/$token'
   fileRoutesById: FileRoutesById
@@ -246,6 +272,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAnalyticsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/recipients/$id': {
+      id: '/_authenticated/recipients/$id'
+      path: '/recipients/$id'
+      fullPath: '/recipients/$id'
+      preLoaderRoute: typeof AuthenticatedRecipientsIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/campaigns/$id': {
+      id: '/_authenticated/campaigns/$id'
+      path: '/campaigns/$id'
+      fullPath: '/campaigns/$id'
+      preLoaderRoute: typeof AuthenticatedCampaignsIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/api/public/gmail/callback': {
       id: '/api/public/gmail/callback'
       path: '/api/public/gmail/callback'
@@ -271,6 +311,8 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedSendRoute: typeof AuthenticatedSendRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedTemplatesRoute: typeof AuthenticatedTemplatesRoute
+  AuthenticatedCampaignsIdRoute: typeof AuthenticatedCampaignsIdRoute
+  AuthenticatedRecipientsIdRoute: typeof AuthenticatedRecipientsIdRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -281,6 +323,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedSendRoute: AuthenticatedSendRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedTemplatesRoute: AuthenticatedTemplatesRoute,
+  AuthenticatedCampaignsIdRoute: AuthenticatedCampaignsIdRoute,
+  AuthenticatedRecipientsIdRoute: AuthenticatedRecipientsIdRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =

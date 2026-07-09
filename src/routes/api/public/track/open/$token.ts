@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { parseUserAgent } from "@/lib/user-agent";
 
 // 1x1 transparent GIF.
 const PIXEL = Buffer.from(
@@ -23,21 +24,50 @@ function pixelResponse() {
 export const Route = createFileRoute("/api/public/track/open/$token")({
   server: {
     handlers: {
-      GET: async ({ params }) => {
+      GET: async ({ params, request }) => {
         const token = String(params.token ?? "").replace(/\.gif$/i, "");
         if (!UUID_RE.test(token)) return pixelResponse();
         try {
           const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
           const now = new Date().toISOString();
 
+          // Extract request metadata (Cloudflare Workers populate cf-* headers).
+          const h = request.headers;
+          const uaRaw = h.get("user-agent");
+          const ua = parseUserAgent(uaRaw);
+          const ip =
+            h.get("cf-connecting-ip") ??
+            h.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+            h.get("x-real-ip") ??
+            null;
+          const country = h.get("cf-ipcountry") ?? null;
+          const city = h.get("cf-ipcity") ?? null;
+          const region = h.get("cf-region") ?? null;
+
           // Preferred path: per-recipient tracking token.
           const { data: rec } = await supabaseAdmin
             .from("email_recipients")
-            .select("id, email_history_id, open_count, first_opened_at")
+            .select("id, email_history_id, user_id, open_count, first_opened_at")
             .eq("tracking_token", token)
             .maybeSingle();
 
           if (rec) {
+            // Persist the individual open event.
+            await supabaseAdmin.from("email_opens").insert({
+              email_recipient_id: rec.id,
+              email_history_id: rec.email_history_id,
+              user_id: rec.user_id,
+              opened_at: now,
+              ip,
+              user_agent: uaRaw ?? null,
+              device_type: ua.deviceType,
+              browser: ua.browser,
+              os: ua.os,
+              country,
+              city,
+              region,
+            });
+
             const newCount = (rec.open_count ?? 0) + 1;
             await supabaseAdmin
               .from("email_recipients")
@@ -72,10 +102,24 @@ export const Route = createFileRoute("/api/public/track/open/$token")({
             // Back-compat: legacy campaign-level tokens.
             const { data: row } = await supabaseAdmin
               .from("email_history")
-              .select("id, open_count, first_opened_at, tracking_enabled")
+              .select("id, user_id, open_count, first_opened_at, tracking_enabled")
               .eq("tracking_token", token)
               .maybeSingle();
             if (row && row.tracking_enabled) {
+              await supabaseAdmin.from("email_opens").insert({
+                email_recipient_id: null,
+                email_history_id: row.id,
+                user_id: row.user_id,
+                opened_at: now,
+                ip,
+                user_agent: uaRaw ?? null,
+                device_type: ua.deviceType,
+                browser: ua.browser,
+                os: ua.os,
+                country,
+                city,
+                region,
+              });
               await supabaseAdmin
                 .from("email_history")
                 .update({

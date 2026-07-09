@@ -98,6 +98,69 @@ export type Database = {
           },
         ]
       }
+      email_opens: {
+        Row: {
+          browser: string | null
+          city: string | null
+          country: string | null
+          device_type: string | null
+          email_history_id: string
+          email_recipient_id: string | null
+          id: string
+          ip: string | null
+          opened_at: string
+          os: string | null
+          region: string | null
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          browser?: string | null
+          city?: string | null
+          country?: string | null
+          device_type?: string | null
+          email_history_id: string
+          email_recipient_id?: string | null
+          id?: string
+          ip?: string | null
+          opened_at?: string
+          os?: string | null
+          region?: string | null
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          browser?: string | null
+          city?: string | null
+          country?: string | null
+          device_type?: string | null
+          email_history_id?: string
+          email_recipient_id?: string | null
+          id?: string
+          ip?: string | null
+          opened_at?: string
+          os?: string | null
+          region?: string | null
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_opens_email_history_id_fkey"
+            columns: ["email_history_id"]
+            isOneToOne: false
+            referencedRelation: "email_history"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_opens_email_recipient_id_fkey"
+            columns: ["email_recipient_id"]
+            isOneToOne: false
+            referencedRelation: "email_recipients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_recipients: {
         Row: {
           click_count: number
