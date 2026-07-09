@@ -127,3 +127,56 @@ export const analyticsOverview = createServerFn({ method: "GET" })
       topTemplates,
     };
   });
+
+export const getCampaign = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { data: campaign, error } = await context.supabase
+      .from("email_history")
+      .select("id, subject, body, template_name, template_id, status, sent_at, error, sender_email, gmail_account_id, bcc, attachments, recipient_count, open_count, first_opened_at, last_opened_at, tracking_enabled")
+      .eq("id", data.id)
+      .eq("user_id", context.userId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!campaign) throw new Error("Campaign not found");
+
+    const { data: recipients, error: rErr } = await context.supabase
+      .from("email_recipients")
+      .select("id, email, name, company, status, open_count, first_opened_at, last_opened_at, click_count")
+      .eq("email_history_id", data.id)
+      .order("open_count", { ascending: false })
+      .order("email", { ascending: true });
+    if (rErr) throw new Error(rErr.message);
+
+    return { campaign, recipients: recipients ?? [] };
+  });
+
+export const getRecipient = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { data: recipient, error } = await context.supabase
+      .from("email_recipients")
+      .select("id, email, name, company, status, open_count, first_opened_at, last_opened_at, click_count, email_history_id")
+      .eq("id", data.id)
+      .eq("user_id", context.userId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!recipient) throw new Error("Recipient not found");
+
+    const { data: campaign } = await context.supabase
+      .from("email_history")
+      .select("id, subject, body, template_id, template_name, sender_email, gmail_account_id, sent_at")
+      .eq("id", recipient.email_history_id)
+      .maybeSingle();
+
+    const { data: opens, error: oErr } = await context.supabase
+      .from("email_opens")
+      .select("id, opened_at, device_type, browser, os, country, city, region, ip")
+      .eq("email_recipient_id", recipient.id)
+      .order("opened_at", { ascending: true });
+    if (oErr) throw new Error(oErr.message);
+
+    return { recipient, campaign, opens: opens ?? [] };
+  });
