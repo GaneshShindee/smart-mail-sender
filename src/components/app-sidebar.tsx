@@ -1,5 +1,5 @@
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
-import { LayoutDashboard, LayoutTemplate, Send, History, Settings, LogOut, FileText, BarChart3 } from "lucide-react";
+import { LayoutDashboard, LayoutTemplate, Send, History, Settings, LogOut, FileText, BarChart3, Inbox, Bell } from "lucide-react";
 import logoAsset from "@/assets/logo.png.asset.json";
 import {
   Sidebar,
@@ -23,6 +23,8 @@ const items = [
   { title: "Resumes", url: "/resumes", icon: FileText },
   { title: "Send Email", url: "/send", icon: Send },
   { title: "History", url: "/history", icon: History },
+  { title: "Replies", url: "/replies", icon: Inbox },
+  { title: "Notifications", url: "/notifications", icon: Bell },
   { title: "Analytics", url: "/analytics", icon: BarChart3 },
   { title: "Settings", url: "/settings", icon: Settings },
 ];
