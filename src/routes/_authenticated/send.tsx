@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { Send, Sparkles, Paperclip, X, FileText, Upload, Flame } from "lucide-react";
 import { EmailGeneratorDialog } from "@/components/email-generator-dialog";
 import { z } from "zod";
+import { Switch } from "@/components/ui/switch";
 
 const searchSchema = z
   .object({
@@ -64,6 +65,7 @@ function SendPage() {
   const [uploads, setUploads] = useState<File[]>([]);
   const uploadRef = useRef<HTMLInputElement | null>(null);
   const initedRef = useRef(false);
+  const [aiPersonalize, setAiPersonalize] = useState(false);
 
   const isFollowUp = search.followUp === "1";
 
@@ -159,11 +161,13 @@ function SendPage() {
           templateId: tplId || null,
           gmailAccountId: senderId || null,
           recipients: parsed.valid,
+          recipientMeta: parsed.meta,
           subject,
           body,
           variables: vars,
           resumeIds,
           uploads: inlineUploads,
+          aiPersonalize,
         },
       });
     },
