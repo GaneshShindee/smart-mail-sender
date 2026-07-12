@@ -221,7 +221,6 @@ export const generateReplyDraft = createServerFn({ method: "POST" })
       .eq("user_id", context.userId)
       .maybeSingle();
     if (error || !reply) throw new Error("Reply not found");
-    if (!reply.gmail_account_id) throw new Error("Reply is not linked to a Gmail account");
     let campaignContext = "";
     if (reply.email_history_id) {
       const { data: c } = await context.supabase
@@ -283,7 +282,7 @@ export const sendReply = createServerFn({ method: "POST" })
       .eq("user_id", userId)
       .maybeSingle();
     if (error || !reply) throw new Error("Reply not found");
-
+    if (!reply.gmail_account_id) throw new Error("Reply is not linked to a Gmail account");
     const { data: conn, error: cErr } = await supabase
       .from("gmail_connections")
       .select("id, gmail_email, display_name, full_name, refresh_token, access_token, expires_at")
