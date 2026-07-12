@@ -22,6 +22,7 @@ import { Route as AuthenticatedAnalyticsRouteImport } from './routes/_authentica
 import { Route as AuthenticatedRecipientsIdRouteImport } from './routes/_authenticated/recipients.$id'
 import { Route as AuthenticatedCampaignsIdRouteImport } from './routes/_authenticated/campaigns.$id'
 import { Route as ApiPublicGmailCallbackRouteImport } from './routes/api/public/gmail/callback'
+import { Route as ApiPublicTrackPdfTokenRouteImport } from './routes/api/public/track/pdf/$token'
 import { Route as ApiPublicTrackOpenTokenRouteImport } from './routes/api/public/track/open/$token'
 
 const AuthRoute = AuthRouteImport.update({
@@ -90,6 +91,11 @@ const ApiPublicGmailCallbackRoute = ApiPublicGmailCallbackRouteImport.update({
   path: '/api/public/gmail/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicTrackPdfTokenRoute = ApiPublicTrackPdfTokenRouteImport.update({
+  id: '/api/public/track/pdf/$token',
+  path: '/api/public/track/pdf/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicTrackOpenTokenRoute = ApiPublicTrackOpenTokenRouteImport.update({
   id: '/api/public/track/open/$token',
   path: '/api/public/track/open/$token',
@@ -110,6 +116,7 @@ export interface FileRoutesByFullPath {
   '/recipients/$id': typeof AuthenticatedRecipientsIdRoute
   '/api/public/gmail/callback': typeof ApiPublicGmailCallbackRoute
   '/api/public/track/open/$token': typeof ApiPublicTrackOpenTokenRoute
+  '/api/public/track/pdf/$token': typeof ApiPublicTrackPdfTokenRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -125,6 +132,7 @@ export interface FileRoutesByTo {
   '/recipients/$id': typeof AuthenticatedRecipientsIdRoute
   '/api/public/gmail/callback': typeof ApiPublicGmailCallbackRoute
   '/api/public/track/open/$token': typeof ApiPublicTrackOpenTokenRoute
+  '/api/public/track/pdf/$token': typeof ApiPublicTrackPdfTokenRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -142,6 +150,7 @@ export interface FileRoutesById {
   '/_authenticated/recipients/$id': typeof AuthenticatedRecipientsIdRoute
   '/api/public/gmail/callback': typeof ApiPublicGmailCallbackRoute
   '/api/public/track/open/$token': typeof ApiPublicTrackOpenTokenRoute
+  '/api/public/track/pdf/$token': typeof ApiPublicTrackPdfTokenRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -159,6 +168,7 @@ export interface FileRouteTypes {
     | '/recipients/$id'
     | '/api/public/gmail/callback'
     | '/api/public/track/open/$token'
+    | '/api/public/track/pdf/$token'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -174,6 +184,7 @@ export interface FileRouteTypes {
     | '/recipients/$id'
     | '/api/public/gmail/callback'
     | '/api/public/track/open/$token'
+    | '/api/public/track/pdf/$token'
   id:
     | '__root__'
     | '/'
@@ -190,6 +201,7 @@ export interface FileRouteTypes {
     | '/_authenticated/recipients/$id'
     | '/api/public/gmail/callback'
     | '/api/public/track/open/$token'
+    | '/api/public/track/pdf/$token'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -198,6 +210,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   ApiPublicGmailCallbackRoute: typeof ApiPublicGmailCallbackRoute
   ApiPublicTrackOpenTokenRoute: typeof ApiPublicTrackOpenTokenRoute
+  ApiPublicTrackPdfTokenRoute: typeof ApiPublicTrackPdfTokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -293,6 +306,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicGmailCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/track/pdf/$token': {
+      id: '/api/public/track/pdf/$token'
+      path: '/api/public/track/pdf/$token'
+      fullPath: '/api/public/track/pdf/$token'
+      preLoaderRoute: typeof ApiPublicTrackPdfTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/track/open/$token': {
       id: '/api/public/track/open/$token'
       path: '/api/public/track/open/$token'
@@ -336,6 +356,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   ApiPublicGmailCallbackRoute: ApiPublicGmailCallbackRoute,
   ApiPublicTrackOpenTokenRoute: ApiPublicTrackOpenTokenRoute,
+  ApiPublicTrackPdfTokenRoute: ApiPublicTrackPdfTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
