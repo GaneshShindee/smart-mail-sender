@@ -3,6 +3,7 @@ import { getRequestHost, getRequestHeader } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { applyTemplate } from "./templating";
+import { deriveNames } from "./recipients";
 
 export type GmailAccount = {
   id: string;
@@ -171,6 +172,7 @@ const sendSchema = z.object({
     base64: z.string().min(1),
     size: z.number().int().positive().max(25 * 1024 * 1024),
   })).max(10).optional(),
+  aiPersonalize: z.boolean().optional(),
 });
 
 export const sendEmail = createServerFn({ method: "POST" })
@@ -214,9 +216,7 @@ export const sendEmail = createServerFn({ method: "POST" })
         .eq("id", conn.id);
     }
 
-    const vars = data.variables ?? {};
-    const subject = applyTemplate(data.subject, vars);
-    const body = applyTemplate(data.body, vars);
+    const globalVars = data.variables ?? {};
 
     // TO = sender (with display name); each recipient receives an individual message
     // via BCC so we can attach a unique tracking pixel per recipient.
@@ -275,6 +275,23 @@ export const sendEmail = createServerFn({ method: "POST" })
     const proto = getRequestHeader("x-forwarded-proto") ?? "https";
     const host = getRequestHost();
     const origin = `${proto}://${host}`;
+    // Render subject/body for the campaign-level record using the sender's own name as fallback.
+    const previewNames = deriveNames("preview@example.com", displayName);
+    const previewVars: Record<string, string> = {
+      first_name: previewNames.first_name,
+      last_name: previewNames.last_name,
+      full_name: previewNames.full_name,
+      name: previewNames.full_name || "there",
+      sender_name: displayName ?? conn.gmail_email,
+      company: "",
+      designation: "",
+      location: "",
+      date: new Date().toLocaleDateString(),
+      ...globalVars,
+    };
+    const subject = applyTemplate(data.subject, previewVars);
+    const body = applyTemplate(data.body, previewVars);
+    const hasPdf = attachments.some((a) => /pdf/i.test(a.mimeType) || /\.pdf$/i.test(a.filename));
     const { data: historyRow, error: hErr } = await supabaseAdmin
       .from("email_history")
       .insert({
@@ -307,12 +324,13 @@ export const sendEmail = createServerFn({ method: "POST" })
         company: m.company ?? null,
         status: "pending" as const,
         tracking_token: trackingEnabled ? crypto.randomUUID() : null,
+        pdf_tracking_token: hasPdf ? crypto.randomUUID() : null,
       };
     });
     const { data: inserted, error: rInsErr } = await supabaseAdmin
       .from("email_recipients")
       .insert(recipientRows)
-      .select("id, email, tracking_token");
+      .select("id, email, name, company, tracking_token, pdf_tracking_token");
     if (rInsErr || !inserted) throw new Error(rInsErr?.message ?? "Failed to prepare recipients");
 
     // Send one message per recipient with a unique pixel — limited concurrency.
@@ -321,17 +339,83 @@ export const sendEmail = createServerFn({ method: "POST" })
     let failedCount = 0;
     const errorRef: { value: string | null } = { value: null };
 
-    const send = async (row: { id: string; email: string; tracking_token: string | null }) => {
+    const aiKey = process.env.LOVABLE_API_KEY;
+    const personalize = data.aiPersonalize === true && !!aiKey;
+
+    const send = async (row: {
+      id: string;
+      email: string;
+      name: string | null;
+      company: string | null;
+      tracking_token: string | null;
+      pdf_tracking_token: string | null;
+    }) => {
       const pixelUrl = trackingEnabled && row.tracking_token
         ? `${origin}/api/public/track/open/${row.tracking_token}`
         : undefined;
+
+      // Per-recipient variables
+      const names = deriveNames(row.email, row.name);
+      const perVars: Record<string, string> = {
+        ...previewVars,
+        first_name: names.first_name || "there",
+        last_name: names.last_name,
+        full_name: names.full_name || names.first_name || "there",
+        name: names.full_name || names.first_name || "there",
+        company: row.company ?? previewVars.company ?? "",
+        ...globalVars,
+      };
+      let personalSubject = applyTemplate(data.subject, perVars);
+      let personalBody = applyTemplate(data.body, perVars);
+
+      // Optional light AI personalization (10% max) — best effort.
+      if (personalize) {
+        try {
+          const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${aiKey}` },
+            body: JSON.stringify({
+              model: "google/gemini-3-flash-preview",
+              messages: [
+                {
+                  role: "system",
+                  content:
+                    "You lightly personalize an outreach email for one specific recipient. Preserve 90-95% of the original wording, tone, and structure. Only make small human-like tweaks: personalize the greeting, and optionally add ONE short sentence that references the recipient's name, company, or role. Return STRICT JSON: {\"subject\":\"...\",\"body\":\"...\"}. No prose, no markdown.",
+                },
+                {
+                  role: "user",
+                  content: `Recipient: ${JSON.stringify({ email: row.email, first_name: names.first_name, full_name: names.full_name, company: row.company ?? "" })}\n\nSUBJECT:\n${personalSubject}\n\nBODY:\n${personalBody}`,
+                },
+              ],
+              response_format: { type: "json_object" },
+            }),
+          });
+          if (res.ok) {
+            const j = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+            const c = j.choices?.[0]?.message?.content ?? "";
+            const m = c.match(/\{[\s\S]*\}/);
+            if (m) {
+              const parsed = JSON.parse(m[0]) as { subject?: string; body?: string };
+              if (typeof parsed.subject === "string" && parsed.subject.trim()) personalSubject = parsed.subject;
+              if (typeof parsed.body === "string" && parsed.body.trim()) personalBody = parsed.body;
+            }
+          }
+        } catch { /* fall back to templated version */ }
+      }
+
+      // Append tracked PDF link when a PDF is attached.
+      if (hasPdf && row.pdf_tracking_token) {
+        const pdfUrl = `${origin}/api/public/track/pdf/${row.pdf_tracking_token}`;
+        personalBody = `${personalBody}\n\n📎 View attached resume: ${pdfUrl}`;
+      }
+
       try {
         const raw = buildRawEmailWithAttachments({
           from: fromHeader,
           to: toHeader,
           bcc: row.email,
-          subject,
-          body,
+          subject: personalSubject,
+          body: personalBody,
           attachments,
           trackingPixelUrl: pixelUrl,
         });
@@ -358,7 +442,7 @@ export const sendEmail = createServerFn({ method: "POST" })
       while (queue.length > 0) {
         const next = queue.shift();
         if (!next) return;
-        await send(next as { id: string; email: string; tracking_token: string | null });
+        await send(next as Parameters<typeof send>[0]);
       }
     });
     await Promise.all(workers);

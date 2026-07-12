@@ -87,12 +87,24 @@ function Dashboard() {
           ) : stats.data?.recent.length ? (
             <ul className="divide-y divide-border">
               {stats.data.recent.map((r) => (
-                <li key={r.id} className="flex items-center justify-between py-3 gap-3">
-                  <div className="min-w-0">
+                <li
+                  key={r.id}
+                  className="flex items-center justify-between py-3 gap-3 cursor-pointer hover:bg-accent/40 rounded-md px-2 -mx-2"
+                  onClick={() => navigate({ to: "/campaigns/$id", params: { id: r.id } })}
+                >
+                  <div className="min-w-0 flex-1">
                     <div className="font-medium truncate">{r.subject}</div>
-                    <div className="text-xs text-muted-foreground truncate">to {r.recipient} · {new Date(r.sent_at).toLocaleString()}</div>
+                    <div className="text-xs text-muted-foreground truncate">
+                      to {r.recipient_count} recipient{r.recipient_count === 1 ? "" : "s"} · {new Date(r.sent_at).toLocaleString()}
+                      {r.template_name ? ` · ${r.template_name}` : ""}
+                    </div>
                   </div>
-                  <StatusBadge status={r.status} />
+                  <div className="flex items-center gap-2 shrink-0">
+                    {r.open_count > 0 && (
+                      <Badge variant="secondary" className="gap-1"><Eye className="h-3 w-3" />{r.open_count}</Badge>
+                    )}
+                    <StatusBadge status={r.status} />
+                  </div>
                 </li>
               ))}
             </ul>

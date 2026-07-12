@@ -50,6 +50,7 @@ export const Route = createFileRoute("/api/public/gmail/callback")({
                 full_name: info.name ?? null,
                 avatar_url: info.picture ?? null,
                 is_default: shouldBeDefault,
+                reads_enabled: /gmail\.readonly/.test(tokens.scope ?? ""),
               },
               { onConflict: "user_id,gmail_email" },
             );
