@@ -344,6 +344,14 @@ function SendPage() {
             </CardContent>
           </Card>
 
+          <div className="flex items-center justify-between rounded-lg border border-border bg-muted/20 px-3 py-2.5">
+            <div className="text-sm">
+              <div className="font-medium flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5" /> AI Personalize</div>
+              <div className="text-xs text-muted-foreground">Small human-like tweaks per recipient (uses their name & company).</div>
+            </div>
+            <Switch checked={aiPersonalize} onCheckedChange={setAiPersonalize} />
+          </div>
+
           <Button
             onClick={() => send.mutate()}
             disabled={send.isPending || parsed.valid.length === 0 || !subject.trim() || !body.trim() || !senderId || overLimit}
