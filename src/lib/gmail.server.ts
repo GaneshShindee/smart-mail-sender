@@ -3,6 +3,8 @@ import { createHmac, timingSafeEqual } from "crypto";
 
 const GMAIL_SCOPES = [
   "https://www.googleapis.com/auth/gmail.send",
+  "https://www.googleapis.com/auth/gmail.readonly",
+  "https://www.googleapis.com/auth/gmail.modify",
   "openid",
   "email",
   "profile",
@@ -266,4 +268,79 @@ export async function gmailSend(accessToken: string, raw: string) {
 
 export function callbackRedirectUri(origin: string) {
   return `${origin}/api/public/gmail/callback`;
+}
+
+/** List Gmail message IDs in INBOX newer than a timestamp. Uses `after:` search operator. */
+export async function gmailListInboxSince(accessToken: string, sinceSeconds: number, max = 25) {
+  const q = encodeURIComponent(`in:inbox newer_than:14d after:${sinceSeconds}`);
+  const res = await fetch(
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${max}&q=${q}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  if (!res.ok) throw new Error(`Gmail list failed: ${res.status} ${await res.text()}`);
+  return (await res.json()) as { messages?: Array<{ id: string; threadId: string }> };
+}
+
+export type GmailMessage = {
+  id: string;
+  threadId: string;
+  labelIds?: string[];
+  snippet?: string;
+  internalDate?: string;
+  payload?: {
+    headers?: Array<{ name: string; value: string }>;
+    mimeType?: string;
+    body?: { data?: string; size?: number };
+    parts?: Array<{ mimeType?: string; body?: { data?: string }; parts?: unknown }>;
+  };
+};
+
+export async function gmailGetMessage(accessToken: string, id: string): Promise<GmailMessage> {
+  const res = await fetch(
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=full`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  if (!res.ok) throw new Error(`Gmail get failed: ${res.status} ${await res.text()}`);
+  return (await res.json()) as GmailMessage;
+}
+
+export function parseFromHeader(value: string | undefined | null): { email: string; name?: string } {
+  const v = (value ?? "").trim();
+  const m = v.match(/^\s*(?:"?([^"<]*)"?\s*)?<?([^>\s]+@[^>\s]+)>?\s*$/);
+  if (!m) return { email: v.toLowerCase() };
+  return { email: m[2].toLowerCase(), name: (m[1] ?? "").trim() || undefined };
+}
+
+function decodeB64Url(s: string): string {
+  const norm = s.replace(/-/g, "+").replace(/_/g, "/");
+  const pad = norm.length % 4 === 0 ? norm : norm + "=".repeat(4 - (norm.length % 4));
+  try {
+    return Buffer.from(pad, "base64").toString("utf8");
+  } catch {
+    return "";
+  }
+}
+
+/** Best-effort text extraction from a Gmail message payload. */
+export function extractPlainText(msg: GmailMessage): string {
+  const walk = (node: NonNullable<GmailMessage["payload"]>): string => {
+    if (node.mimeType === "text/plain" && node.body?.data) return decodeB64Url(node.body.data);
+    if (node.parts && Array.isArray(node.parts)) {
+      for (const p of node.parts) {
+        const t = walk(p as NonNullable<GmailMessage["payload"]>);
+        if (t) return t;
+      }
+    }
+    if (node.body?.data) return decodeB64Url(node.body.data);
+    return "";
+  };
+  if (!msg.payload) return msg.snippet ?? "";
+  const text = walk(msg.payload);
+  return text || msg.snippet || "";
+}
+
+export function headerVal(msg: GmailMessage, name: string): string | undefined {
+  const h = msg.payload?.headers ?? [];
+  const hit = h.find((x) => x.name.toLowerCase() === name.toLowerCase());
+  return hit?.value;
 }

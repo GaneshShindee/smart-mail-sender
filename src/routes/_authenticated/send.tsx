@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { Send, Sparkles, Paperclip, X, FileText, Upload, Flame } from "lucide-react";
 import { EmailGeneratorDialog } from "@/components/email-generator-dialog";
 import { z } from "zod";
+import { Switch } from "@/components/ui/switch";
 
 const searchSchema = z
   .object({
@@ -64,6 +65,7 @@ function SendPage() {
   const [uploads, setUploads] = useState<File[]>([]);
   const uploadRef = useRef<HTMLInputElement | null>(null);
   const initedRef = useRef(false);
+  const [aiPersonalize, setAiPersonalize] = useState(false);
 
   const isFollowUp = search.followUp === "1";
 
@@ -159,11 +161,13 @@ function SendPage() {
           templateId: tplId || null,
           gmailAccountId: senderId || null,
           recipients: parsed.valid,
+          recipientMeta: parsed.meta,
           subject,
           body,
           variables: vars,
           resumeIds,
           uploads: inlineUploads,
+          aiPersonalize,
         },
       });
     },
@@ -339,6 +343,14 @@ function SendPage() {
               <div><Label>Body</Label><Textarea rows={8} value={body} onChange={(e) => setBody(e.target.value)} /></div>
             </CardContent>
           </Card>
+
+          <div className="flex items-center justify-between rounded-lg border border-border bg-muted/20 px-3 py-2.5">
+            <div className="text-sm">
+              <div className="font-medium flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5" /> AI Personalize</div>
+              <div className="text-xs text-muted-foreground">Small human-like tweaks per recipient (uses their name & company).</div>
+            </div>
+            <Switch checked={aiPersonalize} onCheckedChange={setAiPersonalize} />
+          </div>
 
           <Button
             onClick={() => send.mutate()}

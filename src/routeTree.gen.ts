@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
@@ -16,14 +17,22 @@ import { Route as AuthenticatedTemplatesRouteImport } from './routes/_authentica
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedSendRouteImport } from './routes/_authenticated/send'
 import { Route as AuthenticatedResumesRouteImport } from './routes/_authenticated/resumes'
+import { Route as AuthenticatedRepliesRouteImport } from './routes/_authenticated/replies'
+import { Route as AuthenticatedNotificationsRouteImport } from './routes/_authenticated/notifications'
 import { Route as AuthenticatedHistoryRouteImport } from './routes/_authenticated/history'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedAnalyticsRouteImport } from './routes/_authenticated/analytics'
 import { Route as AuthenticatedRecipientsIdRouteImport } from './routes/_authenticated/recipients.$id'
 import { Route as AuthenticatedCampaignsIdRouteImport } from './routes/_authenticated/campaigns.$id'
 import { Route as ApiPublicGmailCallbackRouteImport } from './routes/api/public/gmail/callback'
+import { Route as ApiPublicTrackPdfTokenRouteImport } from './routes/api/public/track/pdf/$token'
 import { Route as ApiPublicTrackOpenTokenRouteImport } from './routes/api/public/track/open/$token'
 
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
@@ -58,6 +67,17 @@ const AuthenticatedResumesRoute = AuthenticatedResumesRouteImport.update({
   path: '/resumes',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedRepliesRoute = AuthenticatedRepliesRouteImport.update({
+  id: '/replies',
+  path: '/replies',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedNotificationsRoute =
+  AuthenticatedNotificationsRouteImport.update({
+    id: '/notifications',
+    path: '/notifications',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedHistoryRoute = AuthenticatedHistoryRouteImport.update({
   id: '/history',
   path: '/history',
@@ -90,6 +110,11 @@ const ApiPublicGmailCallbackRoute = ApiPublicGmailCallbackRouteImport.update({
   path: '/api/public/gmail/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicTrackPdfTokenRoute = ApiPublicTrackPdfTokenRouteImport.update({
+  id: '/api/public/track/pdf/$token',
+  path: '/api/public/track/pdf/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicTrackOpenTokenRoute = ApiPublicTrackOpenTokenRouteImport.update({
   id: '/api/public/track/open/$token',
   path: '/api/public/track/open/$token',
@@ -99,9 +124,12 @@ const ApiPublicTrackOpenTokenRoute = ApiPublicTrackOpenTokenRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/analytics': typeof AuthenticatedAnalyticsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/history': typeof AuthenticatedHistoryRoute
+  '/notifications': typeof AuthenticatedNotificationsRoute
+  '/replies': typeof AuthenticatedRepliesRoute
   '/resumes': typeof AuthenticatedResumesRoute
   '/send': typeof AuthenticatedSendRoute
   '/settings': typeof AuthenticatedSettingsRoute
@@ -110,13 +138,17 @@ export interface FileRoutesByFullPath {
   '/recipients/$id': typeof AuthenticatedRecipientsIdRoute
   '/api/public/gmail/callback': typeof ApiPublicGmailCallbackRoute
   '/api/public/track/open/$token': typeof ApiPublicTrackOpenTokenRoute
+  '/api/public/track/pdf/$token': typeof ApiPublicTrackPdfTokenRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/analytics': typeof AuthenticatedAnalyticsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/history': typeof AuthenticatedHistoryRoute
+  '/notifications': typeof AuthenticatedNotificationsRoute
+  '/replies': typeof AuthenticatedRepliesRoute
   '/resumes': typeof AuthenticatedResumesRoute
   '/send': typeof AuthenticatedSendRoute
   '/settings': typeof AuthenticatedSettingsRoute
@@ -125,15 +157,19 @@ export interface FileRoutesByTo {
   '/recipients/$id': typeof AuthenticatedRecipientsIdRoute
   '/api/public/gmail/callback': typeof ApiPublicGmailCallbackRoute
   '/api/public/track/open/$token': typeof ApiPublicTrackOpenTokenRoute
+  '/api/public/track/pdf/$token': typeof ApiPublicTrackPdfTokenRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/_authenticated/analytics': typeof AuthenticatedAnalyticsRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/history': typeof AuthenticatedHistoryRoute
+  '/_authenticated/notifications': typeof AuthenticatedNotificationsRoute
+  '/_authenticated/replies': typeof AuthenticatedRepliesRoute
   '/_authenticated/resumes': typeof AuthenticatedResumesRoute
   '/_authenticated/send': typeof AuthenticatedSendRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
@@ -142,15 +178,19 @@ export interface FileRoutesById {
   '/_authenticated/recipients/$id': typeof AuthenticatedRecipientsIdRoute
   '/api/public/gmail/callback': typeof ApiPublicGmailCallbackRoute
   '/api/public/track/open/$token': typeof ApiPublicTrackOpenTokenRoute
+  '/api/public/track/pdf/$token': typeof ApiPublicTrackPdfTokenRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/auth'
+    | '/reset-password'
     | '/analytics'
     | '/dashboard'
     | '/history'
+    | '/notifications'
+    | '/replies'
     | '/resumes'
     | '/send'
     | '/settings'
@@ -159,13 +199,17 @@ export interface FileRouteTypes {
     | '/recipients/$id'
     | '/api/public/gmail/callback'
     | '/api/public/track/open/$token'
+    | '/api/public/track/pdf/$token'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/auth'
+    | '/reset-password'
     | '/analytics'
     | '/dashboard'
     | '/history'
+    | '/notifications'
+    | '/replies'
     | '/resumes'
     | '/send'
     | '/settings'
@@ -174,14 +218,18 @@ export interface FileRouteTypes {
     | '/recipients/$id'
     | '/api/public/gmail/callback'
     | '/api/public/track/open/$token'
+    | '/api/public/track/pdf/$token'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
     | '/auth'
+    | '/reset-password'
     | '/_authenticated/analytics'
     | '/_authenticated/dashboard'
     | '/_authenticated/history'
+    | '/_authenticated/notifications'
+    | '/_authenticated/replies'
     | '/_authenticated/resumes'
     | '/_authenticated/send'
     | '/_authenticated/settings'
@@ -190,18 +238,28 @@ export interface FileRouteTypes {
     | '/_authenticated/recipients/$id'
     | '/api/public/gmail/callback'
     | '/api/public/track/open/$token'
+    | '/api/public/track/pdf/$token'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
   ApiPublicGmailCallbackRoute: typeof ApiPublicGmailCallbackRoute
   ApiPublicTrackOpenTokenRoute: typeof ApiPublicTrackOpenTokenRoute
+  ApiPublicTrackPdfTokenRoute: typeof ApiPublicTrackPdfTokenRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth': {
       id: '/auth'
       path: '/auth'
@@ -251,6 +309,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedResumesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/replies': {
+      id: '/_authenticated/replies'
+      path: '/replies'
+      fullPath: '/replies'
+      preLoaderRoute: typeof AuthenticatedRepliesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/notifications': {
+      id: '/_authenticated/notifications'
+      path: '/notifications'
+      fullPath: '/notifications'
+      preLoaderRoute: typeof AuthenticatedNotificationsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/history': {
       id: '/_authenticated/history'
       path: '/history'
@@ -293,6 +365,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicGmailCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/track/pdf/$token': {
+      id: '/api/public/track/pdf/$token'
+      path: '/api/public/track/pdf/$token'
+      fullPath: '/api/public/track/pdf/$token'
+      preLoaderRoute: typeof ApiPublicTrackPdfTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/track/open/$token': {
       id: '/api/public/track/open/$token'
       path: '/api/public/track/open/$token'
@@ -307,6 +386,8 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedAnalyticsRoute: typeof AuthenticatedAnalyticsRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedHistoryRoute: typeof AuthenticatedHistoryRoute
+  AuthenticatedNotificationsRoute: typeof AuthenticatedNotificationsRoute
+  AuthenticatedRepliesRoute: typeof AuthenticatedRepliesRoute
   AuthenticatedResumesRoute: typeof AuthenticatedResumesRoute
   AuthenticatedSendRoute: typeof AuthenticatedSendRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
@@ -319,6 +400,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAnalyticsRoute: AuthenticatedAnalyticsRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedHistoryRoute: AuthenticatedHistoryRoute,
+  AuthenticatedNotificationsRoute: AuthenticatedNotificationsRoute,
+  AuthenticatedRepliesRoute: AuthenticatedRepliesRoute,
   AuthenticatedResumesRoute: AuthenticatedResumesRoute,
   AuthenticatedSendRoute: AuthenticatedSendRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
@@ -334,8 +417,10 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
   ApiPublicGmailCallbackRoute: ApiPublicGmailCallbackRoute,
   ApiPublicTrackOpenTokenRoute: ApiPublicTrackOpenTokenRoute,
+  ApiPublicTrackPdfTokenRoute: ApiPublicTrackPdfTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
