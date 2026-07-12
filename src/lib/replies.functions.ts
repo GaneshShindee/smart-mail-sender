@@ -221,6 +221,7 @@ export const generateReplyDraft = createServerFn({ method: "POST" })
       .eq("user_id", context.userId)
       .maybeSingle();
     if (error || !reply) throw new Error("Reply not found");
+    if (!reply.gmail_account_id) throw new Error("Reply is not linked to a Gmail account");
     let campaignContext = "";
     if (reply.email_history_id) {
       const { data: c } = await context.supabase
