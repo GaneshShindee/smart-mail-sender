@@ -57,7 +57,7 @@ export function LatexPreview({
         throw new Error("LaTeX compilation failed. See log below.");
       }
       const bytes = r.pdf as Uint8Array;
-      const blob = new Blob([bytes], { type: "application/pdf" });
+      const blob = new Blob([bytes.slice().buffer], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
       setPdfUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return url; });
       lastTexRef.current = tex;
