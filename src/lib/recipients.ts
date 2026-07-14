@@ -1,4 +1,21 @@
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Slightly stricter: local part + domain with at least one dot and a 2+ char TLD.
+const STRICT_EMAIL_RE = /^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$/;
+
+/** Domains that cannot receive real mail — reserved / example / invalid TLDs. */
+const UNROUTABLE_DOMAINS = new Set([
+  "example.com", "example.org", "example.net",
+  "test.com", "localhost", "invalid",
+]);
+const UNROUTABLE_TLDS = new Set(["test", "example", "invalid", "localhost", "local"]);
+
+export type SkipReason =
+  | "invalid_syntax"
+  | "duplicate"
+  | "blank"
+  | "unroutable_domain";
+
+export type SkippedRecipient = { email: string; reason: SkipReason; note?: string };
 
 export type ParsedRecipients = {
   valid: string[];
@@ -6,6 +23,7 @@ export type ParsedRecipients = {
   duplicates: number;
   total: number;
   meta: Array<{ email: string; name?: string }>;
+  skipped: SkippedRecipient[];
 };
 
 /** Parse a free-form recipient string.
@@ -22,6 +40,7 @@ export function parseRecipients(input: string): ParsedRecipients {
   const valid: string[] = [];
   const invalid: string[] = [];
   const meta: Array<{ email: string; name?: string }> = [];
+  const skipped: SkippedRecipient[] = [];
   let duplicates = 0;
 
   for (const raw of chunks) {
@@ -47,15 +66,24 @@ export function parseRecipients(input: string): ParsedRecipients {
     }
     if (!email) {
       invalid.push(raw);
+      skipped.push({ email: raw, reason: "invalid_syntax" });
       continue;
     }
     const t = email.toLowerCase();
-    if (!EMAIL_RE.test(t)) {
+    if (!STRICT_EMAIL_RE.test(t)) {
       invalid.push(raw);
+      skipped.push({ email: t, reason: "invalid_syntax" });
+      continue;
+    }
+    const domain = t.split("@")[1] ?? "";
+    const tld = domain.split(".").pop() ?? "";
+    if (UNROUTABLE_DOMAINS.has(domain) || UNROUTABLE_TLDS.has(tld)) {
+      skipped.push({ email: t, reason: "unroutable_domain", note: domain });
       continue;
     }
     if (seen.has(t)) {
       duplicates += 1;
+      skipped.push({ email: t, reason: "duplicate" });
       continue;
     }
     seen.add(t);
@@ -63,7 +91,48 @@ export function parseRecipients(input: string): ParsedRecipients {
     meta.push({ email: t, name });
   }
 
-  return { valid, invalid, duplicates, total: chunks.length, meta };
+  return { valid, invalid, duplicates, total: chunks.length, meta, skipped };
+}
+
+/** Server-side re-validation. Mirrors parseRecipients rules on a list of pre-cleaned emails. */
+export function validateEmails(
+  emails: string[],
+  metaByEmail?: Map<string, { name?: string; company?: string }>,
+): { valid: string[]; skipped: SkippedRecipient[] } {
+  const seen = new Set<string>();
+  const valid: string[] = [];
+  const skipped: SkippedRecipient[] = [];
+  for (const raw of emails) {
+    const t = (raw ?? "").trim().toLowerCase();
+    if (!t) { skipped.push({ email: raw, reason: "blank" }); continue; }
+    if (!STRICT_EMAIL_RE.test(t)) { skipped.push({ email: t, reason: "invalid_syntax" }); continue; }
+    const domain = t.split("@")[1] ?? "";
+    const tld = domain.split(".").pop() ?? "";
+    if (UNROUTABLE_DOMAINS.has(domain) || UNROUTABLE_TLDS.has(tld)) {
+      skipped.push({ email: t, reason: "unroutable_domain", note: domain });
+      continue;
+    }
+    if (seen.has(t)) { skipped.push({ email: t, reason: "duplicate" }); continue; }
+    seen.add(t);
+    valid.push(t);
+  }
+  // Keep metaByEmail param signature stable (unused here but callers may want it).
+  void metaByEmail;
+  return { valid, skipped };
+}
+
+/** Build a friendly greeting from a display name or the email local-part. */
+export function greetingFor(email: string, displayName?: string | null): string {
+  const { first_name, full_name } = deriveNames(email, displayName ?? undefined);
+  const name = first_name || full_name || "";
+  return name ? `Hello ${name},` : `Hello,`;
+}
+
+/** True when the body already personalizes the greeting (either via placeholders or a leading salutation). */
+export function bodyHasGreeting(body: string): boolean {
+  const s = body.trimStart();
+  if (/^(hi|hello|hey|dear|greetings)\b/i.test(s)) return true;
+  return /\{\{\s*(greeting|first_name|full_name|name)\s*\}\}/i.test(body);
 }
 
 /** Derive first/last/full name from a display name or (fallback) email local part. */
