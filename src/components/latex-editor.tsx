@@ -24,7 +24,7 @@ export function LatexEditor({
       theme="vs-dark"
       beforeMount={(monaco) => {
         const langs = monaco.languages.getLanguages();
-        if (!langs.some((l) => l.id === "latex")) {
+        if (!langs.some((l: { id: string }) => l.id === "latex")) {
           monaco.languages.register({ id: "latex", extensions: [".tex"], aliases: ["LaTeX", "latex"] });
           monaco.languages.setMonarchTokensProvider("latex", {
             defaultToken: "",
