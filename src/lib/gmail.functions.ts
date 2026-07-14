@@ -3,7 +3,7 @@ import { getRequestHost, getRequestHeader } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { applyTemplate } from "./templating";
-import { deriveNames } from "./recipients";
+import { deriveNames, validateEmails, greetingFor, bodyHasGreeting, type SkippedRecipient } from "./recipients";
 
 export type GmailAccount = {
   id: string;
@@ -157,9 +157,9 @@ export const testGmailConnection = createServerFn({ method: "POST" })
 const sendSchema = z.object({
   templateId: z.string().uuid().optional().nullable(),
   gmailAccountId: z.string().uuid().optional().nullable(),
-  recipients: z.array(z.string().email()).min(1).max(2000),
+  recipients: z.array(z.string()).min(1).max(2000),
   recipientMeta: z
-    .array(z.object({ email: z.string().email(), name: z.string().max(200).optional(), company: z.string().max(200).optional() }))
+    .array(z.object({ email: z.string(), name: z.string().max(200).optional(), company: z.string().max(200).optional() }))
     .max(2000)
     .optional(),
   subject: z.string().min(1).max(998),
@@ -172,7 +172,6 @@ const sendSchema = z.object({
     base64: z.string().min(1),
     size: z.number().int().positive().max(25 * 1024 * 1024),
   })).max(10).optional(),
-  aiPersonalize: z.boolean().optional(),
 });
 
 export const sendEmail = createServerFn({ method: "POST" })
@@ -218,16 +217,21 @@ export const sendEmail = createServerFn({ method: "POST" })
 
     const globalVars = data.variables ?? {};
 
-    // TO = sender (with display name); each recipient receives an individual message
-    // via BCC so we can attach a unique tracking pixel per recipient.
-    const deduped = Array.from(new Set(data.recipients.map((r) => r.trim().toLowerCase()).filter(Boolean)));
+    // Validate + dedupe recipients server-side. Skipped ones are recorded, campaign continues.
     const metaByEmail = new Map<string, { name?: string; company?: string }>();
     for (const m of data.recipientMeta ?? []) {
       metaByEmail.set(m.email.trim().toLowerCase(), { name: m.name, company: m.company });
     }
+    const totalRequested = data.recipients.length;
+    const { valid: deduped, skipped: preSkipped } = validateEmails(data.recipients, metaByEmail);
+    const skippedReport: SkippedRecipient[] = [...preSkipped];
+    if (deduped.length === 0) {
+      throw new Error(
+        "No valid recipients. All addresses were skipped (invalid syntax, duplicates, or unroutable domains).",
+      );
+    }
     const displayName = (conn.display_name ?? conn.full_name ?? "").trim() || null;
     const fromHeader = formatFromHeader(conn.gmail_email, displayName);
-    const toHeader = fromHeader;
 
     let templateName: string | null = null;
     if (data.templateId) {
@@ -299,7 +303,7 @@ export const sendEmail = createServerFn({ method: "POST" })
         template_id: data.templateId ?? null,
         template_name: templateName,
         recipient: deduped.join(", "),
-        bcc: deduped.join(", "),
+        bcc: null,
         subject,
         body,
         status: "sending",
@@ -308,6 +312,7 @@ export const sendEmail = createServerFn({ method: "POST" })
         attachments: attachmentMeta,
         recipient_count: deduped.length,
         tracking_enabled: trackingEnabled,
+        skipped: skippedReport,
       })
       .select("id")
       .single();
@@ -339,9 +344,6 @@ export const sendEmail = createServerFn({ method: "POST" })
     let failedCount = 0;
     const errorRef: { value: string | null } = { value: null };
 
-    const aiKey = process.env.LOVABLE_API_KEY;
-    const personalize = data.aiPersonalize === true && !!aiKey;
-
     const send = async (row: {
       id: string;
       email: string;
@@ -354,53 +356,24 @@ export const sendEmail = createServerFn({ method: "POST" })
         ? `${origin}/api/public/track/open/${row.tracking_token}`
         : undefined;
 
-      // Per-recipient variables
+      // Per-recipient variables — greeting is the ONLY personalization.
       const names = deriveNames(row.email, row.name);
+      const greeting = greetingFor(row.email, row.name);
       const perVars: Record<string, string> = {
         ...previewVars,
         first_name: names.first_name || "there",
         last_name: names.last_name,
         full_name: names.full_name || names.first_name || "there",
         name: names.full_name || names.first_name || "there",
+        greeting,
         company: row.company ?? previewVars.company ?? "",
         ...globalVars,
       };
       let personalSubject = applyTemplate(data.subject, perVars);
       let personalBody = applyTemplate(data.body, perVars);
-
-      // Optional light AI personalization (10% max) — best effort.
-      if (personalize) {
-        try {
-          const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${aiKey}` },
-            body: JSON.stringify({
-              model: "google/gemini-3-flash-preview",
-              messages: [
-                {
-                  role: "system",
-                  content:
-                    "You lightly personalize an outreach email for one specific recipient. Preserve 90-95% of the original wording, tone, and structure. Only make small human-like tweaks: personalize the greeting, and optionally add ONE short sentence that references the recipient's name, company, or role. Return STRICT JSON: {\"subject\":\"...\",\"body\":\"...\"}. No prose, no markdown.",
-                },
-                {
-                  role: "user",
-                  content: `Recipient: ${JSON.stringify({ email: row.email, first_name: names.first_name, full_name: names.full_name, company: row.company ?? "" })}\n\nSUBJECT:\n${personalSubject}\n\nBODY:\n${personalBody}`,
-                },
-              ],
-              response_format: { type: "json_object" },
-            }),
-          });
-          if (res.ok) {
-            const j = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-            const c = j.choices?.[0]?.message?.content ?? "";
-            const m = c.match(/\{[\s\S]*\}/);
-            if (m) {
-              const parsed = JSON.parse(m[0]) as { subject?: string; body?: string };
-              if (typeof parsed.subject === "string" && parsed.subject.trim()) personalSubject = parsed.subject;
-              if (typeof parsed.body === "string" && parsed.body.trim()) personalBody = parsed.body;
-            }
-          }
-        } catch { /* fall back to templated version */ }
+      // If the template doesn't already have a greeting anywhere, prepend one.
+      if (!bodyHasGreeting(data.body)) {
+        personalBody = `${greeting}\n\n${personalBody}`;
       }
 
       // Append tracked PDF link when a PDF is attached.
@@ -412,8 +385,8 @@ export const sendEmail = createServerFn({ method: "POST" })
       try {
         const raw = buildRawEmailWithAttachments({
           from: fromHeader,
-          to: toHeader,
-          bcc: row.email,
+          // TO = recipient. Sender is NOT placed in TO or BCC — no self-copy.
+          to: row.email,
           subject: personalSubject,
           body: personalBody,
           attachments,
@@ -463,5 +436,7 @@ export const sendEmail = createServerFn({ method: "POST" })
       sent: sentCount,
       failed: failedCount,
       recipientCount: deduped.length,
+      total: totalRequested,
+      skipped: skippedReport,
     };
   });

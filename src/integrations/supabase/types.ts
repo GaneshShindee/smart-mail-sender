@@ -29,6 +29,7 @@ export type Database = {
           recipient_count: number
           sender_email: string | null
           sent_at: string
+          skipped: Json
           status: string
           subject: string
           template_id: string | null
@@ -51,6 +52,7 @@ export type Database = {
           recipient_count?: number
           sender_email?: string | null
           sent_at?: string
+          skipped?: Json
           status?: string
           subject: string
           template_id?: string | null
@@ -73,6 +75,7 @@ export type Database = {
           recipient_count?: number
           sender_email?: string | null
           sent_at?: string
+          skipped?: Json
           status?: string
           subject?: string
           template_id?: string | null
@@ -532,6 +535,107 @@ export type Database = {
             columns: ["follow_up_template_id"]
             isOneToOne: false
             referencedRelation: "templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      resume_projects: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_default: boolean
+          main_tex_filename: string
+          name: string
+          storage_prefix: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_default?: boolean
+          main_tex_filename?: string
+          name: string
+          storage_prefix: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_default?: boolean
+          main_tex_filename?: string
+          name?: string
+          storage_prefix?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      resume_versions: {
+        Row: {
+          ats_score: number | null
+          company: string | null
+          created_at: string
+          custom_instructions: string | null
+          id: string
+          job_description: string
+          job_title: string | null
+          matched_keywords: Json
+          missing_keywords: Json
+          pdf_storage_path: string | null
+          project_id: string
+          strengths: Json
+          suggestions: Json
+          tex_content: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          ats_score?: number | null
+          company?: string | null
+          created_at?: string
+          custom_instructions?: string | null
+          id?: string
+          job_description: string
+          job_title?: string | null
+          matched_keywords?: Json
+          missing_keywords?: Json
+          pdf_storage_path?: string | null
+          project_id: string
+          strengths?: Json
+          suggestions?: Json
+          tex_content: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          ats_score?: number | null
+          company?: string | null
+          created_at?: string
+          custom_instructions?: string | null
+          id?: string
+          job_description?: string
+          job_title?: string | null
+          matched_keywords?: Json
+          missing_keywords?: Json
+          pdf_storage_path?: string | null
+          project_id?: string
+          strengths?: Json
+          suggestions?: Json
+          tex_content?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "resume_versions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "resume_projects"
             referencedColumns: ["id"]
           },
         ]
