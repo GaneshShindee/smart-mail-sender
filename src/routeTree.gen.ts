@@ -23,6 +23,7 @@ import { Route as AuthenticatedHistoryRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedAnalyticsRouteImport } from './routes/_authenticated/analytics'
 import { Route as AuthenticatedResumeStudioIndexRouteImport } from './routes/_authenticated/resume-studio/index'
+import { Route as AuthenticatedResumeStudioIdRouteImport } from './routes/_authenticated/resume-studio/$id'
 import { Route as AuthenticatedRecipientsIdRouteImport } from './routes/_authenticated/recipients.$id'
 import { Route as AuthenticatedCampaignsIdRouteImport } from './routes/_authenticated/campaigns.$id'
 import { Route as ApiPublicGmailCallbackRouteImport } from './routes/api/public/gmail/callback'
@@ -100,6 +101,12 @@ const AuthenticatedResumeStudioIndexRoute =
     path: '/resume-studio/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedResumeStudioIdRoute =
+  AuthenticatedResumeStudioIdRouteImport.update({
+    id: '/resume-studio/$id',
+    path: '/resume-studio/$id',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedRecipientsIdRoute =
   AuthenticatedRecipientsIdRouteImport.update({
     id: '/recipients/$id',
@@ -143,6 +150,7 @@ export interface FileRoutesByFullPath {
   '/templates': typeof AuthenticatedTemplatesRoute
   '/campaigns/$id': typeof AuthenticatedCampaignsIdRoute
   '/recipients/$id': typeof AuthenticatedRecipientsIdRoute
+  '/resume-studio/$id': typeof AuthenticatedResumeStudioIdRoute
   '/resume-studio/': typeof AuthenticatedResumeStudioIndexRoute
   '/api/public/gmail/callback': typeof ApiPublicGmailCallbackRoute
   '/api/public/track/open/$token': typeof ApiPublicTrackOpenTokenRoute
@@ -163,6 +171,7 @@ export interface FileRoutesByTo {
   '/templates': typeof AuthenticatedTemplatesRoute
   '/campaigns/$id': typeof AuthenticatedCampaignsIdRoute
   '/recipients/$id': typeof AuthenticatedRecipientsIdRoute
+  '/resume-studio/$id': typeof AuthenticatedResumeStudioIdRoute
   '/resume-studio': typeof AuthenticatedResumeStudioIndexRoute
   '/api/public/gmail/callback': typeof ApiPublicGmailCallbackRoute
   '/api/public/track/open/$token': typeof ApiPublicTrackOpenTokenRoute
@@ -185,6 +194,7 @@ export interface FileRoutesById {
   '/_authenticated/templates': typeof AuthenticatedTemplatesRoute
   '/_authenticated/campaigns/$id': typeof AuthenticatedCampaignsIdRoute
   '/_authenticated/recipients/$id': typeof AuthenticatedRecipientsIdRoute
+  '/_authenticated/resume-studio/$id': typeof AuthenticatedResumeStudioIdRoute
   '/_authenticated/resume-studio/': typeof AuthenticatedResumeStudioIndexRoute
   '/api/public/gmail/callback': typeof ApiPublicGmailCallbackRoute
   '/api/public/track/open/$token': typeof ApiPublicTrackOpenTokenRoute
@@ -207,6 +217,7 @@ export interface FileRouteTypes {
     | '/templates'
     | '/campaigns/$id'
     | '/recipients/$id'
+    | '/resume-studio/$id'
     | '/resume-studio/'
     | '/api/public/gmail/callback'
     | '/api/public/track/open/$token'
@@ -227,6 +238,7 @@ export interface FileRouteTypes {
     | '/templates'
     | '/campaigns/$id'
     | '/recipients/$id'
+    | '/resume-studio/$id'
     | '/resume-studio'
     | '/api/public/gmail/callback'
     | '/api/public/track/open/$token'
@@ -248,6 +260,7 @@ export interface FileRouteTypes {
     | '/_authenticated/templates'
     | '/_authenticated/campaigns/$id'
     | '/_authenticated/recipients/$id'
+    | '/_authenticated/resume-studio/$id'
     | '/_authenticated/resume-studio/'
     | '/api/public/gmail/callback'
     | '/api/public/track/open/$token'
@@ -364,6 +377,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedResumeStudioIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/resume-studio/$id': {
+      id: '/_authenticated/resume-studio/$id'
+      path: '/resume-studio/$id'
+      fullPath: '/resume-studio/$id'
+      preLoaderRoute: typeof AuthenticatedResumeStudioIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/recipients/$id': {
       id: '/_authenticated/recipients/$id'
       path: '/recipients/$id'
@@ -414,6 +434,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedTemplatesRoute: typeof AuthenticatedTemplatesRoute
   AuthenticatedCampaignsIdRoute: typeof AuthenticatedCampaignsIdRoute
   AuthenticatedRecipientsIdRoute: typeof AuthenticatedRecipientsIdRoute
+  AuthenticatedResumeStudioIdRoute: typeof AuthenticatedResumeStudioIdRoute
   AuthenticatedResumeStudioIndexRoute: typeof AuthenticatedResumeStudioIndexRoute
 }
 
@@ -429,6 +450,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedTemplatesRoute: AuthenticatedTemplatesRoute,
   AuthenticatedCampaignsIdRoute: AuthenticatedCampaignsIdRoute,
   AuthenticatedRecipientsIdRoute: AuthenticatedRecipientsIdRoute,
+  AuthenticatedResumeStudioIdRoute: AuthenticatedResumeStudioIdRoute,
   AuthenticatedResumeStudioIndexRoute: AuthenticatedResumeStudioIndexRoute,
 }
 
