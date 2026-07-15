@@ -19,6 +19,7 @@ import { Route as AuthenticatedSendRouteImport } from './routes/_authenticated/s
 import { Route as AuthenticatedResumesRouteImport } from './routes/_authenticated/resumes'
 import { Route as AuthenticatedRepliesRouteImport } from './routes/_authenticated/replies'
 import { Route as AuthenticatedNotificationsRouteImport } from './routes/_authenticated/notifications'
+import { Route as AuthenticatedJobsRouteImport } from './routes/_authenticated/jobs'
 import { Route as AuthenticatedHistoryRouteImport } from './routes/_authenticated/history'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedAnalyticsRouteImport } from './routes/_authenticated/analytics'
@@ -80,6 +81,11 @@ const AuthenticatedNotificationsRoute =
     path: '/notifications',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedJobsRoute = AuthenticatedJobsRouteImport.update({
+  id: '/jobs',
+  path: '/jobs',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedHistoryRoute = AuthenticatedHistoryRouteImport.update({
   id: '/history',
   path: '/history',
@@ -142,6 +148,7 @@ export interface FileRoutesByFullPath {
   '/analytics': typeof AuthenticatedAnalyticsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/history': typeof AuthenticatedHistoryRoute
+  '/jobs': typeof AuthenticatedJobsRoute
   '/notifications': typeof AuthenticatedNotificationsRoute
   '/replies': typeof AuthenticatedRepliesRoute
   '/resumes': typeof AuthenticatedResumesRoute
@@ -163,6 +170,7 @@ export interface FileRoutesByTo {
   '/analytics': typeof AuthenticatedAnalyticsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/history': typeof AuthenticatedHistoryRoute
+  '/jobs': typeof AuthenticatedJobsRoute
   '/notifications': typeof AuthenticatedNotificationsRoute
   '/replies': typeof AuthenticatedRepliesRoute
   '/resumes': typeof AuthenticatedResumesRoute
@@ -186,6 +194,7 @@ export interface FileRoutesById {
   '/_authenticated/analytics': typeof AuthenticatedAnalyticsRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/history': typeof AuthenticatedHistoryRoute
+  '/_authenticated/jobs': typeof AuthenticatedJobsRoute
   '/_authenticated/notifications': typeof AuthenticatedNotificationsRoute
   '/_authenticated/replies': typeof AuthenticatedRepliesRoute
   '/_authenticated/resumes': typeof AuthenticatedResumesRoute
@@ -209,6 +218,7 @@ export interface FileRouteTypes {
     | '/analytics'
     | '/dashboard'
     | '/history'
+    | '/jobs'
     | '/notifications'
     | '/replies'
     | '/resumes'
@@ -230,6 +240,7 @@ export interface FileRouteTypes {
     | '/analytics'
     | '/dashboard'
     | '/history'
+    | '/jobs'
     | '/notifications'
     | '/replies'
     | '/resumes'
@@ -252,6 +263,7 @@ export interface FileRouteTypes {
     | '/_authenticated/analytics'
     | '/_authenticated/dashboard'
     | '/_authenticated/history'
+    | '/_authenticated/jobs'
     | '/_authenticated/notifications'
     | '/_authenticated/replies'
     | '/_authenticated/resumes'
@@ -349,6 +361,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedNotificationsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/jobs': {
+      id: '/_authenticated/jobs'
+      path: '/jobs'
+      fullPath: '/jobs'
+      preLoaderRoute: typeof AuthenticatedJobsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/history': {
       id: '/_authenticated/history'
       path: '/history'
@@ -426,6 +445,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedAnalyticsRoute: typeof AuthenticatedAnalyticsRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedHistoryRoute: typeof AuthenticatedHistoryRoute
+  AuthenticatedJobsRoute: typeof AuthenticatedJobsRoute
   AuthenticatedNotificationsRoute: typeof AuthenticatedNotificationsRoute
   AuthenticatedRepliesRoute: typeof AuthenticatedRepliesRoute
   AuthenticatedResumesRoute: typeof AuthenticatedResumesRoute
@@ -442,6 +462,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAnalyticsRoute: AuthenticatedAnalyticsRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedHistoryRoute: AuthenticatedHistoryRoute,
+  AuthenticatedJobsRoute: AuthenticatedJobsRoute,
   AuthenticatedNotificationsRoute: AuthenticatedNotificationsRoute,
   AuthenticatedRepliesRoute: AuthenticatedRepliesRoute,
   AuthenticatedResumesRoute: AuthenticatedResumesRoute,
