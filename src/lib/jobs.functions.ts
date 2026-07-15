@@ -102,8 +102,9 @@ export const upsertJob = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => jobShape.parse(d))
   .handler(async ({ data, context }) => {
-    const payload = { ...data, user_id: context.userId };
-    delete (payload as { id?: unknown }).id;
+    const { id: _omit, ...rest } = data;
+    void _omit;
+    const payload = { ...rest, user_id: context.userId };
     if (data.id) {
       const { data: row, error } = await context.supabase
         .from("jobs")
