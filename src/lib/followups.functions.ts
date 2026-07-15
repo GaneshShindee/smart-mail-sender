@@ -123,7 +123,13 @@ export const decideFollowup = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
-    const update: Record<string, unknown> = {};
+    const update: {
+      status?: "approved" | "rejected";
+      scheduled_at?: string | null;
+      suggested_template_id?: string | null;
+      suggested_resume_version_id?: string | null;
+      gmail_connection_id?: string | null;
+    } = {};
     if (data.action === "approve") {
       update.status = "approved";
       update.scheduled_at = data.scheduledAt ?? nextIST3pm().toISOString();
