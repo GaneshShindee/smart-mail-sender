@@ -61,10 +61,10 @@ export const refreshFollowupQueue = createServerFn({ method: "POST" })
     // Fetch opened recipients not replied and not already queued.
     const { data: recipients, error } = await supabase
       .from("email_recipients")
-      .select("id, campaign_id, email, name, company, open_count, last_opened_at, pdf_open_count, last_pdf_open_at, replied_at")
+      .select("id, email_history_id, email, name, company, open_count, last_opened_at, click_count, last_clicked_at, status")
       .eq("user_id", userId)
       .gt("open_count", 0)
-      .is("replied_at", null)
+      .neq("status", "replied")
       .order("last_opened_at", { ascending: false })
       .limit(200);
     if (error) throw new Error(error.message);
@@ -79,25 +79,25 @@ export const refreshFollowupQueue = createServerFn({ method: "POST" })
     const inserted: string[] = [];
     for (const r of recipients ?? []) {
       if (excluded.has(r.id)) continue;
-      const condition = r.pdf_open_count && r.pdf_open_count > 0
+      const condition = r.click_count && r.click_count > 0
         ? "clicked_pdf"
         : r.open_count >= 2
         ? "opened_multi"
         : "opened";
-      const priority = (r.pdf_open_count ?? 0) * 10 + (r.open_count ?? 0);
+      const priority = (r.click_count ?? 0) * 10 + (r.open_count ?? 0);
       const { data: row } = await supabase
         .from("followup_queue")
         .insert({
           user_id: userId,
           recipient_id: r.id,
-          campaign_id: r.campaign_id,
+          campaign_id: r.email_history_id,
           recipient_email: r.email,
           recipient_name: r.name ?? "",
           company: r.company ?? "",
           condition,
           open_count: r.open_count ?? 0,
           last_open_at: r.last_opened_at,
-          pdf_click_at: r.last_pdf_open_at,
+          pdf_click_at: r.last_clicked_at,
           priority,
           status: "pending",
         })
