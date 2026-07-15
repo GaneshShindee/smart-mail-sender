@@ -284,17 +284,25 @@ function CreateProjectDialog({
 }
 
 function GenerateDialog({
-  open, onOpenChange, pending, projects, projectId, setProjectId, onSubmit,
+  open, onOpenChange, pending, projects, projectId, setProjectId, onSubmit, initial,
 }: {
   open: boolean; onOpenChange: (o: boolean) => void; pending: boolean;
   projects: Array<{ id: string; name: string }>;
   projectId: string; setProjectId: (v: string) => void;
   onSubmit: (v: { projectId: string; jd: string; jobTitle: string; company: string; instructions: string }) => void;
+  initial?: { jd: string; title: string; company: string } | null;
 }) {
   const [jd, setJd] = useState("");
   const [jobTitle, setJobTitle] = useState("");
   const [company, setCompany] = useState("");
   const [instructions, setInstructions] = useState("");
+  useEffect(() => {
+    if (open && initial) {
+      setJd(initial.jd || "");
+      setJobTitle(initial.title || "");
+      setCompany(initial.company || "");
+    }
+  }, [open, initial]);
   return (
     <Dialog open={open} onOpenChange={(o) => { onOpenChange(o); if (!o) { setJd(""); setJobTitle(""); setCompany(""); setInstructions(""); } }}>
       <DialogContent className="sm:max-w-2xl">
