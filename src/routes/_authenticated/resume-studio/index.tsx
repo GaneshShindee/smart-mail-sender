@@ -223,6 +223,7 @@ function ResumeStudioPage() {
         projectId={genProjectId}
         setProjectId={setGenProjectId}
         onSubmit={(v) => generate.mutate(v)}
+        initial={prefill}
       />
     </div>
   );
