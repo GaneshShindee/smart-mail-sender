@@ -305,6 +305,114 @@ export type Database = {
           },
         ]
       }
+      followup_queue: {
+        Row: {
+          campaign_id: string | null
+          company: string | null
+          condition: string
+          created_at: string
+          gmail_connection_id: string | null
+          id: string
+          last_open_at: string | null
+          notes: string | null
+          open_count: number
+          pdf_click_at: string | null
+          priority: number
+          recipient_email: string
+          recipient_id: string | null
+          recipient_name: string | null
+          scheduled_at: string | null
+          sent_at: string | null
+          status: string
+          suggested_resume_version_id: string | null
+          suggested_template_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          campaign_id?: string | null
+          company?: string | null
+          condition?: string
+          created_at?: string
+          gmail_connection_id?: string | null
+          id?: string
+          last_open_at?: string | null
+          notes?: string | null
+          open_count?: number
+          pdf_click_at?: string | null
+          priority?: number
+          recipient_email: string
+          recipient_id?: string | null
+          recipient_name?: string | null
+          scheduled_at?: string | null
+          sent_at?: string | null
+          status?: string
+          suggested_resume_version_id?: string | null
+          suggested_template_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          campaign_id?: string | null
+          company?: string | null
+          condition?: string
+          created_at?: string
+          gmail_connection_id?: string | null
+          id?: string
+          last_open_at?: string | null
+          notes?: string | null
+          open_count?: number
+          pdf_click_at?: string | null
+          priority?: number
+          recipient_email?: string
+          recipient_id?: string | null
+          recipient_name?: string | null
+          scheduled_at?: string | null
+          sent_at?: string | null
+          status?: string
+          suggested_resume_version_id?: string | null
+          suggested_template_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "followup_queue_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "email_history"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "followup_queue_gmail_connection_id_fkey"
+            columns: ["gmail_connection_id"]
+            isOneToOne: false
+            referencedRelation: "gmail_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "followup_queue_recipient_id_fkey"
+            columns: ["recipient_id"]
+            isOneToOne: false
+            referencedRelation: "email_recipients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "followup_queue_suggested_resume_version_id_fkey"
+            columns: ["suggested_resume_version_id"]
+            isOneToOne: false
+            referencedRelation: "resume_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "followup_queue_suggested_template_id_fkey"
+            columns: ["suggested_template_id"]
+            isOneToOne: false
+            referencedRelation: "templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gmail_connections: {
         Row: {
           access_token: string | null
@@ -413,6 +521,104 @@ export type Database = {
         }
         Relationships: []
       }
+      job_bookmarks: {
+        Row: {
+          created_at: string
+          job_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          job_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          job_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_bookmarks_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      jobs: {
+        Row: {
+          apply_url: string | null
+          company: string
+          company_website: string | null
+          created_at: string
+          description: string | null
+          employment_type: string | null
+          experience: string | null
+          id: string
+          is_public: boolean
+          location: string | null
+          recruiter_email: string | null
+          responsibilities: string[]
+          salary: string | null
+          skills: string[]
+          source_url: string | null
+          tags: string[]
+          technologies: string[]
+          title: string
+          updated_at: string
+          user_id: string
+          work_mode: string | null
+        }
+        Insert: {
+          apply_url?: string | null
+          company: string
+          company_website?: string | null
+          created_at?: string
+          description?: string | null
+          employment_type?: string | null
+          experience?: string | null
+          id?: string
+          is_public?: boolean
+          location?: string | null
+          recruiter_email?: string | null
+          responsibilities?: string[]
+          salary?: string | null
+          skills?: string[]
+          source_url?: string | null
+          tags?: string[]
+          technologies?: string[]
+          title: string
+          updated_at?: string
+          user_id: string
+          work_mode?: string | null
+        }
+        Update: {
+          apply_url?: string | null
+          company?: string
+          company_website?: string | null
+          created_at?: string
+          description?: string | null
+          employment_type?: string | null
+          experience?: string | null
+          id?: string
+          is_public?: boolean
+          location?: string | null
+          recruiter_email?: string | null
+          responsibilities?: string[]
+          salary?: string | null
+          skills?: string[]
+          source_url?: string | null
+          tags?: string[]
+          technologies?: string[]
+          title?: string
+          updated_at?: string
+          user_id?: string
+          work_mode?: string | null
+        }
+        Relationships: []
+      }
       pdf_events: {
         Row: {
           browser: string | null
@@ -490,6 +696,7 @@ export type Database = {
           avatar_url: string | null
           compose_prefs: Json
           created_at: string
+          default_gmail_connection_id: string | null
           default_template_id: string | null
           email: string | null
           follow_up_template_id: string | null
@@ -502,6 +709,7 @@ export type Database = {
           avatar_url?: string | null
           compose_prefs?: Json
           created_at?: string
+          default_gmail_connection_id?: string | null
           default_template_id?: string | null
           email?: string | null
           follow_up_template_id?: string | null
@@ -514,6 +722,7 @@ export type Database = {
           avatar_url?: string | null
           compose_prefs?: Json
           created_at?: string
+          default_gmail_connection_id?: string | null
           default_template_id?: string | null
           email?: string | null
           follow_up_template_id?: string | null
@@ -523,6 +732,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "profiles_default_gmail_connection_id_fkey"
+            columns: ["default_gmail_connection_id"]
+            isOneToOne: false
+            referencedRelation: "gmail_connections"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "profiles_default_template_id_fkey"
             columns: ["default_template_id"]
@@ -570,6 +786,36 @@ export type Database = {
           main_tex_filename?: string
           name?: string
           storage_prefix?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      resume_prompt_templates: {
+        Row: {
+          created_at: string
+          id: string
+          is_default: boolean
+          name: string
+          prompt: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          name: string
+          prompt?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          name?: string
+          prompt?: string
           updated_at?: string
           user_id?: string
         }
