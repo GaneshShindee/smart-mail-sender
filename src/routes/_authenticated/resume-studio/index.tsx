@@ -18,19 +18,29 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "../dashboard";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, Trash2, Wand2, FileText, Sparkles, ArrowRight, Upload } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { fileToBase64 } from "@/lib/resumes";
 import { relativeTime } from "@/lib/user-agent";
+import { z } from "zod";
+
+const searchSchema = z.object({
+  jd: z.string().optional(),
+  title: z.string().optional(),
+  company: z.string().optional(),
+  jobId: z.string().optional(),
+}).partial();
 
 export const Route = createFileRoute("/_authenticated/resume-studio/")({
   head: () => ({ meta: [{ title: "AI Resume Studio — Smart Email Sender" }] }),
+  validateSearch: (s: Record<string, unknown>) => searchSchema.parse(s),
   component: ResumeStudioPage,
 });
 
 function ResumeStudioPage() {
   const qc = useQueryClient();
   const nav = useNavigate();
+  const search = Route.useSearch();
   const listFn = useServerFn(listResumeProjects);
   const createFn = useServerFn(createResumeProject);
   const delFn = useServerFn(deleteResumeProject);
@@ -43,6 +53,16 @@ function ResumeStudioPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [genOpen, setGenOpen] = useState(false);
   const [genProjectId, setGenProjectId] = useState<string>("");
+  const [prefill, setPrefill] = useState<{ jd: string; title: string; company: string } | null>(null);
+
+  useEffect(() => {
+    if ((search.jd || search.title || search.company) && projects.data?.length && !genOpen) {
+      setGenProjectId(projects.data.find((p) => p.is_default)?.id ?? projects.data[0].id);
+      setPrefill({ jd: search.jd ?? "", title: search.title ?? "", company: search.company ?? "" });
+      setGenOpen(true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search.jd, search.title, search.company, projects.data]);
 
   const del = useMutation({
     mutationFn: (id: string) => delFn({ data: { id } }),
@@ -203,6 +223,7 @@ function ResumeStudioPage() {
         projectId={genProjectId}
         setProjectId={setGenProjectId}
         onSubmit={(v) => generate.mutate(v)}
+        initial={prefill}
       />
     </div>
   );
@@ -263,17 +284,25 @@ function CreateProjectDialog({
 }
 
 function GenerateDialog({
-  open, onOpenChange, pending, projects, projectId, setProjectId, onSubmit,
+  open, onOpenChange, pending, projects, projectId, setProjectId, onSubmit, initial,
 }: {
   open: boolean; onOpenChange: (o: boolean) => void; pending: boolean;
   projects: Array<{ id: string; name: string }>;
   projectId: string; setProjectId: (v: string) => void;
   onSubmit: (v: { projectId: string; jd: string; jobTitle: string; company: string; instructions: string }) => void;
+  initial?: { jd: string; title: string; company: string } | null;
 }) {
   const [jd, setJd] = useState("");
   const [jobTitle, setJobTitle] = useState("");
   const [company, setCompany] = useState("");
   const [instructions, setInstructions] = useState("");
+  useEffect(() => {
+    if (open && initial) {
+      setJd(initial.jd || "");
+      setJobTitle(initial.title || "");
+      setCompany(initial.company || "");
+    }
+  }, [open, initial]);
   return (
     <Dialog open={open} onOpenChange={(o) => { onOpenChange(o); if (!o) { setJd(""); setJobTitle(""); setCompany(""); setInstructions(""); } }}>
       <DialogContent className="sm:max-w-2xl">

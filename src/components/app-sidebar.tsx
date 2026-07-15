@@ -1,5 +1,5 @@
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
-import { LayoutDashboard, LayoutTemplate, Send, History, Settings, LogOut, FileText, BarChart3, Inbox, Bell, Wand2 } from "lucide-react";
+import { LayoutDashboard, LayoutTemplate, Send, History, Settings, LogOut, FileText, BarChart3, Inbox, Bell, Wand2, Briefcase, ListChecks } from "lucide-react";
 import logoAsset from "@/assets/logo.png.asset.json";
 import {
   Sidebar,
@@ -19,11 +19,13 @@ import { useQueryClient } from "@tanstack/react-query";
 
 const items = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
+  { title: "Jobs", url: "/jobs", icon: Briefcase },
   { title: "My Templates", url: "/templates", icon: LayoutTemplate },
   { title: "Resumes", url: "/resumes", icon: FileText },
   { title: "AI Resume Studio", url: "/resume-studio", icon: Wand2 },
   { title: "Send Email", url: "/send", icon: Send },
   { title: "History", url: "/history", icon: History },
+  { title: "Follow-ups", url: "/followups", icon: ListChecks },
   { title: "Replies", url: "/replies", icon: Inbox },
   { title: "Notifications", url: "/notifications", icon: Bell },
   { title: "Analytics", url: "/analytics", icon: BarChart3 },

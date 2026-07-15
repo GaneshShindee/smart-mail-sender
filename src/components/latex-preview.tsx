@@ -90,7 +90,10 @@ export function LatexPreview({
   const download = () => {
     const blob = new Blob([tex], { type: "application/x-tex" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = filename; a.click();
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
     URL.revokeObjectURL(url);
   };
 
