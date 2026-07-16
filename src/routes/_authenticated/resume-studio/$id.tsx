@@ -51,6 +51,14 @@ function WorkspacePage() {
     onError: (e) => toast.error("Save failed", { description: (e as Error).message }),
   });
 
+  // Auto-save 1.5s after the user stops editing.
+  useEffect(() => {
+    if (!dirty || save.isPending) return;
+    const t = setTimeout(() => save.mutate(), 1500);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tex, dirty]);
+
   const uploadPdf = useMutation({
     mutationFn: (b64: string) => uploadPdfFn({ data: { id, pdfBase64: b64 } }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["resume-version", id] }),
