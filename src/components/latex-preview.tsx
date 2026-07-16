@@ -13,7 +13,7 @@ async function loadEngine(): Promise<any> {
   if (window.PdfTeXEngine) return new window.PdfTeXEngine();
   await new Promise<void>((resolve, reject) => {
     const s = document.createElement("script");
-    s.src = "https://cdn.jsdelivr.net/gh/SwiftLaTeX/SwiftLaTeX@master/PdfTeXEngine.js";
+    s.src = "/swiftlatex/PdfTeXEngine.js";
     s.async = true;
     s.onload = () => resolve();
     s.onerror = () => reject(new Error("Failed to load PdfTeXEngine"));
