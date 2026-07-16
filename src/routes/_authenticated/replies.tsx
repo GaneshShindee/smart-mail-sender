@@ -14,6 +14,7 @@ import { Inbox, RefreshCw, Sparkles, Send, Archive, ArchiveRestore } from "lucid
 import { useState } from "react";
 import { toast } from "sonner";
 import { relativeTime } from "@/lib/user-agent";
+import { ReplyAssistantModal, type ReplyTone, type ReplyLength } from "@/components/reply-assistant-modal";
 
 export const Route = createFileRoute("/_authenticated/replies")({
   head: () => ({ meta: [{ title: "Reply Center — Smart Email Sender" }] }),
@@ -33,6 +34,7 @@ function RepliesPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
+  const [assistOpen, setAssistOpen] = useState(false);
 
   const list = useQuery({ queryKey: ["replies", filter], queryFn: () => listFn({ data: { filter } }) });
   const detail = useQuery({
@@ -68,8 +70,9 @@ function RepliesPage() {
   });
 
   const generate = useMutation({
-    mutationFn: () => genFn({ data: { replyId: selectedId! } }),
-    onSuccess: (r) => { setSubject(r.subject); setBody(r.body); toast.success("Draft generated"); },
+    mutationFn: (opts: { tone: ReplyTone; length: ReplyLength; instruction: string }) =>
+      genFn({ data: { replyId: selectedId!, tone: opts.tone, length: opts.length, instruction: opts.instruction || undefined } }),
+    onSuccess: (r) => { setSubject(r.subject); setBody(r.body); setAssistOpen(false); toast.success("Draft generated"); },
     onError: (e) => toast.error("AI failed", { description: (e as Error).message }),
   });
 
@@ -176,7 +179,7 @@ function RepliesPage() {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <Label>Your reply</Label>
-                    <Button size="sm" variant="outline" onClick={() => generate.mutate()} disabled={generate.isPending}>
+                    <Button size="sm" variant="outline" onClick={() => setAssistOpen(true)} disabled={generate.isPending}>
                       <Sparkles className="h-3.5 w-3.5 mr-1" /> {generate.isPending ? "Drafting…" : "AI Draft"}
                     </Button>
                   </div>
@@ -197,6 +200,13 @@ function RepliesPage() {
           </CardContent>
         </Card>
       </div>
+
+      <ReplyAssistantModal
+        open={assistOpen}
+        onOpenChange={setAssistOpen}
+        pending={generate.isPending}
+        onGenerate={(opts) => generate.mutate(opts)}
+      />
     </div>
   );
 }

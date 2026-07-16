@@ -20,7 +20,8 @@ import { toast } from "sonner";
 import { Send, Sparkles, Paperclip, X, FileText, Upload, Flame } from "lucide-react";
 import { EmailGeneratorDialog } from "@/components/email-generator-dialog";
 import { z } from "zod";
-import { Switch } from "@/components/ui/switch";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { getResumeVersion } from "@/lib/resume-studio.functions";
 
 const searchSchema = z
   .object({
@@ -31,6 +32,7 @@ const searchSchema = z
     campaignId: z.string().optional(),
     name: z.string().optional(),
     company: z.string().optional(),
+    resumeVersionId: z.string().optional(),
   })
   .partial();
 
@@ -65,7 +67,11 @@ function SendPage() {
   const [uploads, setUploads] = useState<File[]>([]);
   const uploadRef = useRef<HTMLInputElement | null>(null);
   const initedRef = useRef(false);
-  const [aiPersonalize, setAiPersonalize] = useState(false);
+  const [report, setReport] = useState<null | {
+    total: number; sent: number; failed: number;
+    skipped: Array<{ email: string; reason: string; note?: string }>;
+    recipientCount: number;
+  }>(null);
 
   const isFollowUp = search.followUp === "1";
 
@@ -160,26 +166,67 @@ function SendPage() {
         data: {
           templateId: tplId || null,
           gmailAccountId: senderId || null,
-          recipients: parsed.valid,
+          // Send everything the user typed — the server re-validates and skips.
+          recipients: parsed.valid.length ? parsed.valid : [],
           recipientMeta: parsed.meta,
           subject,
           body,
           variables: vars,
           resumeIds,
           uploads: inlineUploads,
-          aiPersonalize,
         },
       });
     },
     onSuccess: (r) => {
-      toast.success(`Email sent to ${r.recipientCount} recipient${r.recipientCount === 1 ? "" : "s"}`);
+      toast.success(`Email sent to ${r.sent} recipient${r.sent === 1 ? "" : "s"}`);
       qc.invalidateQueries({ queryKey: ["dashboard-stats"] });
       qc.invalidateQueries({ queryKey: ["history"] });
+      setReport({
+        total: r.total ?? r.recipientCount,
+        sent: r.sent,
+        failed: r.failed,
+        skipped: (r.skipped ?? []) as Array<{ email: string; reason: string; note?: string }>,
+        recipientCount: r.recipientCount,
+      });
       setRecipientText("");
       setUploads([]);
     },
     onError: (e) => toast.error("Send failed", { description: (e as Error).message }),
   });
+
+  // Auto-attach a generated resume version when arriving from Resume Studio.
+  const getVersionFn = useServerFn(getResumeVersion);
+  useEffect(() => {
+    if (!search.resumeVersionId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await getVersionFn({ data: { id: search.resumeVersionId! } });
+        if (cancelled) return;
+        // Attach as an inline upload (temporary) so the user can review/replace.
+        const filename = `${(r.version.company || r.version.job_title || "resume").replace(/[^A-Za-z0-9._-]+/g, "_")}.tex`;
+        const blob = new Blob([r.version.tex_content], { type: "application/x-tex" });
+        const file = new File([blob], filename, { type: "application/x-tex" });
+        setUploads((u) => (u.some((x) => x.name === file.name) ? u : [...u, file]));
+        // If a PDF was compiled and uploaded to storage, prefer that.
+        if (r.pdfUrl) {
+          try {
+            const resp = await fetch(r.pdfUrl);
+            const buf = await resp.arrayBuffer();
+            const pdf = new File(
+              [buf],
+              filename.replace(/\.tex$/, ".pdf"),
+              { type: "application/pdf" },
+            );
+            setUploads((u) => (u.some((x) => x.name === pdf.name) ? u : [...u, pdf]));
+          } catch { /* ignore, .tex still attached */ }
+        }
+      } catch (e) {
+        toast.error("Could not load resume", { description: (e as Error).message });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [search.resumeVersionId, getVersionFn]);
 
   if (accounts.data && accounts.data.length === 0) {
     return (
@@ -344,12 +391,12 @@ function SendPage() {
             </CardContent>
           </Card>
 
-          <div className="flex items-center justify-between rounded-lg border border-border bg-muted/20 px-3 py-2.5">
-            <div className="text-sm">
-              <div className="font-medium flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5" /> AI Personalize</div>
-              <div className="text-xs text-muted-foreground">Small human-like tweaks per recipient (uses their name & company).</div>
-            </div>
-            <Switch checked={aiPersonalize} onCheckedChange={setAiPersonalize} />
+          <div className="rounded-lg border border-border bg-muted/20 px-3 py-2.5 text-xs text-muted-foreground flex items-start gap-2">
+            <Sparkles className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+            <span>
+              Each recipient gets a personalized greeting like <span className="font-medium text-foreground">Hello Ganesh,</span> —
+              the rest of the template is sent exactly as written. Invalid, duplicate, and unroutable addresses are automatically skipped.
+            </span>
           </div>
 
           <Button
@@ -396,6 +443,79 @@ function SendPage() {
           setRecipientText(merged.join(", "));
         }}
       />
+
+      <SendReportDialog report={report} onClose={() => setReport(null)} />
     </div>
   );
+}
+
+function SendReportDialog({
+  report,
+  onClose,
+}: {
+  report: null | { total: number; sent: number; failed: number; skipped: Array<{ email: string; reason: string; note?: string }>; recipientCount: number };
+  onClose: () => void;
+}) {
+  const open = !!report;
+  const download = () => {
+    if (!report) return;
+    const now = new Date().toISOString();
+    const rows: string[] = ["Email,Status,Reason,Timestamp"];
+    for (let i = 0; i < report.sent; i++) rows.push(`,sent,,${now}`);
+    for (let i = 0; i < report.failed; i++) rows.push(`,failed,,${now}`);
+    for (const s of report.skipped) rows.push(`${csv(s.email)},skipped,${csv(s.reason + (s.note ? ` (${s.note})` : ""))},${now}`);
+    const blob = new Blob([rows.join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `send-report-${Date.now()}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader><DialogTitle>Campaign summary</DialogTitle></DialogHeader>
+        {report && (
+          <div className="space-y-3 text-sm">
+            <div className="grid grid-cols-3 gap-2">
+              <Stat label="Total" value={report.total} />
+              <Stat label="Sent" value={report.sent} tone="ok" />
+              <Stat label="Failed" value={report.failed} tone={report.failed ? "err" : undefined} />
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <Stat label="Invalid" value={report.skipped.filter((s) => s.reason === "invalid_syntax").length} />
+              <Stat label="Duplicate" value={report.skipped.filter((s) => s.reason === "duplicate").length} />
+              <Stat label="Domain errors" value={report.skipped.filter((s) => s.reason === "unroutable_domain").length} />
+            </div>
+            {report.skipped.length > 0 && (
+              <div className="rounded-md border border-border bg-muted/30 p-2 max-h-40 overflow-auto text-xs space-y-1">
+                {report.skipped.map((s, i) => (
+                  <div key={i} className="flex items-center justify-between gap-2">
+                    <span className="truncate">{s.email || "(blank)"}</span>
+                    <span className="text-muted-foreground">{s.reason}{s.note ? ` · ${s.note}` : ""}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={download}>Download report</Button>
+          <Button onClick={onClose}>Done</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+function Stat({ label, value, tone }: { label: string; value: number; tone?: "ok" | "err" }) {
+  const color = tone === "ok" ? "text-emerald-600 dark:text-emerald-400" : tone === "err" ? "text-destructive" : "";
+  return (
+    <div className="rounded-md border border-border bg-background px-3 py-2">
+      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className={`text-lg font-semibold ${color}`}>{value}</div>
+    </div>
+  );
+}
+function csv(s: string) {
+  if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
 }

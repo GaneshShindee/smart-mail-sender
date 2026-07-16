@@ -209,6 +209,8 @@ export const generateReplyDraft = createServerFn({ method: "POST" })
     z.object({
       replyId: z.string().uuid(),
       instruction: z.string().max(2000).optional(),
+      tone: z.enum(["professional", "friendly", "formal", "confident", "enthusiastic", "neutral"]).optional(),
+      length: z.enum(["short", "medium", "detailed"]).optional(),
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
@@ -230,6 +232,12 @@ export const generateReplyDraft = createServerFn({ method: "POST" })
         .maybeSingle();
       if (c) campaignContext = `\n\nOriginal outreach subject: ${c.subject}\nOriginal body:\n${(c.body ?? "").slice(0, 2000)}`;
     }
+    const tone = data.tone ?? "professional";
+    const length = data.length ?? "medium";
+    const lengthGuide =
+      length === "short" ? "Keep the reply under 80 words." :
+      length === "detailed" ? "Aim for 200-300 words with clear structure." :
+      "Keep the reply around 120-180 words.";
 
     const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -240,11 +248,11 @@ export const generateReplyDraft = createServerFn({ method: "POST" })
           {
             role: "system",
             content:
-              "You are a professional email reply assistant. Draft a concise, courteous reply matching the tone of the original outreach. Keep under 150 words. Do NOT invent facts. Return STRICT JSON: {\"subject\":\"...\",\"body\":\"...\"}",
+              `You are an email reply assistant. Draft a context-aware reply that references the ORIGINAL outreach and the recipient's latest message. Tone: ${tone}. ${lengthGuide} Do NOT invent facts, credentials, dates, or offers. If the user provides custom instructions, follow them naturally. Return STRICT JSON: {"subject":"...","body":"..."}. No markdown.`,
           },
           {
             role: "user",
-            content: `Recipient replied. Draft a reply.${data.instruction ? `\n\nUser instruction: ${data.instruction}` : ""}\n\nFrom: ${reply.from_name ?? ""} <${reply.from_email}>\nSubject: ${reply.subject ?? ""}\nTheir message:\n${(reply.body ?? reply.snippet ?? "").slice(0, 4000)}${campaignContext}`,
+            content: `Draft a reply to this message.${data.instruction ? `\n\nUser instructions: ${data.instruction}` : ""}\n\nFrom: ${reply.from_name ?? ""} <${reply.from_email}>\nSubject: ${reply.subject ?? ""}\nTheir message:\n${(reply.body ?? reply.snippet ?? "").slice(0, 6000)}${campaignContext}`,
           },
         ],
         response_format: { type: "json_object" },
