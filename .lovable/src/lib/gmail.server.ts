@@ -160,18 +160,17 @@ export function buildRawEmail(opts: {
   from: string; to: string; bcc?: string; subject: string; body: string; trackingPixelUrl?: string;
 }) {
   const mime = buildBodyMime(opts.body, opts.trackingPixelUrl);
-  const headers = [
+  const lines = [
     `From: ${opts.from}`,
     `To: ${opts.to}`,
     opts.bcc ? `Bcc: ${opts.bcc}` : null,
     `Subject: ${encodeHeader(opts.subject)}`,
     `MIME-Version: 1.0`,
     `Content-Type: ${mime.contentType}`,
-  ].filter((l): l is string => l !== null);
-  // Blank line MUST separate headers from body — don't collapse it with filter(Boolean).
-  const message = headers.join("\r\n") + "\r\n\r\n" + mime.body;
-  return base64url(message);
-
+    ``,
+    mime.body,
+  ].filter(Boolean).join("\r\n");
+  return base64url(lines);
 }
 
 export type EmailAttachment = {

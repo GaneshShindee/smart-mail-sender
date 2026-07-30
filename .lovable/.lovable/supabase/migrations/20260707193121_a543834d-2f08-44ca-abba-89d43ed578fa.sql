@@ -1,1 +1,0 @@
-DROP FUNCTION IF EXISTS public.record_email_open(uuid);
