@@ -15,10 +15,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { LatexEditor } from "@/components/latex-editor";
+import { LatexEditor, type EditorSelection, type LatexEditorApi } from "@/components/latex-editor";
 import { LatexPreview } from "@/components/latex-preview";
+import { UpdateResumeDialog, InlineAskAi } from "@/components/resume-ai-dialogs";
 import { ArrowLeft, Save, Wand2, Sparkles, Trash2, Send, CheckCircle2, AlertCircle } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/resume-studio/$id")({
@@ -46,6 +47,9 @@ function WorkspacePage() {
   const [errorLines, setErrorLines] = useState<number[]>([]);
   const [compiledTex, setCompiledTex] = useState<string | null>(null);
   const [hasPdf, setHasPdf] = useState(false);
+  const [updateOpen, setUpdateOpen] = useState(false);
+  const [selection, setSelection] = useState<EditorSelection | null>(null);
+  const editorApi = useRef<LatexEditorApi | null>(null);
 
   useEffect(() => {
     if (q.data && !dirty) setTex(q.data.version.tex_content);
@@ -163,11 +167,17 @@ function WorkspacePage() {
       </div>
 
       <div className="flex flex-wrap gap-2">
+        <Button size="sm" onClick={() => setUpdateOpen(true)}>
+          <Wand2 className="h-3.5 w-3.5 mr-1" /> Update Resume with AI
+        </Button>
         {(["summary", "experience", "projects", "skills", "ats"] as const).map((s) => (
           <Button key={s} size="sm" variant="outline" onClick={() => improve.mutate(s)} disabled={improve.isPending}>
             <Wand2 className="h-3.5 w-3.5 mr-1" /> Improve {s === "ats" ? "ATS coverage" : s}
           </Button>
         ))}
+        <span className="text-xs text-muted-foreground self-center">
+          Tip: select any LaTeX in the editor to get an inline “Ask AI” rewrite.
+        </span>
       </div>
 
       <InsightsBar version={v} />
@@ -178,8 +188,24 @@ function WorkspacePage() {
             <span>LaTeX source · {q.data.project?.main_tex_filename ?? "resume.tex"}</span>
             {dirty && <span className="text-amber-600 dark:text-amber-400">● Unsaved</span>}
           </div>
-          <div className="flex-1 min-h-0">
-            <LatexEditor value={tex} onChange={(v) => { setTex(v); setDirty(true); }} errorLines={errorLines} />
+          <div className="flex-1 min-h-0 relative">
+            <LatexEditor
+              value={tex}
+              onChange={(v) => { setTex(v); setDirty(true); }}
+              errorLines={errorLines}
+              onSelectionChange={setSelection}
+              onReady={(api) => { editorApi.current = api; }}
+            />
+            <InlineAskAi
+              selection={selection}
+              versionId={id}
+              document={tex}
+              onReplace={(start, end, text) => {
+                editorApi.current?.replaceRange(start, end, text);
+                setDirty(true);
+                setSelection(null);
+              }}
+            />
           </div>
         </Card>
         <Card className="overflow-hidden flex flex-col min-h-0">
@@ -193,6 +219,13 @@ function WorkspacePage() {
           />
         </Card>
       </div>
+
+      <UpdateResumeDialog
+        open={updateOpen}
+        onOpenChange={setUpdateOpen}
+        versionId={id}
+        onApplied={(newTex) => { setTex(newTex); setDirty(false); qc.invalidateQueries({ queryKey: ["resume-version", id] }); }}
+      />
     </div>
   );
 }
