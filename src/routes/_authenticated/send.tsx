@@ -19,6 +19,8 @@ import { parseRecipients } from "@/lib/recipients";
 import { toast } from "sonner";
 import { Send, Sparkles, Paperclip, X, FileText, Upload, Flame } from "lucide-react";
 import { EmailGeneratorDialog } from "@/components/email-generator-dialog";
+import { AiBodyDialog } from "@/components/ai-body-dialog";
+import { DraftManager, type DraftState, type LoadedDraft } from "@/components/draft-manager";
 import { z } from "zod";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { getResumeVersion } from "@/lib/resume-studio.functions";
@@ -63,8 +65,14 @@ function SendPage() {
   const [body, setBody] = useState("");
   const [vars, setVars] = useState<Record<string, string>>({});
   const [genOpen, setGenOpen] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
+  const [draftId, setDraftId] = useState<string | null>(null);
+  const [jobMeta, setJobMeta] = useState({ company: "", role: "", jobDescription: "", instructions: "" });
   const [resumeIds, setResumeIds] = useState<string[]>([]);
   const [uploads, setUploads] = useState<File[]>([]);
+  const [savedAttachments, setSavedAttachments] = useState<
+    Array<{ filename: string; mimeType: string; size: number; storagePath: string }>
+  >([]);
   const uploadRef = useRef<HTMLInputElement | null>(null);
   const initedRef = useRef(false);
   const [report, setReport] = useState<null | {
@@ -128,6 +136,54 @@ function SendPage() {
 
   const toggleResume = (id: string) =>
     setResumeIds((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
+
+  const collectDraftState = async (): Promise<DraftState> => {
+    const inline = await Promise.all(
+      uploads.map(async (f) => ({
+        filename: f.name,
+        mimeType: f.type || "application/octet-stream",
+        size: f.size,
+        base64: await fileToBase64(f),
+      })),
+    );
+    const keptSaved = savedAttachments.filter((a) => uploads.some((u) => u.name === a.filename));
+    const fresh = inline.filter((a) => !keptSaved.some((k) => k.filename === a.filename));
+    return {
+      name: subject || "Untitled draft",
+      gmailAccountId: senderId || null,
+      templateId: tplId || null,
+      resumeVersionId: search.resumeVersionId ?? null,
+      recipients: recipientText,
+      subject,
+      body,
+      variables: vars,
+      resumeIds,
+      attachments: [...keptSaved, ...fresh],
+      company: jobMeta.company,
+      role: jobMeta.role,
+      jobDescription: jobMeta.jobDescription,
+      instructions: jobMeta.instructions,
+    };
+  };
+
+  const applyLoadedDraft = ({ draft, files }: LoadedDraft) => {
+    initedRef.current = true;
+    setTplId(draft.template_id ?? "");
+    setSenderId(draft.gmail_account_id ?? senderId);
+    setRecipientText(draft.recipients ?? "");
+    setSubject(draft.subject ?? "");
+    setBody(draft.body ?? "");
+    setVars(draft.variables ?? {});
+    setResumeIds(draft.resume_ids ?? []);
+    setUploads(files);
+    setSavedAttachments(draft.attachments ?? []);
+    setJobMeta({
+      company: draft.company ?? "",
+      role: draft.role ?? "",
+      jobDescription: draft.job_description ?? "",
+      instructions: draft.instructions ?? "",
+    });
+  };
 
   const onUpload = (files: FileList | null) => {
     if (!files) return;
@@ -257,7 +313,14 @@ function SendPage() {
             {isFollowUp ? "Review the pre-filled details and hit send." : "Pick a template, drop in recipients, and send."}
           </p>
         </div>
-        <div className="min-w-[260px]">
+        <div className="flex items-end gap-3 flex-wrap">
+          <DraftManager
+            draftId={draftId}
+            onDraftIdChange={setDraftId}
+            getState={collectDraftState}
+            onLoad={applyLoadedDraft}
+          />
+          <div className="min-w-[260px]">
           <Label className="text-xs">Send from</Label>
           <Select value={senderId} onValueChange={setSenderId}>
             <SelectTrigger><SelectValue placeholder="Select a Gmail account" /></SelectTrigger>
@@ -269,6 +332,7 @@ function SendPage() {
               ))}
             </SelectContent>
           </Select>
+          </div>
         </div>
       </div>
 
@@ -387,7 +451,12 @@ function SendPage() {
           </Card>
 
           <Card>
-            <CardHeader className="pb-3"><CardTitle className="text-base">Subject & body</CardTitle></CardHeader>
+            <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-base">Subject &amp; body</CardTitle>
+              <Button type="button" size="sm" variant="outline" onClick={() => setAiOpen(true)}>
+                <Sparkles className="h-3.5 w-3.5 mr-1" /> Generate Body Using AI
+              </Button>
+            </CardHeader>
             <CardContent className="space-y-3">
               <div><Label>Subject</Label><Input value={subject} onChange={(e) => setSubject(e.target.value)} /></div>
               <div><Label>Body</Label><Textarea rows={8} value={body} onChange={(e) => setBody(e.target.value)} /></div>
@@ -448,6 +517,22 @@ function SendPage() {
       />
 
       <SendReportDialog report={report} onClose={() => setReport(null)} />
+
+      <AiBodyDialog
+        open={aiOpen}
+        onOpenChange={setAiOpen}
+        templateId={tplId || null}
+        resumeVersionId={search.resumeVersionId ?? null}
+        initialCompany={jobMeta.company || (vars.company ?? "")}
+        initialRole={jobMeta.role}
+        initialJobDescription={jobMeta.jobDescription}
+        onUse={(r) => {
+          if (r.subject) setSubject(r.subject);
+          setBody(r.body);
+          setJobMeta({ company: r.company, role: r.role, jobDescription: r.jobDescription, instructions: r.instructions });
+          toast.success("AI email applied");
+        }}
+      />
     </div>
   );
 }
