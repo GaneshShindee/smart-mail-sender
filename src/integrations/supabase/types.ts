@@ -14,6 +14,72 @@ export type Database = {
   }
   public: {
     Tables: {
+      email_drafts: {
+        Row: {
+          attachments: Json
+          body: string
+          company: string
+          created_at: string
+          gmail_account_id: string | null
+          id: string
+          instructions: string
+          job_description: string
+          metadata: Json
+          name: string
+          recipients: string
+          resume_ids: string[]
+          resume_version_id: string | null
+          role: string
+          subject: string
+          template_id: string | null
+          updated_at: string
+          user_id: string
+          variables: Json
+        }
+        Insert: {
+          attachments?: Json
+          body?: string
+          company?: string
+          created_at?: string
+          gmail_account_id?: string | null
+          id?: string
+          instructions?: string
+          job_description?: string
+          metadata?: Json
+          name?: string
+          recipients?: string
+          resume_ids?: string[]
+          resume_version_id?: string | null
+          role?: string
+          subject?: string
+          template_id?: string | null
+          updated_at?: string
+          user_id: string
+          variables?: Json
+        }
+        Update: {
+          attachments?: Json
+          body?: string
+          company?: string
+          created_at?: string
+          gmail_account_id?: string | null
+          id?: string
+          instructions?: string
+          job_description?: string
+          metadata?: Json
+          name?: string
+          recipients?: string
+          resume_ids?: string[]
+          resume_version_id?: string | null
+          role?: string
+          subject?: string
+          template_id?: string | null
+          updated_at?: string
+          user_id?: string
+          variables?: Json
+        }
+        Relationships: []
+      }
       email_history: {
         Row: {
           attachments: Json
@@ -691,6 +757,108 @@ export type Database = {
           },
         ]
       }
+      profile_details: {
+        Row: {
+          created_at: string
+          email: string
+          first_name: string
+          github: string
+          last_name: string
+          linkedin: string
+          location: string
+          phone: string
+          portfolio: string
+          summary: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string
+          first_name?: string
+          github?: string
+          last_name?: string
+          linkedin?: string
+          location?: string
+          phone?: string
+          portfolio?: string
+          summary?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          first_name?: string
+          github?: string
+          last_name?: string
+          linkedin?: string
+          location?: string
+          phone?: string
+          portfolio?: string
+          summary?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profile_entries: {
+        Row: {
+          bullets: string[]
+          created_at: string
+          description: string
+          end_date: string
+          id: string
+          is_current: boolean
+          location: string
+          section: Database["public"]["Enums"]["profile_section"]
+          sort_order: number
+          start_date: string
+          subtitle: string
+          tags: string[]
+          title: string
+          updated_at: string
+          url: string
+          user_id: string
+        }
+        Insert: {
+          bullets?: string[]
+          created_at?: string
+          description?: string
+          end_date?: string
+          id?: string
+          is_current?: boolean
+          location?: string
+          section: Database["public"]["Enums"]["profile_section"]
+          sort_order?: number
+          start_date?: string
+          subtitle?: string
+          tags?: string[]
+          title?: string
+          updated_at?: string
+          url?: string
+          user_id: string
+        }
+        Update: {
+          bullets?: string[]
+          created_at?: string
+          description?: string
+          end_date?: string
+          id?: string
+          is_current?: boolean
+          location?: string
+          section?: Database["public"]["Enums"]["profile_section"]
+          sort_order?: number
+          start_date?: string
+          subtitle?: string
+          tags?: string[]
+          title?: string
+          updated_at?: string
+          url?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -1054,7 +1222,14 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      profile_section:
+        | "education"
+        | "experience"
+        | "project"
+        | "skill"
+        | "certification"
+        | "achievement"
+        | "language"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1181,6 +1356,16 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      profile_section: [
+        "education",
+        "experience",
+        "project",
+        "skill",
+        "certification",
+        "achievement",
+        "language",
+      ],
+    },
   },
 } as const
