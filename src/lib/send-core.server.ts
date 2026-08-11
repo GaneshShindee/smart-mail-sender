@@ -112,7 +112,6 @@ export async function resolveAttachments(
         filename: r.original_filename,
         mimeType: r.mime_type,
         data: Buffer.from(await blob.arrayBuffer()),
-        size: r.size_bytes,
       });
       meta.push({ name: r.original_filename, size: r.size_bytes, source: "resume" });
     }
@@ -125,12 +124,11 @@ export async function resolveAttachments(
       filename: u.filename,
       mimeType: u.mimeType,
       data: Buffer.from(await blob.arrayBuffer()),
-      size: u.size,
     });
     meta.push({ name: u.filename, size: u.size, source: "upload" });
   }
 
-  const total = attachments.reduce((n, a) => n + a.size, 0);
+  const total = meta.reduce((n, m) => n + m.size, 0);
   if (total > 25 * 1024 * 1024) throw new Error("Attachments exceed 25 MB total.");
   return { attachments, meta };
 }
