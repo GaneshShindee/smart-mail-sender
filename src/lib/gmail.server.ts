@@ -133,6 +133,29 @@ function textToHtml(text: string, pixelUrl?: string) {
   return `<!doctype html><html><body style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111;white-space:normal">${body}${pixel}</body></html>`;
 }
 
+/** Wrap caller-supplied rich-text HTML (already sanitized fragment) into a full document. */
+function wrapHtmlBody(fragment: string, pixelUrl?: string) {
+  const pixel = pixelUrl
+    ? `\n<img src="${pixelUrl}" width="1" height="1" alt="" style="display:none;border:0;height:1px;width:1px" />`
+    : "";
+  return `<!doctype html><html><body style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111">${fragment}${pixel}</body></html>`;
+}
+
+export type MessageOptions = {
+  from: string;
+  /** Omit for BCC-only campaign messages so recipients stay private and no self-copy is created. */
+  to?: string | null;
+  bcc?: string;
+  subject: string;
+  /** Plain-text alternative. Always required. */
+  body: string;
+  /** Optional rich-text HTML fragment; when present it becomes the text/html alternative. */
+  html?: string | null;
+  trackingPixelUrl?: string;
+  inReplyTo?: string | null;
+  references?: string | null;
+};
+
 /** Returns headers + body for the message body — plain text, or multipart/alternative when a pixel is present. */
 function buildBodyMime(text: string, pixelUrl?: string, htmlBody?: string): { contentType: string; body: string } {
   if (!pixelUrl && !htmlBody) {
