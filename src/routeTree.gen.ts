@@ -30,6 +30,7 @@ import { Route as ApiLatexCompileRouteImport } from './routes/api/latex/compile'
 import { Route as AuthenticatedResumeStudioIdRouteImport } from './routes/_authenticated/resume-studio/$id'
 import { Route as AuthenticatedRecipientsIdRouteImport } from './routes/_authenticated/recipients.$id'
 import { Route as AuthenticatedCampaignsIdRouteImport } from './routes/_authenticated/campaigns.$id'
+import { Route as ApiPublicHooksProcessSendsRouteImport } from './routes/api/public/hooks/process-sends'
 import { Route as ApiPublicGmailCallbackRouteImport } from './routes/api/public/gmail/callback'
 import { Route as ApiPublicTrackPdfTokenRouteImport } from './routes/api/public/track/pdf/$token'
 import { Route as ApiPublicTrackOpenTokenRouteImport } from './routes/api/public/track/open/$token'
@@ -143,6 +144,12 @@ const AuthenticatedCampaignsIdRoute =
     path: '/campaigns/$id',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const ApiPublicHooksProcessSendsRoute =
+  ApiPublicHooksProcessSendsRouteImport.update({
+    id: '/api/public/hooks/process-sends',
+    path: '/api/public/hooks/process-sends',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicGmailCallbackRoute = ApiPublicGmailCallbackRouteImport.update({
   id: '/api/public/gmail/callback',
   path: '/api/public/gmail/callback',
@@ -181,6 +188,7 @@ export interface FileRoutesByFullPath {
   '/api/latex/compile': typeof ApiLatexCompileRoute
   '/resume-studio/': typeof AuthenticatedResumeStudioIndexRoute
   '/api/public/gmail/callback': typeof ApiPublicGmailCallbackRoute
+  '/api/public/hooks/process-sends': typeof ApiPublicHooksProcessSendsRoute
   '/api/public/track/open/$token': typeof ApiPublicTrackOpenTokenRoute
   '/api/public/track/pdf/$token': typeof ApiPublicTrackPdfTokenRoute
 }
@@ -206,6 +214,7 @@ export interface FileRoutesByTo {
   '/api/latex/compile': typeof ApiLatexCompileRoute
   '/resume-studio': typeof AuthenticatedResumeStudioIndexRoute
   '/api/public/gmail/callback': typeof ApiPublicGmailCallbackRoute
+  '/api/public/hooks/process-sends': typeof ApiPublicHooksProcessSendsRoute
   '/api/public/track/open/$token': typeof ApiPublicTrackOpenTokenRoute
   '/api/public/track/pdf/$token': typeof ApiPublicTrackPdfTokenRoute
 }
@@ -233,6 +242,7 @@ export interface FileRoutesById {
   '/api/latex/compile': typeof ApiLatexCompileRoute
   '/_authenticated/resume-studio/': typeof AuthenticatedResumeStudioIndexRoute
   '/api/public/gmail/callback': typeof ApiPublicGmailCallbackRoute
+  '/api/public/hooks/process-sends': typeof ApiPublicHooksProcessSendsRoute
   '/api/public/track/open/$token': typeof ApiPublicTrackOpenTokenRoute
   '/api/public/track/pdf/$token': typeof ApiPublicTrackPdfTokenRoute
 }
@@ -260,6 +270,7 @@ export interface FileRouteTypes {
     | '/api/latex/compile'
     | '/resume-studio/'
     | '/api/public/gmail/callback'
+    | '/api/public/hooks/process-sends'
     | '/api/public/track/open/$token'
     | '/api/public/track/pdf/$token'
   fileRoutesByTo: FileRoutesByTo
@@ -285,6 +296,7 @@ export interface FileRouteTypes {
     | '/api/latex/compile'
     | '/resume-studio'
     | '/api/public/gmail/callback'
+    | '/api/public/hooks/process-sends'
     | '/api/public/track/open/$token'
     | '/api/public/track/pdf/$token'
   id:
@@ -311,6 +323,7 @@ export interface FileRouteTypes {
     | '/api/latex/compile'
     | '/_authenticated/resume-studio/'
     | '/api/public/gmail/callback'
+    | '/api/public/hooks/process-sends'
     | '/api/public/track/open/$token'
     | '/api/public/track/pdf/$token'
   fileRoutesById: FileRoutesById
@@ -322,6 +335,7 @@ export interface RootRouteChildren {
   ResetPasswordRoute: typeof ResetPasswordRoute
   ApiLatexCompileRoute: typeof ApiLatexCompileRoute
   ApiPublicGmailCallbackRoute: typeof ApiPublicGmailCallbackRoute
+  ApiPublicHooksProcessSendsRoute: typeof ApiPublicHooksProcessSendsRoute
   ApiPublicTrackOpenTokenRoute: typeof ApiPublicTrackOpenTokenRoute
   ApiPublicTrackPdfTokenRoute: typeof ApiPublicTrackPdfTokenRoute
 }
@@ -475,6 +489,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedCampaignsIdRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/api/public/hooks/process-sends': {
+      id: '/api/public/hooks/process-sends'
+      path: '/api/public/hooks/process-sends'
+      fullPath: '/api/public/hooks/process-sends'
+      preLoaderRoute: typeof ApiPublicHooksProcessSendsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/gmail/callback': {
       id: '/api/public/gmail/callback'
       path: '/api/public/gmail/callback'
@@ -547,6 +568,7 @@ const rootRouteChildren: RootRouteChildren = {
   ResetPasswordRoute: ResetPasswordRoute,
   ApiLatexCompileRoute: ApiLatexCompileRoute,
   ApiPublicGmailCallbackRoute: ApiPublicGmailCallbackRoute,
+  ApiPublicHooksProcessSendsRoute: ApiPublicHooksProcessSendsRoute,
   ApiPublicTrackOpenTokenRoute: ApiPublicTrackOpenTokenRoute,
   ApiPublicTrackPdfTokenRoute: ApiPublicTrackPdfTokenRoute,
 }

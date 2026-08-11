@@ -234,13 +234,17 @@ function SendPage() {
       });
     },
     onSuccess: (r) => {
-      toast.success(`Email sent to ${r.sent} recipient${r.sent === 1 ? "" : "s"}`);
+      toast.success(
+        r.scheduled
+          ? `Campaign scheduled for ${new Date(r.scheduled).toLocaleString()}`
+          : `Queued — sending to ${r.recipientCount} recipient${r.recipientCount === 1 ? "" : "s"} in the background`,
+      );
       qc.invalidateQueries({ queryKey: ["dashboard-stats"] });
       qc.invalidateQueries({ queryKey: ["history"] });
       setReport({
         total: r.total ?? r.recipientCount,
-        sent: r.sent,
-        failed: r.failed,
+        sent: 0,
+        failed: 0,
         skipped: (r.skipped ?? []) as Array<{ email: string; reason: string; note?: string }>,
         recipientCount: r.recipientCount,
       });

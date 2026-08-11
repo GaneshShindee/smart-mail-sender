@@ -133,13 +133,36 @@ function textToHtml(text: string, pixelUrl?: string) {
   return `<!doctype html><html><body style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111;white-space:normal">${body}${pixel}</body></html>`;
 }
 
+/** Wrap caller-supplied rich-text HTML (already sanitized fragment) into a full document. */
+function wrapHtmlBody(fragment: string, pixelUrl?: string) {
+  const pixel = pixelUrl
+    ? `\n<img src="${pixelUrl}" width="1" height="1" alt="" style="display:none;border:0;height:1px;width:1px" />`
+    : "";
+  return `<!doctype html><html><body style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111">${fragment}${pixel}</body></html>`;
+}
+
+export type MessageOptions = {
+  from: string;
+  /** Omit for BCC-only campaign messages so recipients stay private and no self-copy is created. */
+  to?: string | null;
+  bcc?: string;
+  subject: string;
+  /** Plain-text alternative. Always required. */
+  body: string;
+  /** Optional rich-text HTML fragment; when present it becomes the text/html alternative. */
+  html?: string | null;
+  trackingPixelUrl?: string;
+  inReplyTo?: string | null;
+  references?: string | null;
+};
+
 /** Returns headers + body for the message body — plain text, or multipart/alternative when a pixel is present. */
-function buildBodyMime(text: string, pixelUrl?: string): { contentType: string; body: string } {
-  if (!pixelUrl) {
+function buildBodyMime(text: string, pixelUrl?: string, htmlBody?: string | null): { contentType: string; body: string } {
+  if (!pixelUrl && !htmlBody) {
     return { contentType: `text/plain; charset="UTF-8"`, body: text };
   }
   const boundary = `=_alt_${Math.random().toString(36).slice(2)}_${Date.now().toString(36)}`;
-  const html = textToHtml(text, pixelUrl);
+  const html = htmlBody ? wrapHtmlBody(htmlBody, pixelUrl) : textToHtml(text, pixelUrl);
   const body = [
     `--${boundary}`,
     `Content-Type: text/plain; charset="UTF-8"`,
@@ -156,15 +179,15 @@ function buildBodyMime(text: string, pixelUrl?: string): { contentType: string; 
   return { contentType: `multipart/alternative; boundary="${boundary}"`, body };
 }
 
-export function buildRawEmail(opts: {
-  from: string; to: string; bcc?: string; subject: string; body: string; trackingPixelUrl?: string;
-}) {
-  const mime = buildBodyMime(opts.body, opts.trackingPixelUrl);
+export function buildRawEmail(opts: MessageOptions) {
+  const mime = buildBodyMime(opts.body, opts.trackingPixelUrl, opts.html);
   const headers = [
     `From: ${opts.from}`,
-    `To: ${opts.to}`,
+    opts.to ? `To: ${opts.to}` : null,
     opts.bcc ? `Bcc: ${opts.bcc}` : null,
     `Subject: ${encodeHeader(opts.subject)}`,
+    opts.inReplyTo ? `In-Reply-To: ${opts.inReplyTo}` : null,
+    opts.references ? `References: ${opts.references}` : null,
     `MIME-Version: 1.0`,
     `Content-Type: ${mime.contentType}`,
   ].filter((l): l is string => l !== null);
@@ -206,32 +229,23 @@ export function formatFromHeader(email: string, displayName?: string | null) {
   return `${safe} <${email}>`;
 }
 
-export function buildRawEmailWithAttachments(opts: {
-  from: string;
-  to: string;
-  bcc?: string;
-  subject: string;
-  body: string;
-  attachments: EmailAttachment[];
-  trackingPixelUrl?: string;
-}) {
+export function buildRawEmailWithAttachments(opts: MessageOptions & { attachments: EmailAttachment[] }) {
   if (!opts.attachments || opts.attachments.length === 0) {
-    return buildRawEmail({
-      from: opts.from, to: opts.to, bcc: opts.bcc, subject: opts.subject, body: opts.body,
-      trackingPixelUrl: opts.trackingPixelUrl,
-    });
+    return buildRawEmail(opts);
   }
   const boundary = `=_ses_${Math.random().toString(36).slice(2)}_${Date.now().toString(36)}`;
   const headers = [
     `From: ${opts.from}`,
-    `To: ${opts.to}`,
+    opts.to ? `To: ${opts.to}` : null,
     opts.bcc ? `Bcc: ${opts.bcc}` : null,
     `Subject: ${encodeHeader(opts.subject)}`,
+    opts.inReplyTo ? `In-Reply-To: ${opts.inReplyTo}` : null,
+    opts.references ? `References: ${opts.references}` : null,
     `MIME-Version: 1.0`,
     `Content-Type: multipart/mixed; boundary="${boundary}"`,
-  ].filter(Boolean);
+  ].filter((l): l is string => l !== null);
 
-  const bodyMime = buildBodyMime(opts.body, opts.trackingPixelUrl);
+  const bodyMime = buildBodyMime(opts.body, opts.trackingPixelUrl, opts.html);
   const parts: string[] = [];
   parts.push(`--${boundary}`);
   parts.push(`Content-Type: ${bodyMime.contentType}`);
@@ -254,14 +268,16 @@ export function buildRawEmailWithAttachments(opts: {
   return Buffer.from(message, "utf8").toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-export async function gmailSend(accessToken: string, raw: string) {
+export async function gmailSend(accessToken: string, raw: string, threadId?: string | null) {
+  const payload: { raw: string; threadId?: string } = { raw };
+  if (threadId) payload.threadId = threadId;
   const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ raw }),
+    body: JSON.stringify(payload),
   });
   if (!res.ok) throw new Error(`Gmail send failed: ${res.status} ${await res.text()}`);
   return (await res.json()) as { id: string; threadId: string };

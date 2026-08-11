@@ -11,11 +11,23 @@ export const Route = createFileRoute("/api/public/track/pdf/$token")({
         if (!UUID_RE.test(token)) return new Response("Not found", { status: 404 });
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-        const { data: rec } = await supabaseAdmin
+        const { data: recRow } = await supabaseAdmin
           .from("email_recipients")
           .select("id, user_id, email_history_id")
           .eq("pdf_tracking_token", token)
           .maybeSingle();
+
+        // BCC campaigns share one outgoing message, so the campaign token is
+        // also a valid resume link. Individual sends use per-recipient tokens.
+        let rec: { id: string | null; user_id: string; email_history_id: string } | null = recRow ?? null;
+        if (!rec) {
+          const { data: histRow } = await supabaseAdmin
+            .from("email_history")
+            .select("id, user_id")
+            .eq("tracking_token", token)
+            .maybeSingle();
+          if (histRow) rec = { id: null, user_id: histRow.user_id, email_history_id: histRow.id };
+        }
         if (!rec) return new Response("Not found", { status: 404 });
 
         // Look up the primary attached resume for this campaign.
