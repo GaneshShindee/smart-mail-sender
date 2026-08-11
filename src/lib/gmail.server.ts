@@ -157,7 +157,7 @@ export type MessageOptions = {
 };
 
 /** Returns headers + body for the message body — plain text, or multipart/alternative when a pixel is present. */
-function buildBodyMime(text: string, pixelUrl?: string, htmlBody?: string): { contentType: string; body: string } {
+function buildBodyMime(text: string, pixelUrl?: string, htmlBody?: string | null): { contentType: string; body: string } {
   if (!pixelUrl && !htmlBody) {
     return { contentType: `text/plain; charset="UTF-8"`, body: text };
   }
