@@ -49,6 +49,8 @@ export type RecipientRow = {
   company: string | null;
   tracking_token: string | null;
   pdf_tracking_token: string | null;
+  gmail_thread_id?: string | null;
+  rfc_message_id?: string | null;
 };
 
 export type Connection = {
@@ -237,7 +239,7 @@ export async function runCampaign(historyId: string): Promise<{ sent: number; fa
 
   const { data: recipients, error: rErr } = await supabaseAdmin
     .from("email_recipients")
-    .select("id, email, name, company, tracking_token, pdf_tracking_token")
+    .select("id, email, name, company, tracking_token, pdf_tracking_token, gmail_thread_id, rfc_message_id")
     .eq("email_history_id", historyId);
   if (rErr) throw new Error(rErr.message);
   const rows = (recipients ?? []) as RecipientRow[];
@@ -324,9 +326,11 @@ export async function runCampaign(historyId: string): Promise<{ sent: number; fa
           html,
           attachments,
           pixelUrl,
-          threadId: payload.threadId ?? null,
-          inReplyTo: payload.inReplyTo ?? null,
-          references: payload.references ?? null,
+          // Prefer the recipient's own conversation so follow-ups and replies
+          // stay in the same Gmail thread as the original message.
+          threadId: row.gmail_thread_id ?? payload.threadId ?? null,
+          inReplyTo: row.rfc_message_id ?? payload.inReplyTo ?? null,
+          references: row.rfc_message_id ?? payload.references ?? null,
         });
         sent += 1;
         await supabaseAdmin
@@ -361,6 +365,25 @@ export async function runCampaign(historyId: string): Promise<{ sent: number; fa
     .update({ status, error: firstError ? firstError.slice(0, 1000) : null, sent_at: new Date().toISOString() })
     .eq("id", historyId);
   return { sent, failed, status };
+}
+
+/** Wake the background worker without blocking the calling request. */
+export async function kickWorker(origin: string) {
+  const key = process.env["SUPABASE_ANON_KEY"] ?? process.env["SUPABASE_PUBLISHABLE_KEY"] ?? "";
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 1200);
+  try {
+    await fetch(`${origin}/api/public/hooks/process-sends`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: key },
+      body: "{}",
+      signal: ctrl.signal,
+    });
+  } catch {
+    // Aborting is expected — the scheduler picks the job up within a minute anyway.
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /** Claim and run every due job. Safe to call concurrently: claims are atomic per row. */

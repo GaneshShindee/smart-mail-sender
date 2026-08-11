@@ -186,28 +186,6 @@ function requestOrigin() {
 }
 
 /**
- * Wake the background worker without blocking this request. The worker request
- * is a separate server invocation, so it keeps running after we abort our side.
- */
-async function kickWorker(origin: string) {
-  const key = process.env["SUPABASE_ANON_KEY"] ?? process.env["SUPABASE_PUBLISHABLE_KEY"] ?? "";
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 1200);
-  try {
-    await fetch(`${origin}/api/public/hooks/process-sends`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", apikey: key },
-      body: "{}",
-      signal: ctrl.signal,
-    });
-  } catch {
-    // Aborting is expected — pg_cron picks the job up within a minute regardless.
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-/**
  * Queue a campaign. Nothing is sent inside this request: recipients, attachments
  * and the job row are persisted, then a background worker performs delivery, so
  * the browser can be closed immediately (and scheduled sends work at all).
@@ -218,7 +196,7 @@ export const sendEmail = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { loadConnection } = await import("./send-core.server");
+    const { loadConnection, kickWorker } = await import("./send-core.server");
 
     const conn = await loadConnection(userId, data.gmailAccountId);
     const mode = data.sendMode ?? "bcc";
@@ -419,6 +397,7 @@ export const manageScheduledCampaign = createServerFn({ method: "POST" })
       await supabaseAdmin.from("email_history").update({ scheduled_at: iso, status: "scheduled" }).eq("id", data.id);
       return { ok: true, status: "scheduled" };
     }
+    const { kickWorker } = await import("./send-core.server");
     const now = new Date().toISOString();
     await supabaseAdmin.from("send_jobs").update({ run_at: now, status: "pending" }).eq("email_history_id", data.id);
     await supabaseAdmin.from("email_history").update({ scheduled_at: null, status: "queued" }).eq("id", data.id);
