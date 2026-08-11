@@ -134,7 +134,7 @@ export const getCampaign = createServerFn({ method: "GET" })
   .handler(async ({ data, context }) => {
     const { data: campaign, error } = await context.supabase
       .from("email_history")
-      .select("id, subject, body, template_name, template_id, status, sent_at, error, sender_email, gmail_account_id, bcc, attachments, recipient_count, open_count, first_opened_at, last_opened_at, tracking_enabled")
+      .select("id, subject, body, body_html, template_name, template_id, status, sent_at, scheduled_at, timezone, send_mode, kind, error, sender_email, gmail_account_id, gmail_thread_id, bcc, attachments, recipient_count, open_count, first_opened_at, last_opened_at, tracking_enabled")
       .eq("id", data.id)
       .eq("user_id", context.userId)
       .maybeSingle();
@@ -143,13 +143,52 @@ export const getCampaign = createServerFn({ method: "GET" })
 
     const { data: recipients, error: rErr } = await context.supabase
       .from("email_recipients")
-      .select("id, email, name, company, status, open_count, first_opened_at, last_opened_at, click_count")
+      .select(
+        "id, email, name, company, status, open_count, first_opened_at, last_opened_at, click_count, last_clicked_at, pdf_view_count, first_pdf_view_at, last_pdf_view_at, replied_at, followup_sent_at, followup_count",
+      )
       .eq("email_history_id", data.id)
       .order("open_count", { ascending: false })
       .order("email", { ascending: true });
     if (rErr) throw new Error(rErr.message);
 
-    return { campaign, recipients: recipients ?? [] };
+    const rows = (recipients ?? []) as Array<{
+      open_count: number | null;
+      pdf_view_count: number | null;
+      click_count: number | null;
+      replied_at: string | null;
+      followup_sent_at: string | null;
+      last_opened_at: string | null;
+      last_pdf_view_at: string | null;
+      last_clicked_at: string | null;
+    }>;
+    const opened = rows.filter((r) => (r.open_count ?? 0) > 0).length;
+    const stats = {
+      recipients: rows.length,
+      opened,
+      notOpened: rows.length - opened,
+      openRate: rows.length > 0 ? opened / rows.length : 0,
+      totalOpens: rows.reduce((n, r) => n + (r.open_count ?? 0), 0),
+      clicks: rows.reduce((n, r) => n + (r.click_count ?? 0), 0),
+      pdfViews: rows.reduce((n, r) => n + (r.pdf_view_count ?? 0), 0),
+      pdfViewers: rows.filter((r) => (r.pdf_view_count ?? 0) > 0).length,
+      replies: rows.filter((r) => r.replied_at).length,
+      followups: rows.filter((r) => r.followup_sent_at).length,
+    };
+
+    const withActivity = (recipients ?? []).map((r) => {
+      const row = r as typeof r & {
+        last_opened_at: string | null;
+        last_pdf_view_at: string | null;
+        replied_at: string | null;
+        followup_sent_at: string | null;
+      };
+      const stamps = [row.last_opened_at, row.last_pdf_view_at, row.replied_at, row.followup_sent_at]
+        .filter(Boolean)
+        .sort() as string[];
+      return { ...row, last_activity_at: stamps.length ? stamps[stamps.length - 1] : null };
+    });
+
+    return { campaign, recipients: withActivity, stats };
   });
 
 export const getRecipient = createServerFn({ method: "GET" })
@@ -158,7 +197,9 @@ export const getRecipient = createServerFn({ method: "GET" })
   .handler(async ({ data, context }) => {
     const { data: recipient, error } = await context.supabase
       .from("email_recipients")
-      .select("id, email, name, company, status, open_count, first_opened_at, last_opened_at, click_count, email_history_id")
+      .select(
+        "id, email, name, company, status, open_count, first_opened_at, last_opened_at, click_count, last_clicked_at, pdf_view_count, first_pdf_view_at, last_pdf_view_at, replied_at, followup_sent_at, followup_count, gmail_thread_id, email_history_id",
+      )
       .eq("id", data.id)
       .eq("user_id", context.userId)
       .maybeSingle();
@@ -178,5 +219,33 @@ export const getRecipient = createServerFn({ method: "GET" })
       .order("opened_at", { ascending: true });
     if (oErr) throw new Error(oErr.message);
 
-    return { recipient, campaign, opens: opens ?? [] };
+    const { data: pdfEvents } = await context.supabase
+      .from("pdf_events")
+      .select("id, created_at, filename, event_type, device_type, browser, os, country, city, region")
+      .eq("email_recipient_id", recipient.id)
+      .order("created_at", { ascending: true });
+
+    const { data: replies } = await context.supabase
+      .from("email_replies")
+      .select("id, received_at, subject, snippet, from_email")
+      .eq("email_recipient_id", recipient.id)
+      .order("received_at", { ascending: true });
+
+    const { data: followups } = await context.supabase
+      .from("email_history")
+      .select("id, subject, sent_at, status, kind")
+      .eq("user_id", context.userId)
+      .eq("parent_campaign_id", recipient.email_history_id)
+      .in("kind", ["followup", "reply"])
+      .ilike("recipient", `%${recipient.email}%`)
+      .order("sent_at", { ascending: true });
+
+    return {
+      recipient,
+      campaign,
+      opens: opens ?? [],
+      pdfEvents: pdfEvents ?? [],
+      replies: replies ?? [],
+      followups: followups ?? [],
+    };
   });
