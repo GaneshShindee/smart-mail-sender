@@ -158,6 +158,7 @@ function buildBodyMime(text: string, pixelUrl?: string): { contentType: string; 
 
 export function buildRawEmail(opts: {
   from: string; to: string; bcc?: string; subject: string; body: string; trackingPixelUrl?: string;
+  inReplyTo?: string | null; references?: string | null;
 }) {
   const mime = buildBodyMime(opts.body, opts.trackingPixelUrl);
   const headers = [
@@ -165,6 +166,8 @@ export function buildRawEmail(opts: {
     `To: ${opts.to}`,
     opts.bcc ? `Bcc: ${opts.bcc}` : null,
     `Subject: ${encodeHeader(opts.subject)}`,
+    opts.inReplyTo ? `In-Reply-To: ${opts.inReplyTo}` : null,
+    opts.references ? `References: ${opts.references}` : null,
     `MIME-Version: 1.0`,
     `Content-Type: ${mime.contentType}`,
   ].filter((l): l is string => l !== null);
@@ -214,11 +217,14 @@ export function buildRawEmailWithAttachments(opts: {
   body: string;
   attachments: EmailAttachment[];
   trackingPixelUrl?: string;
+  inReplyTo?: string | null;
+  references?: string | null;
 }) {
   if (!opts.attachments || opts.attachments.length === 0) {
     return buildRawEmail({
       from: opts.from, to: opts.to, bcc: opts.bcc, subject: opts.subject, body: opts.body,
       trackingPixelUrl: opts.trackingPixelUrl,
+      inReplyTo: opts.inReplyTo, references: opts.references,
     });
   }
   const boundary = `=_ses_${Math.random().toString(36).slice(2)}_${Date.now().toString(36)}`;
@@ -227,6 +233,8 @@ export function buildRawEmailWithAttachments(opts: {
     `To: ${opts.to}`,
     opts.bcc ? `Bcc: ${opts.bcc}` : null,
     `Subject: ${encodeHeader(opts.subject)}`,
+    opts.inReplyTo ? `In-Reply-To: ${opts.inReplyTo}` : null,
+    opts.references ? `References: ${opts.references}` : null,
     `MIME-Version: 1.0`,
     `Content-Type: multipart/mixed; boundary="${boundary}"`,
   ].filter(Boolean);
@@ -254,17 +262,75 @@ export function buildRawEmailWithAttachments(opts: {
   return Buffer.from(message, "utf8").toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-export async function gmailSend(accessToken: string, raw: string) {
+export async function gmailSend(accessToken: string, raw: string, threadId?: string | null) {
   const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ raw }),
+    body: JSON.stringify(threadId ? { raw, threadId } : { raw }),
   });
   if (!res.ok) throw new Error(`Gmail send failed: ${res.status} ${await res.text()}`);
   return (await res.json()) as { id: string; threadId: string };
+}
+
+/** Fetch the RFC 5322 Message-ID of a sent Gmail message (used later for In-Reply-To). */
+export async function gmailRfcMessageId(accessToken: string, id: string): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=metadata&metadataHeaders=Message-ID`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+    if (!res.ok) return null;
+    const j = (await res.json()) as GmailMessage;
+    return headerVal(j, "Message-ID") ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Heuristic: is this inbox message a delivery-failure notification (bounce)? */
+export function isBounceMessage(from: string, subject: string | null | undefined): boolean {
+  const f = from.toLowerCase();
+  const s = (subject ?? "").toLowerCase();
+  const bounceSender =
+    f.startsWith("mailer-daemon@") ||
+    f.startsWith("postmaster@") ||
+    f.includes("mail-daemon") ||
+    f.includes("mailerdaemon");
+  const bounceSubject =
+    s.includes("delivery status notification (failure)") ||
+    s.includes("undeliverable") ||
+    s.includes("delivery incomplete") ||
+    s.includes("returned mail") ||
+    s.includes("failure notice") ||
+    s.includes("address not found") ||
+    s.includes("mail delivery failed") ||
+    s.includes("delivery has failed");
+  return bounceSender || bounceSubject;
+}
+
+const BOUNCE_ADDR_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
+
+/** Extract failed recipient addresses + a human reason from a bounce body. */
+export function parseBounce(text: string): { addresses: string[]; reason: string } {
+  const body = text.slice(0, 20_000);
+  const addresses = new Set<string>();
+  for (const line of body.split(/\r?\n/)) {
+    if (/final-recipient|original-recipient|to:\s|couldn't be found|does not exist|wasn't found|recipient/i.test(line)) {
+      for (const m of line.match(BOUNCE_ADDR_RE) ?? []) {
+        const a = m.toLowerCase();
+        if (a.startsWith("mailer-daemon@") || a.startsWith("postmaster@")) continue;
+        addresses.add(a);
+      }
+    }
+  }
+  const diag = body.match(/Diagnostic-Code:\s*([^\r\n]+(?:\r?\n\s+[^\r\n]+)*)/i);
+  const smtp = body.match(/(55\d[ -][^\r\n]{0,200})/);
+  const human = body.match(/(address (?:couldn't be found|not found)[^\r\n]{0,160}|does not exist[^\r\n]{0,160}|mailbox (?:is )?(?:full|unavailable)[^\r\n]{0,160})/i);
+  const reason = (diag?.[1] ?? smtp?.[1] ?? human?.[1] ?? "Delivery failed").replace(/\s+/g, " ").trim().slice(0, 500);
+  return { addresses: [...addresses], reason };
 }
 
 export function callbackRedirectUri(origin: string) {
