@@ -14,6 +14,60 @@ export type Database = {
   }
   public: {
     Tables: {
+      email_bounces: {
+        Row: {
+          bounce_type: string
+          created_at: string
+          email_history_id: string | null
+          email_recipient_id: string | null
+          gmail_message_id: string | null
+          id: string
+          provider_response: string | null
+          reason: string | null
+          recipient_email: string
+          user_id: string
+        }
+        Insert: {
+          bounce_type?: string
+          created_at?: string
+          email_history_id?: string | null
+          email_recipient_id?: string | null
+          gmail_message_id?: string | null
+          id?: string
+          provider_response?: string | null
+          reason?: string | null
+          recipient_email: string
+          user_id: string
+        }
+        Update: {
+          bounce_type?: string
+          created_at?: string
+          email_history_id?: string | null
+          email_recipient_id?: string | null
+          gmail_message_id?: string | null
+          id?: string
+          provider_response?: string | null
+          reason?: string | null
+          recipient_email?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_bounces_email_history_id_fkey"
+            columns: ["email_history_id"]
+            isOneToOne: false
+            referencedRelation: "email_history"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_bounces_email_recipient_id_fkey"
+            columns: ["email_recipient_id"]
+            isOneToOne: false
+            referencedRelation: "email_recipients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_drafts: {
         Row: {
           attachments: Json
@@ -85,14 +139,22 @@ export type Database = {
           attachments: Json
           bcc: string | null
           body: string
+          body_html: string | null
           error: string | null
           first_opened_at: string | null
           gmail_account_id: string | null
+          gmail_message_id: string | null
+          gmail_thread_id: string | null
           id: string
+          kind: string
           last_opened_at: string | null
           open_count: number
+          parent_campaign_id: string | null
           recipient: string
           recipient_count: number
+          rfc_message_id: string | null
+          scheduled_at: string | null
+          send_mode: string
           sender_email: string | null
           sent_at: string
           skipped: Json
@@ -100,6 +162,7 @@ export type Database = {
           subject: string
           template_id: string | null
           template_name: string | null
+          timezone: string | null
           tracking_enabled: boolean
           tracking_token: string | null
           user_id: string
@@ -108,14 +171,22 @@ export type Database = {
           attachments?: Json
           bcc?: string | null
           body: string
+          body_html?: string | null
           error?: string | null
           first_opened_at?: string | null
           gmail_account_id?: string | null
+          gmail_message_id?: string | null
+          gmail_thread_id?: string | null
           id?: string
+          kind?: string
           last_opened_at?: string | null
           open_count?: number
+          parent_campaign_id?: string | null
           recipient: string
           recipient_count?: number
+          rfc_message_id?: string | null
+          scheduled_at?: string | null
+          send_mode?: string
           sender_email?: string | null
           sent_at?: string
           skipped?: Json
@@ -123,6 +194,7 @@ export type Database = {
           subject: string
           template_id?: string | null
           template_name?: string | null
+          timezone?: string | null
           tracking_enabled?: boolean
           tracking_token?: string | null
           user_id: string
@@ -131,14 +203,22 @@ export type Database = {
           attachments?: Json
           bcc?: string | null
           body?: string
+          body_html?: string | null
           error?: string | null
           first_opened_at?: string | null
           gmail_account_id?: string | null
+          gmail_message_id?: string | null
+          gmail_thread_id?: string | null
           id?: string
+          kind?: string
           last_opened_at?: string | null
           open_count?: number
+          parent_campaign_id?: string | null
           recipient?: string
           recipient_count?: number
+          rfc_message_id?: string | null
+          scheduled_at?: string | null
+          send_mode?: string
           sender_email?: string | null
           sent_at?: string
           skipped?: Json
@@ -146,6 +226,7 @@ export type Database = {
           subject?: string
           template_id?: string | null
           template_name?: string | null
+          timezone?: string | null
           tracking_enabled?: boolean
           tracking_token?: string | null
           user_id?: string
@@ -156,6 +237,13 @@ export type Database = {
             columns: ["gmail_account_id"]
             isOneToOne: false
             referencedRelation: "gmail_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_history_parent_campaign_id_fkey"
+            columns: ["parent_campaign_id"]
+            isOneToOne: false
+            referencedRelation: "email_history"
             referencedColumns: ["id"]
           },
           {
@@ -235,15 +323,27 @@ export type Database = {
           click_count: number
           company: string | null
           created_at: string
+          delivery_error: string | null
+          delivery_status: string
+          delivery_updated_at: string | null
           email: string
           email_history_id: string
           first_opened_at: string | null
+          first_pdf_view_at: string | null
+          followup_count: number
+          followup_sent_at: string | null
+          gmail_message_id: string | null
+          gmail_thread_id: string | null
           id: string
           last_clicked_at: string | null
           last_opened_at: string | null
+          last_pdf_view_at: string | null
           name: string | null
           open_count: number
           pdf_tracking_token: string | null
+          pdf_view_count: number
+          replied_at: string | null
+          rfc_message_id: string | null
           status: string
           tracking_token: string | null
           user_id: string
@@ -252,15 +352,27 @@ export type Database = {
           click_count?: number
           company?: string | null
           created_at?: string
+          delivery_error?: string | null
+          delivery_status?: string
+          delivery_updated_at?: string | null
           email: string
           email_history_id: string
           first_opened_at?: string | null
+          first_pdf_view_at?: string | null
+          followup_count?: number
+          followup_sent_at?: string | null
+          gmail_message_id?: string | null
+          gmail_thread_id?: string | null
           id?: string
           last_clicked_at?: string | null
           last_opened_at?: string | null
+          last_pdf_view_at?: string | null
           name?: string | null
           open_count?: number
           pdf_tracking_token?: string | null
+          pdf_view_count?: number
+          replied_at?: string | null
+          rfc_message_id?: string | null
           status?: string
           tracking_token?: string | null
           user_id: string
@@ -269,15 +381,27 @@ export type Database = {
           click_count?: number
           company?: string | null
           created_at?: string
+          delivery_error?: string | null
+          delivery_status?: string
+          delivery_updated_at?: string | null
           email?: string
           email_history_id?: string
           first_opened_at?: string | null
+          first_pdf_view_at?: string | null
+          followup_count?: number
+          followup_sent_at?: string | null
+          gmail_message_id?: string | null
+          gmail_thread_id?: string | null
           id?: string
           last_clicked_at?: string | null
           last_opened_at?: string | null
+          last_pdf_view_at?: string | null
           name?: string | null
           open_count?: number
           pdf_tracking_token?: string | null
+          pdf_view_count?: number
+          replied_at?: string | null
+          rfc_message_id?: string | null
           status?: string
           tracking_token?: string | null
           user_id?: string
@@ -307,6 +431,7 @@ export type Database = {
           is_archived: boolean
           is_read: boolean
           received_at: string
+          rfc_message_id: string | null
           snippet: string | null
           subject: string | null
           user_id: string
@@ -325,6 +450,7 @@ export type Database = {
           is_archived?: boolean
           is_read?: boolean
           received_at?: string
+          rfc_message_id?: string | null
           snippet?: string | null
           subject?: string | null
           user_id: string
@@ -343,6 +469,7 @@ export type Database = {
           is_archived?: boolean
           is_read?: boolean
           received_at?: string
+          rfc_message_id?: string | null
           snippet?: string | null
           subject?: string | null
           user_id?: string
@@ -1096,6 +1223,59 @@ export type Database = {
         }
         Relationships: []
       }
+      send_jobs: {
+        Row: {
+          attempts: number
+          created_at: string
+          email_history_id: string
+          id: string
+          job_type: string
+          last_error: string | null
+          locked_at: string | null
+          payload: Json
+          run_at: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          email_history_id: string
+          id?: string
+          job_type?: string
+          last_error?: string | null
+          locked_at?: string | null
+          payload?: Json
+          run_at?: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          email_history_id?: string
+          id?: string
+          job_type?: string
+          last_error?: string | null
+          locked_at?: string | null
+          payload?: Json
+          run_at?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "send_jobs_email_history_id_fkey"
+            columns: ["email_history_id"]
+            isOneToOne: false
+            referencedRelation: "email_history"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       template_saves: {
         Row: {
           created_at: string
@@ -1213,6 +1393,51 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_locations: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      variable_options: {
+        Row: {
+          created_at: string
+          id: string
+          user_id: string
+          value: string
+          variable_name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          user_id: string
+          value: string
+          variable_name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          user_id?: string
+          value?: string
+          variable_name?: string
+        }
+        Relationships: []
       }
     }
     Views: {
