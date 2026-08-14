@@ -14,6 +14,60 @@ export type Database = {
   }
   public: {
     Tables: {
+      email_bounces: {
+        Row: {
+          bounce_type: string
+          created_at: string
+          email_history_id: string | null
+          email_recipient_id: string | null
+          gmail_message_id: string | null
+          id: string
+          provider_response: string | null
+          reason: string | null
+          recipient_email: string
+          user_id: string
+        }
+        Insert: {
+          bounce_type?: string
+          created_at?: string
+          email_history_id?: string | null
+          email_recipient_id?: string | null
+          gmail_message_id?: string | null
+          id?: string
+          provider_response?: string | null
+          reason?: string | null
+          recipient_email: string
+          user_id: string
+        }
+        Update: {
+          bounce_type?: string
+          created_at?: string
+          email_history_id?: string | null
+          email_recipient_id?: string | null
+          gmail_message_id?: string | null
+          id?: string
+          provider_response?: string | null
+          reason?: string | null
+          recipient_email?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_bounces_email_history_id_fkey"
+            columns: ["email_history_id"]
+            isOneToOne: false
+            referencedRelation: "email_history"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_bounces_email_recipient_id_fkey"
+            columns: ["email_recipient_id"]
+            isOneToOne: false
+            referencedRelation: "email_recipients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_drafts: {
         Row: {
           attachments: Json
@@ -269,6 +323,9 @@ export type Database = {
           click_count: number
           company: string | null
           created_at: string
+          delivery_error: string | null
+          delivery_status: string
+          delivery_updated_at: string | null
           email: string
           email_history_id: string
           first_opened_at: string | null
@@ -295,6 +352,9 @@ export type Database = {
           click_count?: number
           company?: string | null
           created_at?: string
+          delivery_error?: string | null
+          delivery_status?: string
+          delivery_updated_at?: string | null
           email: string
           email_history_id: string
           first_opened_at?: string | null
@@ -321,6 +381,9 @@ export type Database = {
           click_count?: number
           company?: string | null
           created_at?: string
+          delivery_error?: string | null
+          delivery_status?: string
+          delivery_updated_at?: string | null
           email?: string
           email_history_id?: string
           first_opened_at?: string | null
@@ -368,6 +431,7 @@ export type Database = {
           is_archived: boolean
           is_read: boolean
           received_at: string
+          rfc_message_id: string | null
           snippet: string | null
           subject: string | null
           user_id: string
@@ -386,6 +450,7 @@ export type Database = {
           is_archived?: boolean
           is_read?: boolean
           received_at?: string
+          rfc_message_id?: string | null
           snippet?: string | null
           subject?: string | null
           user_id: string
@@ -404,6 +469,7 @@ export type Database = {
           is_archived?: boolean
           is_read?: boolean
           received_at?: string
+          rfc_message_id?: string | null
           snippet?: string | null
           subject?: string | null
           user_id?: string
@@ -1346,6 +1412,30 @@ export type Database = {
           id?: string
           name?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      variable_options: {
+        Row: {
+          created_at: string
+          id: string
+          user_id: string
+          value: string
+          variable_name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          user_id: string
+          value: string
+          variable_name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          user_id?: string
+          value?: string
+          variable_name?: string
         }
         Relationships: []
       }
