@@ -326,6 +326,11 @@ export const sendReply = createServerFn({ method: "POST" })
       .eq("user_id", userId)
       .maybeSingle();
     if (error || !reply) throw new Error("Reply not found");
+    const { data: replyMeta } = await supabase
+      .from("email_replies")
+      .select("rfc_message_id, email_recipient_id")
+      .eq("id", data.replyId)
+      .maybeSingle();
     if (!reply.gmail_account_id) throw new Error("Reply is not linked to a Gmail account");
     const { data: conn, error: cErr } = await supabase
       .from("gmail_connections")
@@ -352,9 +357,19 @@ export const sendReply = createServerFn({ method: "POST" })
     const displayName = (conn.display_name ?? conn.full_name ?? "").trim() || null;
     const from = formatFromHeader(conn.gmail_email, displayName);
     const to = reply.from_name ? formatFromHeader(reply.from_email, reply.from_name) : reply.from_email;
-    const raw = buildRawEmail({ from, to, subject: data.subject, body: data.body });
+    // Reply goes ONLY to the person who replied — no BCC, no campaign list.
+    const subject = /^re:/i.test(data.subject) ? data.subject : `Re: ${data.subject}`;
+    const inReplyTo = replyMeta?.rfc_message_id ?? null;
+    const raw = buildRawEmail({
+      from,
+      to,
+      subject,
+      body: data.body,
+      inReplyTo,
+      references: inReplyTo,
+    });
 
-    // Post to Gmail with threading headers so it shows in the same conversation.
+    // Same Gmail conversation via threadId + In-Reply-To/References.
     const payload: { raw: string; threadId?: string } = { raw };
     if (reply.gmail_thread_id) payload.threadId = reply.gmail_thread_id;
     const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
