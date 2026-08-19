@@ -96,6 +96,40 @@ export const syncReplies = createServerFn({ method: "POST" })
         const { email: fromEmail, name: fromName } = parseFromHeader(fromRaw);
         if (fromEmail === conn.gmail_email.toLowerCase()) continue;
 
+        const bodyText = extractPlainText(msg);
+
+        // ── Delivery failure notifications → real bounce records ────────────
+        const { isBounceMessage, parseBounce } = await import("./gmail.server");
+        if (isBounceMessage(fromEmail, subject)) {
+          const { addresses, reason } = parseBounce(bodyText);
+          for (const addr of addresses) {
+            const target = recipientByEmail.get(addr);
+            await supabaseAdmin.from("email_bounces").insert({
+              user_id: userId,
+              email_history_id: target?.email_history_id ?? null,
+              email_recipient_id: target?.id ?? null,
+              recipient_email: addr,
+              bounce_type: /5\d\d|not (?:be )?found|does not exist|no such user/i.test(reason) ? "hard" : "soft",
+              reason,
+              provider_response: bodyText.slice(0, 2000),
+              gmail_message_id: msg.id,
+            });
+            if (target) {
+              await supabaseAdmin
+                .from("email_recipients")
+                .update({
+                  delivery_status: "bounced",
+                  delivery_error: reason,
+                  delivery_updated_at: new Date().toISOString(),
+                  status: "failed",
+                })
+                .eq("id", target.id);
+            }
+            totalBounces += 1;
+          }
+          continue; // A bounce is not a human reply.
+        }
+
         const known = recipientByEmail.get(fromEmail);
         // Only save messages we can attribute to a campaign (either matched sender or in-reply header).
         if (!known && !inReplyTo && !references) continue;
@@ -106,12 +140,13 @@ export const syncReplies = createServerFn({ method: "POST" })
             ? new Date(Number(msg.internalDate)).toISOString()
             : new Date().toISOString();
 
-        const body = extractPlainText(msg).slice(0, 20_000);
+        const body = bodyText.slice(0, 20_000);
         await supabaseAdmin.from("email_replies").insert({
           user_id: userId,
           gmail_account_id: conn.id,
           gmail_message_id: msg.id,
           gmail_thread_id: msg.threadId ?? null,
+          rfc_message_id: headerVal(msg, "Message-ID") ?? null,
           email_history_id: known?.email_history_id ?? null,
           email_recipient_id: known?.id ?? null,
           from_email: fromEmail,
@@ -130,7 +165,7 @@ export const syncReplies = createServerFn({ method: "POST" })
         .eq("id", conn.id);
     }
 
-    return { synced: activeConns.length, replies: totalReplies, needsReconnect: false };
+    return { synced: activeConns.length, replies: totalReplies, bounces: totalBounces, needsReconnect: false };
   });
 
 export const listReplies = createServerFn({ method: "GET" })
