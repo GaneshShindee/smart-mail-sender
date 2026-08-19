@@ -116,9 +116,6 @@ export const listFollowupRecipients = createServerFn({ method: "GET" })
     const floor = dateFloor(data.dateRange, data.from);
     const ceil = dateCeil(data.dateRange, data.to);
 
-    const applyScope = <T extends { eq: unknown }>(qb: T): T => qb;
-    void applyScope;
-
     // ── Filtered page of rows ────────────────────────────────────────────────
     let q = supabase.from("email_recipients").select(SELECT, { count: "exact" }).eq("user_id", userId);
     if (data.campaignId) q = q.eq("email_history_id", data.campaignId);
@@ -298,8 +295,6 @@ export const sendFollowupBatch = createServerFn({ method: "POST" })
     let firstError: string | null = null;
 
     const one = async (row: RecipientRow) => {
-      let token = row.gmail_thread_id ? row.rfc_message_id : row.rfc_message_id;
-      void token;
       // Ensure tracking tokens exist so follow-up engagement is measurable.
       let trackToken: string | null = null;
       let pdfToken: string | null = null;
@@ -310,7 +305,7 @@ export const sendFollowupBatch = createServerFn({ method: "POST" })
         .maybeSingle();
       trackToken = cur?.tracking_token ?? null;
       pdfToken = cur?.pdf_tracking_token ?? null;
-      const patch: Record<string, string> = {};
+      const patch: { tracking_token?: string; pdf_tracking_token?: string } = {};
       if (trackingEnabled && !trackToken) { trackToken = crypto.randomUUID(); patch.tracking_token = trackToken; }
       if (hasPdf && !pdfToken) { pdfToken = crypto.randomUUID(); patch.pdf_tracking_token = pdfToken; }
       if (Object.keys(patch).length) await supabaseAdmin.from("email_recipients").update(patch).eq("id", row.id);
