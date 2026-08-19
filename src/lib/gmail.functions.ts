@@ -494,13 +494,19 @@ export const sendEmail = createServerFn({ method: "POST" })
           attachments,
           trackingPixelUrl: pixelUrl,
         });
-        await gmailSend(accessToken, raw);
+        const sentMsg = await gmailSend(accessToken, raw);
         sentCount += 1;
-        const sentMeta = await (async () => null)();
-        void sentMeta;
+        const rfc = await gmailRfcMessageId(accessToken, sentMsg.id);
         await supabaseAdmin
           .from("email_recipients")
-          .update({ status: "sent", delivery_status: "accepted", delivery_updated_at: new Date().toISOString() })
+          .update({
+            status: "sent",
+            delivery_status: "accepted",
+            delivery_updated_at: new Date().toISOString(),
+            gmail_message_id: sentMsg.id ?? null,
+            gmail_thread_id: sentMsg.threadId ?? null,
+            rfc_message_id: rfc,
+          })
           .eq("id", row.id);
       } catch (err) {
         failedCount += 1;
