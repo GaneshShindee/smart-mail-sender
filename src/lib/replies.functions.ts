@@ -27,6 +27,7 @@ export const syncReplies = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     let totalReplies = 0;
+    let totalBounces = 0;
     for (const conn of activeConns) {
       let accessToken = conn.access_token ?? "";
       const expired = !conn.expires_at || new Date(conn.expires_at).getTime() < Date.now() + 30_000;
