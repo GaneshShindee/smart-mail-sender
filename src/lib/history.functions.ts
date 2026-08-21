@@ -134,7 +134,7 @@ export const getCampaign = createServerFn({ method: "GET" })
   .handler(async ({ data, context }) => {
     const { data: campaign, error } = await context.supabase
       .from("email_history")
-      .select("id, subject, body, template_name, template_id, status, sent_at, error, sender_email, gmail_account_id, bcc, attachments, recipient_count, open_count, first_opened_at, last_opened_at, tracking_enabled")
+      .select("id, subject, body, template_name, template_id, status, sent_at, error, sender_email, gmail_account_id, bcc, attachments, recipient_count, open_count, first_opened_at, last_opened_at, tracking_enabled, send_mode, kind, gmail_thread_id")
       .eq("id", data.id)
       .eq("user_id", context.userId)
       .maybeSingle();
@@ -143,13 +143,25 @@ export const getCampaign = createServerFn({ method: "GET" })
 
     const { data: recipients, error: rErr } = await context.supabase
       .from("email_recipients")
-      .select("id, email, name, company, status, open_count, first_opened_at, last_opened_at, click_count")
+      .select("id, email, name, company, status, open_count, first_opened_at, last_opened_at, click_count, pdf_view_count, first_pdf_view_at, last_pdf_view_at, replied_at, followup_sent_at, followup_count, delivery_status, delivery_error, created_at")
       .eq("email_history_id", data.id)
       .order("open_count", { ascending: false })
       .order("email", { ascending: true });
     if (rErr) throw new Error(rErr.message);
 
-    return { campaign, recipients: recipients ?? [] };
+    const list = recipients ?? [];
+    const stats = {
+      total: list.length,
+      delivered: list.filter((r) => ["accepted", "delivered"].includes(r.delivery_status)).length,
+      bounced: list.filter((r) => ["bounced", "invalid", "failed"].includes(r.delivery_status)).length,
+      opened: list.filter((r) => (r.open_count ?? 0) > 0).length,
+      totalOpens: list.reduce((n, r) => n + (r.open_count ?? 0), 0),
+      clicks: list.reduce((n, r) => n + (r.click_count ?? 0), 0),
+      pdfViews: list.reduce((n, r) => n + (r.pdf_view_count ?? 0), 0),
+      replies: list.filter((r) => r.replied_at).length,
+      followups: list.filter((r) => r.followup_sent_at).length,
+    };
+    return { campaign, recipients: list, stats };
   });
 
 export const getRecipient = createServerFn({ method: "GET" })
@@ -158,7 +170,7 @@ export const getRecipient = createServerFn({ method: "GET" })
   .handler(async ({ data, context }) => {
     const { data: recipient, error } = await context.supabase
       .from("email_recipients")
-      .select("id, email, name, company, status, open_count, first_opened_at, last_opened_at, click_count, email_history_id")
+      .select("id, email, name, company, status, open_count, first_opened_at, last_opened_at, click_count, pdf_view_count, first_pdf_view_at, last_pdf_view_at, replied_at, followup_sent_at, followup_count, delivery_status, delivery_error, created_at, email_history_id")
       .eq("id", data.id)
       .eq("user_id", context.userId)
       .maybeSingle();
@@ -178,5 +190,30 @@ export const getRecipient = createServerFn({ method: "GET" })
       .order("opened_at", { ascending: true });
     if (oErr) throw new Error(oErr.message);
 
-    return { recipient, campaign, opens: opens ?? [] };
+    const [{ data: pdfs }, { data: replies }, { data: bounces }] = await Promise.all([
+      context.supabase
+        .from("pdf_events")
+        .select("id, created_at, filename, event_type, device_type, browser, os, country, city, region")
+        .eq("email_recipient_id", recipient.id)
+        .order("created_at", { ascending: true }),
+      context.supabase
+        .from("email_replies")
+        .select("id, subject, snippet, received_at, from_email")
+        .eq("email_recipient_id", recipient.id)
+        .order("received_at", { ascending: true }),
+      context.supabase
+        .from("email_bounces")
+        .select("id, created_at, bounce_type, reason")
+        .eq("email_recipient_id", recipient.id)
+        .order("created_at", { ascending: true }),
+    ]);
+
+    return {
+      recipient,
+      campaign,
+      opens: opens ?? [],
+      pdfEvents: pdfs ?? [],
+      replies: replies ?? [],
+      bounces: bounces ?? [],
+    };
   });

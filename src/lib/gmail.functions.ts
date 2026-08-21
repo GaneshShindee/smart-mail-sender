@@ -471,7 +471,7 @@ export const sendEmail = createServerFn({ method: "POST" })
         company: row.company ?? previewVars.company ?? "",
         ...globalVars,
       };
-      let personalSubject = applyTemplate(data.subject, perVars);
+      const personalSubject = applyTemplate(data.subject, perVars);
       let personalBody = applyTemplate(data.body, perVars);
       // If the template doesn't already have a greeting anywhere, prepend one.
       if (!bodyHasGreeting(data.body)) {

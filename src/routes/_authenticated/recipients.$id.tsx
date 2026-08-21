@@ -54,7 +54,7 @@ function RecipientDetailsPage() {
   if (isLoading || !data) {
     return <div className="mx-auto max-w-5xl space-y-4"><Skeleton className="h-8 w-64" /><Skeleton className="h-40 w-full" /><Skeleton className="h-96 w-full" /></div>;
   }
-  const { recipient, campaign, opens } = data;
+  const { recipient, campaign, opens, pdfEvents, replies, bounces } = data;
   const opensTyped = opens as OpenRow[];
 
   // Stats.
@@ -112,6 +112,25 @@ function RecipientDetailsPage() {
   };
 
   const hot = total >= 3;
+
+  const timeline = (() => {
+    const events: { key: string; label: string; when: string; accent?: boolean }[] = [];
+    opensTyped.forEach((o, i) => events.push({ key: `o-${o.id}`, label: `Opened #${i + 1}`, when: o.opened_at }));
+    pdfEvents.forEach((p, i) =>
+      events.push({
+        key: `p-${p.id}`,
+        label: p.event_type === "click" ? `Resume link clicked #${i + 1}` : `Resume PDF viewed #${i + 1}`,
+        when: p.created_at,
+      }),
+    );
+    replies.forEach((r) => events.push({ key: `r-${r.id}`, label: "Reply received", when: r.received_at, accent: true }));
+    bounces.forEach((b) =>
+      events.push({ key: `b-${b.id}`, label: `Delivery failed — ${b.reason ?? b.bounce_type}`, when: b.created_at, accent: true }),
+    );
+    if (recipient.followup_sent_at)
+      events.push({ key: "f", label: `Follow-up sent (×${recipient.followup_count ?? 1})`, when: recipient.followup_sent_at, accent: true });
+    return events.sort((a, b) => a.when.localeCompare(b.when));
+  })();
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -210,11 +229,11 @@ function RecipientDetailsPage() {
           <CardContent>
             <ul className="space-y-3 border-l border-border pl-4">
               <TimelineDot label="Email Sent" when={campaign?.sent_at ?? recipient.first_opened_at} accent />
-              {opensTyped.map((o, i) => (
-                <TimelineDot key={o.id} label={`Open #${i + 1}`} when={o.opened_at} />
+              {timeline.map((t) => (
+                <TimelineDot key={t.key} label={t.label} when={t.when} accent={t.accent} />
               ))}
-              {opensTyped.length === 0 && (
-                <li className="text-xs text-muted-foreground">Timeline will populate as opens arrive.</li>
+              {timeline.length === 0 && (
+                <li className="text-xs text-muted-foreground">Timeline will populate as engagement arrives.</li>
               )}
             </ul>
           </CardContent>
