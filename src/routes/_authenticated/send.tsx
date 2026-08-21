@@ -49,7 +49,6 @@ function SendPage() {
   const search = Route.useSearch();
   const listFn = useServerFn(listTemplates);
   const sendFn = useServerFn(sendEmail);
-  const [sendMode, setSendMode] = useState<"bcc" | "individual">("bcc");
   const accountsFn = useServerFn(listGmailAccounts);
   const resumesFn = useServerFn(listResumes);
   const prefsFn = useServerFn(getUserPreferences);
@@ -83,6 +82,8 @@ function SendPage() {
   }>(null);
 
   const isFollowUp = search.followUp === "1";
+  // Follow-ups must be individual so each one stays in that person's own thread.
+  const [sendMode, setSendMode] = useState<"bcc" | "individual">(isFollowUp ? "individual" : "bcc");
 
   const selectedSender = useMemo(
     () => accounts.data?.find((a) => a.id === senderId) ?? null,
@@ -331,6 +332,11 @@ function SendPage() {
                 <SelectItem value="individual">Individual per recipient</SelectItem>
               </SelectContent>
             </Select>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              {sendMode === "bcc"
+                ? "One message, everyone hidden in BCC, no self-copy."
+                : "Personalized greeting + per-recipient tracking."}
+            </p>
           </div>
           <div className="min-w-[260px]">
           <Label className="text-xs">Send from</Label>
