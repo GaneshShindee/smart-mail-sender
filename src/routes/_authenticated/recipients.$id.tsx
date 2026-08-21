@@ -113,7 +113,7 @@ function RecipientDetailsPage() {
 
   const hot = total >= 3;
 
-  const timeline = useMemo(() => {
+  const timeline = (() => {
     const events: { key: string; label: string; when: string; accent?: boolean }[] = [];
     opensTyped.forEach((o, i) => events.push({ key: `o-${o.id}`, label: `Opened #${i + 1}`, when: o.opened_at }));
     pdfEvents.forEach((p, i) =>
@@ -130,7 +130,7 @@ function RecipientDetailsPage() {
     if (recipient.followup_sent_at)
       events.push({ key: "f", label: `Follow-up sent (×${recipient.followup_count ?? 1})`, when: recipient.followup_sent_at, accent: true });
     return events.sort((a, b) => a.when.localeCompare(b.when));
-  }, [opensTyped, pdfEvents, replies, bounces, recipient]);
+  })();
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
