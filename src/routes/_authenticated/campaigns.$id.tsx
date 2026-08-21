@@ -26,7 +26,7 @@ function CampaignDetailsPage() {
   if (isLoading || !data) {
     return <div className="mx-auto max-w-6xl space-y-4"><Skeleton className="h-8 w-64" /><Skeleton className="h-40 w-full" /><Skeleton className="h-96 w-full" /></div>;
   }
-  const { campaign, recipients } = data;
+  const { campaign, recipients, stats } = data;
   const opened = recipients.filter((r) => (r.open_count ?? 0) > 0);
   const openRate = recipients.length ? opened.length / recipients.length : 0;
   const attachments = Array.isArray(campaign.attachments) ? (campaign.attachments as Array<{ name: string }>) : [];
