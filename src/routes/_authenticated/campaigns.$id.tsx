@@ -59,11 +59,17 @@ function CampaignDetailsPage() {
         <StatusBadge status={campaign.status} />
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <Stat label="Recipients" value={String(recipients.length)} icon={Users} />
+        <Stat label="Delivered" value={`${stats.delivered} · ${stats.bounced} invalid`} icon={Mail} />
         <Stat label="Opened" value={`${opened.length} / ${recipients.length}`} icon={Eye} />
         <Stat label="Open rate" value={`${Math.round(openRate * 100)}%`} icon={Flame} />
         <Stat label="Total opens" value={String(campaign.open_count ?? 0)} icon={Mail} />
+        <Stat label="Clicks" value={String(stats.clicks)} icon={Eye} />
+        <Stat label="Resume / PDF views" value={String(stats.pdfViews)} icon={Eye} />
+        <Stat label="Replies" value={String(stats.replies)} icon={Mail} />
+        <Stat label="Follow-ups sent" value={String(stats.followups)} icon={Flame} />
+        <Stat label="Send mode" value={campaign.send_mode === "bcc" ? "One BCC message" : "Individual"} icon={Users} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
@@ -82,12 +88,27 @@ function CampaignDetailsPage() {
                         {r.email}
                         {r.company ? ` · ${r.company}` : ""}
                       </div>
-                      <div className="text-xs text-muted-foreground mt-0.5">
-                        {opens > 0 ? (
-                          <>Opened {opens} time{opens === 1 ? "" : "s"} · last {r.last_opened_at ? relativeTime(r.last_opened_at) : "—"}</>
-                        ) : (
-                          <span>Not opened</span>
-                        )}
+                      <div className="text-xs text-muted-foreground mt-0.5 flex flex-wrap gap-x-3">
+                        <span>
+                          {opens > 0
+                            ? `Opened ${opens} time${opens === 1 ? "" : "s"} · last ${r.last_opened_at ? relativeTime(r.last_opened_at) : "—"}`
+                            : "Not opened"}
+                        </span>
+                        <span>
+                          {(r.pdf_view_count ?? 0) > 0
+                            ? `Resume viewed ${r.pdf_view_count} time${r.pdf_view_count === 1 ? "" : "s"} · last ${r.last_pdf_view_at ? new Date(r.last_pdf_view_at).toLocaleString() : "—"}`
+                            : "Resume not viewed"}
+                        </span>
+                        <span>{(r.click_count ?? 0) > 0 ? `${r.click_count} click${r.click_count === 1 ? "" : "s"}` : "No clicks"}</span>
+                        <span>{r.replied_at ? "Replied" : "Not replied"}</span>
+                        <span>{r.followup_sent_at ? `Follow-up sent ×${r.followup_count}` : "Follow-up available"}</span>
+                        <span>
+                          {["accepted", "delivered"].includes(r.delivery_status)
+                            ? "Delivered"
+                            : ["bounced", "invalid", "failed"].includes(r.delivery_status)
+                              ? `Invalid / Bounced${r.delivery_error ? ` — ${r.delivery_error}` : ""}`
+                              : "Delivery unknown"}
+                        </span>
                       </div>
                     </Link>
                     <div className="flex items-center gap-2 shrink-0">
