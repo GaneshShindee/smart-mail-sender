@@ -334,8 +334,8 @@ function SendPage() {
             </Select>
             <p className="text-[11px] text-muted-foreground mt-1">
               {sendMode === "bcc"
-                ? "One message, everyone hidden in BCC, no self-copy."
-                : "Personalized greeting + per-recipient tracking."}
+                ? "One message, everyone hidden in BCC, no self-copy. Opens are tracked at campaign level."
+                : "One message each: personalized greeting, per-recipient open + resume tracking."}
             </p>
           </div>
           <div className="min-w-[260px]">
