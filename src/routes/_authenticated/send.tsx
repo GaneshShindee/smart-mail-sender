@@ -49,6 +49,7 @@ function SendPage() {
   const search = Route.useSearch();
   const listFn = useServerFn(listTemplates);
   const sendFn = useServerFn(sendEmail);
+  const [sendMode, setSendMode] = useState<"bcc" | "individual">("bcc");
   const accountsFn = useServerFn(listGmailAccounts);
   const resumesFn = useServerFn(listResumes);
   const prefsFn = useServerFn(getUserPreferences);
@@ -229,6 +230,7 @@ function SendPage() {
           body,
           variables: vars,
           resumeIds,
+          sendMode,
           uploads: inlineUploads,
         },
       });
@@ -320,6 +322,16 @@ function SendPage() {
             getState={collectDraftState}
             onLoad={applyLoadedDraft}
           />
+          <div className="min-w-[220px]">
+            <Label className="text-xs">Send mode</Label>
+            <Select value={sendMode} onValueChange={(v) => setSendMode(v as "bcc" | "individual")}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="bcc">One BCC message (recommended)</SelectItem>
+                <SelectItem value="individual">Individual per recipient</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <div className="min-w-[260px]">
           <Label className="text-xs">Send from</Label>
           <Select value={senderId} onValueChange={setSenderId}>
