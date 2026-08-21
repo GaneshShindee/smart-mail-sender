@@ -54,7 +54,7 @@ function RecipientDetailsPage() {
   if (isLoading || !data) {
     return <div className="mx-auto max-w-5xl space-y-4"><Skeleton className="h-8 w-64" /><Skeleton className="h-40 w-full" /><Skeleton className="h-96 w-full" /></div>;
   }
-  const { recipient, campaign, opens } = data;
+  const { recipient, campaign, opens, pdfEvents, replies, bounces } = data;
   const opensTyped = opens as OpenRow[];
 
   // Stats.
