@@ -165,8 +165,6 @@ const sendSchema = z.object({
   subject: z.string().min(1).max(998),
   body: z.string().min(1).max(100_000),
   variables: z.record(z.string(), z.string()).optional(),
-  /** 'bcc' (default) = ONE Gmail message with every recipient in BCC. 'individual' = one message per recipient. */
-  sendMode: z.enum(["bcc", "individual"]).optional(),
   resumeIds: z.array(z.string().uuid()).max(10).optional(),
   uploads: z.array(z.object({
     filename: z.string().min(1).max(255),
@@ -192,8 +190,7 @@ export const sendEmail = createServerFn({ method: "POST" })
     if (connErr) throw new Error(connErr.message);
     if (!conn) throw new Error("Gmail is not connected. Connect Gmail in Settings.");
 
-    const { refreshAccessToken, buildRawEmailWithAttachments, gmailSend, gmailRfcMessageId, formatFromHeader } =
-      await import("./gmail.server");
+    const { refreshAccessToken, buildRawEmailWithAttachments, gmailSend, formatFromHeader } = await import("./gmail.server");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     // Per-user tracking preference (defaults on).
@@ -299,8 +296,6 @@ export const sendEmail = createServerFn({ method: "POST" })
     const subject = applyTemplate(data.subject, previewVars);
     const body = applyTemplate(data.body, previewVars);
     const hasPdf = attachments.some((a) => /pdf/i.test(a.mimeType) || /\.pdf$/i.test(a.filename));
-    const sendMode = data.sendMode ?? "bcc";
-    const campaignToken = trackingEnabled ? crypto.randomUUID() : null;
     const { data: historyRow, error: hErr } = await supabaseAdmin
       .from("email_history")
       .insert({
@@ -308,7 +303,7 @@ export const sendEmail = createServerFn({ method: "POST" })
         template_id: data.templateId ?? null,
         template_name: templateName,
         recipient: deduped.join(", "),
-        bcc: sendMode === "bcc" ? deduped.join(", ") : null,
+        bcc: null,
         subject,
         body,
         status: "sending",
@@ -317,9 +312,6 @@ export const sendEmail = createServerFn({ method: "POST" })
         attachments: attachmentMeta,
         recipient_count: deduped.length,
         tracking_enabled: trackingEnabled,
-        tracking_token: campaignToken,
-        send_mode: sendMode,
-        kind: "campaign",
         skipped: skippedReport,
       })
       .select("id")
@@ -338,7 +330,6 @@ export const sendEmail = createServerFn({ method: "POST" })
         status: "pending" as const,
         tracking_token: trackingEnabled ? crypto.randomUUID() : null,
         pdf_tracking_token: hasPdf ? crypto.randomUUID() : null,
-        delivery_status: "unknown" as const,
       };
     });
     const { data: inserted, error: rInsErr } = await supabaseAdmin
@@ -347,100 +338,7 @@ export const sendEmail = createServerFn({ method: "POST" })
       .select("id, email, name, company, tracking_token, pdf_tracking_token");
     if (rInsErr || !inserted) throw new Error(rInsErr?.message ?? "Failed to prepare recipients");
 
-    // ── BCC mode: ONE Gmail message carrying every recipient in BCC ──────────
-    if (sendMode === "bcc") {
-      // Gmail rejects a single message with more than 100 envelope recipients,
-      // so large campaigns go out in BCC batches of 100 (never one-per-person).
-      const BATCH = 100;
-      const bccVars: Record<string, string> = {
-        ...previewVars,
-        first_name: globalVars.first_name ?? "there",
-        last_name: globalVars.last_name ?? "",
-        full_name: globalVars.full_name ?? "there",
-        name: globalVars.name ?? "there",
-        greeting: globalVars.greeting ?? "Hello,",
-        ...globalVars,
-      };
-      const bccSubject = applyTemplate(data.subject, bccVars);
-      let bccBody = applyTemplate(data.body, bccVars);
-      if (!bodyHasGreeting(data.body)) bccBody = `Hello,\n\n${bccBody}`;
-      const pixelUrl = campaignToken ? `${origin}/api/public/track/open/${campaignToken}` : undefined;
-
-      let batchSent = 0;
-      let batchFailed = 0;
-      let firstError: string | null = null;
-      let threadId: string | null = null;
-      let messageId: string | null = null;
-      let rfcId: string | null = null;
-
-      for (let i = 0; i < inserted.length; i += BATCH) {
-        const slice = inserted.slice(i, i + BATCH);
-        try {
-          const raw = buildRawEmailWithAttachments({
-            from: fromHeader,
-            // No sender self-copy: recipients live only in Bcc.
-            to: "undisclosed-recipients:;",
-            bcc: slice.map((r) => r.email).join(", "),
-            subject: bccSubject,
-            body: bccBody,
-            attachments,
-            trackingPixelUrl: pixelUrl,
-          });
-          const sentMsg = await gmailSend(accessToken, raw);
-          if (!threadId) {
-            threadId = sentMsg.threadId ?? null;
-            messageId = sentMsg.id ?? null;
-            rfcId = await gmailRfcMessageId(accessToken, sentMsg.id);
-          }
-          batchSent += slice.length;
-          await supabaseAdmin
-            .from("email_recipients")
-            .update({
-              status: "sent",
-              delivery_status: "accepted",
-              delivery_updated_at: new Date().toISOString(),
-              gmail_message_id: sentMsg.id ?? null,
-              gmail_thread_id: sentMsg.threadId ?? null,
-              rfc_message_id: rfcId,
-            })
-            .in("id", slice.map((r) => r.id));
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          if (!firstError) firstError = msg;
-          batchFailed += slice.length;
-          await supabaseAdmin
-            .from("email_recipients")
-            .update({ status: "failed", delivery_status: "failed", delivery_error: msg.slice(0, 500), delivery_updated_at: new Date().toISOString() })
-            .in("id", slice.map((r) => r.id));
-        }
-      }
-
-      const status = batchFailed === 0 ? "sent" : batchSent === 0 ? "failed" : "partial";
-      await supabaseAdmin
-        .from("email_history")
-        .update({
-          status,
-          error: firstError ? firstError.slice(0, 1000) : null,
-          gmail_thread_id: threadId,
-          gmail_message_id: messageId,
-          rfc_message_id: rfcId,
-        })
-        .eq("id", historyRow.id);
-      if (batchSent === 0) throw new Error(firstError ?? "Send failed");
-      return {
-        ok: true,
-        historyId: historyRow.id,
-        sent: batchSent,
-        failed: batchFailed,
-        recipientCount: deduped.length,
-        total: totalRequested,
-        skipped: skippedReport,
-        mode: "bcc" as const,
-        messages: Math.ceil(inserted.length / BATCH),
-      };
-    }
-
-    // ── Individual mode: one personalized message per recipient ──────────────
+    // Send one message per recipient with a unique pixel — limited concurrency.
     const CONCURRENCY = 4;
     let sentCount = 0;
     let failedCount = 0;
@@ -471,7 +369,7 @@ export const sendEmail = createServerFn({ method: "POST" })
         company: row.company ?? previewVars.company ?? "",
         ...globalVars,
       };
-      const personalSubject = applyTemplate(data.subject, perVars);
+      let personalSubject = applyTemplate(data.subject, perVars);
       let personalBody = applyTemplate(data.body, perVars);
       // If the template doesn't already have a greeting anywhere, prepend one.
       if (!bodyHasGreeting(data.body)) {
@@ -494,19 +392,11 @@ export const sendEmail = createServerFn({ method: "POST" })
           attachments,
           trackingPixelUrl: pixelUrl,
         });
-        const sentMsg = await gmailSend(accessToken, raw);
+        await gmailSend(accessToken, raw);
         sentCount += 1;
-        const rfc = await gmailRfcMessageId(accessToken, sentMsg.id);
         await supabaseAdmin
           .from("email_recipients")
-          .update({
-            status: "sent",
-            delivery_status: "accepted",
-            delivery_updated_at: new Date().toISOString(),
-            gmail_message_id: sentMsg.id ?? null,
-            gmail_thread_id: sentMsg.threadId ?? null,
-            rfc_message_id: rfc,
-          })
+          .update({ status: "sent" })
           .eq("id", row.id);
       } catch (err) {
         failedCount += 1;
@@ -514,7 +404,7 @@ export const sendEmail = createServerFn({ method: "POST" })
         if (!errorRef.value) errorRef.value = msg;
         await supabaseAdmin
           .from("email_recipients")
-          .update({ status: "failed", delivery_status: "failed", delivery_error: msg.slice(0, 500), delivery_updated_at: new Date().toISOString() })
+          .update({ status: "failed" })
           .eq("id", row.id);
       }
     };
