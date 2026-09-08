@@ -304,18 +304,21 @@ export function buildRawEmailWithAttachments(opts: {
   return Buffer.from(message, "utf8").toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-export async function gmailSend(accessToken: string, raw: string) {
+export async function gmailSend(accessToken: string, raw: string, threadId?: string | null) {
+  const payload: { raw: string; threadId?: string } = { raw };
+  if (threadId) payload.threadId = threadId;
   const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ raw }),
+    body: JSON.stringify(payload),
   });
   if (!res.ok) throw new Error(`Gmail send failed: ${res.status} ${await res.text()}`);
   return (await res.json()) as { id: string; threadId: string };
 }
+
 
 export function callbackRedirectUri(origin: string) {
   return `${origin}/api/public/gmail/callback`;
