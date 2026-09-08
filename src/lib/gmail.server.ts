@@ -261,11 +261,12 @@ export function buildRawEmailWithAttachments(opts: {
   body: string;
   attachments: EmailAttachment[];
   trackingPixelUrl?: string;
+  thread?: ThreadHeaders;
 }) {
   if (!opts.attachments || opts.attachments.length === 0) {
     return buildRawEmail({
       from: opts.from, to: opts.to, bcc: opts.bcc, subject: opts.subject, body: opts.body,
-      trackingPixelUrl: opts.trackingPixelUrl,
+      trackingPixelUrl: opts.trackingPixelUrl, thread: opts.thread,
     });
   }
   const boundary = `=_ses_${Math.random().toString(36).slice(2)}_${Date.now().toString(36)}`;
@@ -274,9 +275,11 @@ export function buildRawEmailWithAttachments(opts: {
     `To: ${opts.to}`,
     opts.bcc ? `Bcc: ${opts.bcc}` : null,
     `Subject: ${encodeHeader(opts.subject)}`,
+    ...threadHeaderLines(opts.thread),
     `MIME-Version: 1.0`,
     `Content-Type: multipart/mixed; boundary="${boundary}"`,
   ].filter(Boolean);
+
 
   const bodyMime = buildBodyMime(opts.body, opts.trackingPixelUrl);
   const parts: string[] = [];
