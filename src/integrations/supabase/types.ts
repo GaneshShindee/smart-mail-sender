@@ -347,6 +347,8 @@ export type Database = {
           status: string
           tracking_token: string | null
           user_id: string
+          user_reply_count: number
+          user_reply_sent_at: string | null
         }
         Insert: {
           click_count?: number
@@ -376,6 +378,8 @@ export type Database = {
           status?: string
           tracking_token?: string | null
           user_id: string
+          user_reply_count?: number
+          user_reply_sent_at?: string | null
         }
         Update: {
           click_count?: number
@@ -405,6 +409,8 @@ export type Database = {
           status?: string
           tracking_token?: string | null
           user_id?: string
+          user_reply_count?: number
+          user_reply_sent_at?: string | null
         }
         Relationships: [
           {
