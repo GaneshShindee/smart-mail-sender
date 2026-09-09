@@ -41,7 +41,7 @@ export const listHistoryRecipients = createServerFn({ method: "GET" })
       .parse(d ?? {}),
   )
   .handler(async ({ data, context }) => {
-    const { filterRecipients, type: _t } = await import("@/lib/history-filters").then((m) => ({ filterRecipients: m.filterRecipients, type: null }));
+    const { filterRecipients } = await import("@/lib/history-filters");
     let q = context.supabase
       .from("email_recipients")
       .select(
