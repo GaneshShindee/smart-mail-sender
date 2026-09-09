@@ -21,6 +21,105 @@ export const listHistory = createServerFn({ method: "GET" })
     return rows ?? [];
   });
 
+/**
+ * Recipient-level history rows with reply + resume-view state resolved from the
+ * real tracking tables, then filtered with the shared filter logic.
+ */
+export const listHistoryRecipients = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        search: z.string().default(""),
+        openCount: z.enum(["all", "0", "1", "2", "3+"]).default("all"),
+        replyStatus: z.enum(["all", "replied", "not_replied"]).default("all"),
+        resume: z.enum(["all", "viewed", "not_viewed"]).default("all"),
+        status: z.string().default("all"),
+        campaignId: z.string().uuid().optional(),
+        limit: z.number().int().min(1).max(2000).default(1000),
+      })
+      .parse(d ?? {}),
+  )
+  .handler(async ({ data, context }) => {
+    const { filterRecipients, type: _t } = await import("@/lib/history-filters").then((m) => ({ filterRecipients: m.filterRecipients, type: null }));
+    let q = context.supabase
+      .from("email_recipients")
+      .select(
+        "id, email_history_id, email, name, company, status, open_count, first_opened_at, last_opened_at, pdf_view_count, last_pdf_view_at, replied_at, user_reply_sent_at, user_reply_count, followup_count, gmail_thread_id, gmail_message_id, rfc_message_id",
+      )
+      .eq("user_id", context.userId)
+      .order("created_at", { ascending: false })
+      .limit(data.limit);
+    if (data.campaignId) q = q.eq("email_history_id", data.campaignId);
+    const { data: rows, error } = await q;
+    if (error) throw new Error(error.message);
+    const list = rows ?? [];
+    if (list.length === 0) return [];
+
+    const historyIds = Array.from(new Set(list.map((r) => r.email_history_id)));
+    const [{ data: campaigns }, { data: replies }] = await Promise.all([
+      context.supabase
+        .from("email_history")
+        .select("id, subject, template_name, sender_email, sent_at")
+        .in("id", historyIds)
+        .eq("user_id", context.userId),
+      context.supabase
+        .from("email_replies")
+        .select("email_recipient_id, from_email, received_at")
+        .eq("user_id", context.userId)
+        .limit(5000),
+    ]);
+    const campaignById = new Map((campaigns ?? []).map((c) => [c.id, c]));
+    const repliedRecipientIds = new Set<string>();
+    const repliedEmails = new Map<string, string>();
+    for (const r of replies ?? []) {
+      if (r.email_recipient_id) repliedRecipientIds.add(r.email_recipient_id);
+      const key = r.from_email.toLowerCase();
+      if (!repliedEmails.has(key)) repliedEmails.set(key, r.received_at);
+    }
+
+    const shaped = list.map((r) => {
+      const c = campaignById.get(r.email_history_id);
+      const hasReply =
+        !!r.replied_at || repliedRecipientIds.has(r.id) || repliedEmails.has(r.email.toLowerCase());
+      return {
+        id: r.id,
+        email_history_id: r.email_history_id,
+        email: r.email,
+        name: r.name,
+        company: r.company,
+        subject: c?.subject ?? "(deleted campaign)",
+        template_name: c?.template_name ?? null,
+        sender_email: c?.sender_email ?? null,
+        sent_at: c?.sent_at ?? new Date(0).toISOString(),
+        status: r.status,
+        open_count: r.open_count ?? 0,
+        last_opened_at: r.last_opened_at,
+        first_opened_at: r.first_opened_at,
+        pdf_view_count: r.pdf_view_count ?? 0,
+        last_pdf_view_at: r.last_pdf_view_at,
+        has_reply: hasReply,
+        recipient_replied_at: r.replied_at ?? repliedEmails.get(r.email.toLowerCase()) ?? null,
+        user_reply_sent: !!r.user_reply_sent_at,
+        user_reply_count: r.user_reply_count ?? 0,
+        user_reply_sent_at: r.user_reply_sent_at,
+        followup_count: r.followup_count ?? 0,
+        gmail_thread_id: r.gmail_thread_id,
+        gmail_message_id: r.gmail_message_id,
+        rfc_message_id: r.rfc_message_id,
+      };
+    });
+
+    return filterRecipients(shaped, {
+      search: data.search,
+      openCount: data.openCount,
+      replyStatus: data.replyStatus,
+      resume: data.resume,
+      status: data.status,
+    });
+  });
+
+
 export const dashboardStats = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
