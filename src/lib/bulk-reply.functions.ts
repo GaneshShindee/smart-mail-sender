@@ -1,7 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { applyTemplate, deriveNames, greetingFor, bodyHasGreeting } from "@/lib/templating";
+import { applyTemplate } from "@/lib/templating";
+import { deriveNames, greetingFor, bodyHasGreeting } from "@/lib/recipients";
+
 
 const targetSchema = z.object({
   /** email_recipients.id */
