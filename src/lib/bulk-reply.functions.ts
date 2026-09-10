@@ -60,7 +60,7 @@ export const bulkSendReply = createServerFn({ method: "POST" })
     const historyIds = Array.from(new Set(owned.map((r) => r.email_history_id)));
     const { data: campaigns, error: cErr } = await supabase
       .from("email_history")
-      .select("id, subject, body, gmail_account_id, sender_email, template_name")
+      .select("id, subject, body, gmail_account_id, sender_email, template_name, parent_campaign_id")
       .in("id", historyIds)
       .eq("user_id", userId);
     if (cErr) throw new Error(cErr.message);
