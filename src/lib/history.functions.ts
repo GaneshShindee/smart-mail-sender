@@ -21,6 +21,93 @@ export const listHistory = createServerFn({ method: "GET" })
     return rows ?? [];
   });
 
+export type CampaignSummary = {
+  id: string;
+  subject: string;
+  template_name: string | null;
+  sender_email: string | null;
+  status: string;
+  sent_at: string;
+  error: string | null;
+  recipient_count: number;
+  recipients: number;
+  opened: number;
+  total_opens: number;
+  resume_views: number;
+  replied: number;
+  you_replied: number;
+  attachment_count: number;
+};
+
+/** Campaign-level history list (one row per send, replies excluded). */
+export const listCampaigns = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        search: z.string().default(""),
+        status: z.string().default("all"),
+        limit: z.number().int().min(1).max(500).default(200),
+      })
+      .parse(d ?? {}),
+  )
+  .handler(async ({ data, context }): Promise<CampaignSummary[]> => {
+    let q = context.supabase
+      .from("email_history")
+      .select("id, subject, template_name, sender_email, status, sent_at, error, recipient_count, attachments, kind")
+      .eq("user_id", context.userId)
+      .neq("kind", "reply")
+      .order("sent_at", { ascending: false })
+      .limit(data.limit);
+    if (data.status !== "all") q = q.eq("status", data.status);
+    if (data.search) q = q.or(`recipient.ilike.%${data.search}%,subject.ilike.%${data.search}%,template_name.ilike.%${data.search}%`);
+    const { data: rows, error } = await q;
+    if (error) throw new Error(error.message);
+    const campaigns = rows ?? [];
+    if (campaigns.length === 0) return [];
+
+    const ids = campaigns.map((c) => c.id);
+    const { data: recipients } = await context.supabase
+      .from("email_recipients")
+      .select("email_history_id, open_count, pdf_view_count, replied_at, user_reply_sent_at")
+      .eq("user_id", context.userId)
+      .in("email_history_id", ids);
+
+    const agg = new Map<string, { recipients: number; opened: number; opens: number; resume: number; replied: number; youReplied: number }>();
+    for (const r of recipients ?? []) {
+      const a = agg.get(r.email_history_id) ?? { recipients: 0, opened: 0, opens: 0, resume: 0, replied: 0, youReplied: 0 };
+      a.recipients += 1;
+      a.opens += r.open_count ?? 0;
+      if ((r.open_count ?? 0) > 0) a.opened += 1;
+      if ((r.pdf_view_count ?? 0) > 0) a.resume += 1;
+      if (r.replied_at) a.replied += 1;
+      if (r.user_reply_sent_at) a.youReplied += 1;
+      agg.set(r.email_history_id, a);
+    }
+
+    return campaigns.map((c) => {
+      const a = agg.get(c.id);
+      const attachments = Array.isArray(c.attachments) ? (c.attachments as unknown[]) : [];
+      return {
+        id: c.id,
+        subject: c.subject,
+        template_name: c.template_name,
+        sender_email: c.sender_email,
+        status: c.status,
+        sent_at: c.sent_at,
+        error: c.error,
+        recipient_count: c.recipient_count ?? 0,
+        recipients: a?.recipients ?? c.recipient_count ?? 0,
+        opened: a?.opened ?? 0,
+        total_opens: a?.opens ?? 0,
+        resume_views: a?.resume ?? 0,
+        replied: a?.replied ?? 0,
+        you_replied: a?.youReplied ?? 0,
+        attachment_count: attachments.length,
+      };
+    });
+  });
+
 /**
  * Recipient-level history rows with reply + resume-view state resolved from the
  * real tracking tables, then filtered with the shared filter logic.
