@@ -120,6 +120,9 @@ export const bulkSendReply = createServerFn({ method: "POST" })
 
     const result: BulkReplyResult = { success: [], failed: [] };
     const globalVars = data.variables ?? {};
+    const proto = getRequestHeader("x-forwarded-proto") ?? "https";
+    const origin = `${proto}://${getRequestHost()}`;
+
 
     // Sequential: one Gmail message per recipient, failures never abort the rest.
     for (const row of owned) {
