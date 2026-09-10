@@ -154,11 +154,52 @@ export const bulkSendReply = createServerFn({ method: "POST" })
         const inReplyTo = row.rfc_message_id ?? null;
         const references = buildReferences({ references: row.rfc_message_id, inReplyTo });
 
+        // Each outgoing reply is a first-class, individually tracked message.
+        const rootCampaignId = campaign.parent_campaign_id ?? campaign.id;
+        const trackingToken = crypto.randomUUID();
+        const { data: replyHistory, error: rhErr } = await supabaseAdmin
+          .from("email_history")
+          .insert({
+            user_id: userId,
+            kind: "reply",
+            parent_campaign_id: rootCampaignId,
+            template_id: data.templateId ?? null,
+            recipient: row.email,
+            subject,
+            body,
+            status: "sending",
+            gmail_account_id: campaign.gmail_account_id,
+            sender_email: sender.email,
+            recipient_count: 1,
+            tracking_enabled: true,
+            rfc_message_id: rfcMessageId,
+          })
+          .select("id")
+          .single();
+        if (rhErr || !replyHistory) throw new Error(rhErr?.message ?? "Failed to log reply");
+
+        const { data: replyRecipient } = await supabaseAdmin
+          .from("email_recipients")
+          .insert({
+            user_id: userId,
+            email_history_id: replyHistory.id,
+            email: row.email,
+            name: row.name,
+            company: row.company,
+            status: "pending",
+            tracking_token: trackingToken,
+            rfc_message_id: rfcMessageId,
+            gmail_thread_id: row.gmail_thread_id,
+          })
+          .select("id")
+          .single();
+
         const raw = buildRawEmail({
           from: sender.from,
           to: row.name ? formatFromHeader(row.email, row.name) : row.email,
           subject,
           body,
+          trackingPixelUrl: `${origin}/api/public/track/open/${trackingToken}`,
           thread: { messageId: rfcMessageId, inReplyTo, references },
         });
         // threadId keeps the reply inside THIS recipient's conversation.
@@ -172,6 +213,22 @@ export const bulkSendReply = createServerFn({ method: "POST" })
             gmail_thread_id: row.gmail_thread_id ?? sent.threadId,
           })
           .eq("id", row.id);
+
+        await supabaseAdmin
+          .from("email_history")
+          .update({
+            status: "sent",
+            gmail_thread_id: sent.threadId,
+            gmail_message_id: sent.id,
+          })
+          .eq("id", replyHistory.id);
+        if (replyRecipient) {
+          await supabaseAdmin
+            .from("email_recipients")
+            .update({ status: "sent", gmail_thread_id: sent.threadId, gmail_message_id: sent.id })
+            .eq("id", replyRecipient.id);
+        }
+
 
         result.success.push({
           emailHistoryId: row.email_history_id,
