@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { getRecipient } from "@/lib/history.functions";
+import { getRecipient, getRecipientThread, type ThreadMessage } from "@/lib/history.functions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -35,7 +35,12 @@ function RecipientDetailsPage() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
   const fn = useServerFn(getRecipient);
+  const threadFn = useServerFn(getRecipientThread);
   const { data, isLoading } = useQuery({ queryKey: ["recipient", id], queryFn: () => fn({ data: { id } }) });
+  const { data: thread, isLoading: loadingThread } = useQuery({
+    queryKey: ["recipient-thread", id],
+    queryFn: () => threadFn({ data: { id } }),
+  });
   const [search, setSearch] = useState("");
   const [device, setDevice] = useState("all");
 
