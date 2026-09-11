@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { getRecipient } from "@/lib/history.functions";
+import { getRecipient, getRecipientThread, type ThreadMessage } from "@/lib/history.functions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -35,7 +35,12 @@ function RecipientDetailsPage() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
   const fn = useServerFn(getRecipient);
+  const threadFn = useServerFn(getRecipientThread);
   const { data, isLoading } = useQuery({ queryKey: ["recipient", id], queryFn: () => fn({ data: { id } }) });
+  const { data: thread, isLoading: loadingThread } = useQuery({
+    queryKey: ["recipient-thread", id],
+    queryFn: () => threadFn({ data: { id } }),
+  });
   const [search, setSearch] = useState("");
   const [device, setDevice] = useState("all");
 
@@ -156,6 +161,26 @@ function RecipientDetailsPage() {
         <Stat label="Campaign" value={campaign?.subject ?? "—"} />
       </div>
 
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">
+            Conversation{thread ? ` (${thread.messages.length} message${thread.messages.length === 1 ? "" : "s"})` : ""}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {loadingThread ? (
+            <>
+              <Skeleton className="h-24 w-full" />
+              <Skeleton className="h-24 w-full" />
+            </>
+          ) : (thread?.messages ?? []).length === 0 ? (
+            <p className="text-sm text-muted-foreground">No messages recorded for this recipient yet.</p>
+          ) : (
+            (thread?.messages as ThreadMessage[]).map((m) => <ThreadBubble key={`${m.direction}-${m.id}`} m={m} />)
+          )}
+        </CardContent>
+      </Card>
+
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader className="flex flex-row items-center justify-between gap-2">
@@ -220,6 +245,41 @@ function RecipientDetailsPage() {
           </CardContent>
         </Card>
       </div>
+    </div>
+  );
+}
+
+function ThreadBubble({ m }: { m: ThreadMessage }) {
+  const outgoing = m.direction === "outgoing";
+  return (
+    <div className={`rounded-lg border p-3 ${outgoing ? "border-border bg-card" : "border-primary/40 bg-primary/5 ml-6"}`}>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="text-sm font-medium">
+          {outgoing ? (m.is_original ? "You sent the original email" : "You replied") : "They replied"}
+        </div>
+        <div className="text-xs text-muted-foreground">{new Date(m.at).toLocaleString()}</div>
+      </div>
+      {m.subject && <div className="text-xs text-muted-foreground mt-0.5 truncate">{m.subject}</div>}
+      <div className="mt-2 whitespace-pre-wrap text-xs max-h-48 overflow-auto rounded-md bg-muted/40 p-2">
+        {m.body || "(no content)"}
+      </div>
+      {outgoing && (
+        <div className="mt-2 flex items-center gap-2 flex-wrap">
+          {!m.tracking_enabled ? (
+            <Badge variant="outline">Tracking off</Badge>
+          ) : m.open_count > 0 ? (
+            <>
+              <Badge className="gap-1"><Eye className="h-3 w-3" />Viewed {m.open_count}×</Badge>
+              <span className="text-xs text-muted-foreground">
+                last {m.last_opened_at ? relativeTime(m.last_opened_at) : "—"}
+              </span>
+            </>
+          ) : (
+            <Badge variant="secondary">Not viewed yet</Badge>
+          )}
+          {m.pdf_view_count > 0 && <Badge variant="secondary">Resume viewed {m.pdf_view_count}×</Badge>}
+        </div>
+      )}
     </div>
   );
 }
