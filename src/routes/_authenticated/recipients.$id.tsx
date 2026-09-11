@@ -161,6 +161,26 @@ function RecipientDetailsPage() {
         <Stat label="Campaign" value={campaign?.subject ?? "—"} />
       </div>
 
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">
+            Conversation{thread ? ` (${thread.messages.length} message${thread.messages.length === 1 ? "" : "s"})` : ""}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {loadingThread ? (
+            <>
+              <Skeleton className="h-24 w-full" />
+              <Skeleton className="h-24 w-full" />
+            </>
+          ) : (thread?.messages ?? []).length === 0 ? (
+            <p className="text-sm text-muted-foreground">No messages recorded for this recipient yet.</p>
+          ) : (
+            (thread?.messages as ThreadMessage[]).map((m) => <ThreadBubble key={`${m.direction}-${m.id}`} m={m} />)
+          )}
+        </CardContent>
+      </Card>
+
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader className="flex flex-row items-center justify-between gap-2">
