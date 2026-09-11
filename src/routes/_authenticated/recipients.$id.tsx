@@ -249,6 +249,41 @@ function RecipientDetailsPage() {
   );
 }
 
+function ThreadBubble({ m }: { m: ThreadMessage }) {
+  const outgoing = m.direction === "outgoing";
+  return (
+    <div className={`rounded-lg border p-3 ${outgoing ? "border-border bg-card" : "border-primary/40 bg-primary/5 ml-6"}`}>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="text-sm font-medium">
+          {outgoing ? (m.is_original ? "You sent the original email" : "You replied") : "They replied"}
+        </div>
+        <div className="text-xs text-muted-foreground">{new Date(m.at).toLocaleString()}</div>
+      </div>
+      {m.subject && <div className="text-xs text-muted-foreground mt-0.5 truncate">{m.subject}</div>}
+      <div className="mt-2 whitespace-pre-wrap text-xs max-h-48 overflow-auto rounded-md bg-muted/40 p-2">
+        {m.body || "(no content)"}
+      </div>
+      {outgoing && (
+        <div className="mt-2 flex items-center gap-2 flex-wrap">
+          {!m.tracking_enabled ? (
+            <Badge variant="outline">Tracking off</Badge>
+          ) : m.open_count > 0 ? (
+            <>
+              <Badge className="gap-1"><Eye className="h-3 w-3" />Viewed {m.open_count}×</Badge>
+              <span className="text-xs text-muted-foreground">
+                last {m.last_opened_at ? relativeTime(m.last_opened_at) : "—"}
+              </span>
+            </>
+          ) : (
+            <Badge variant="secondary">Not viewed yet</Badge>
+          )}
+          {m.pdf_view_count > 0 && <Badge variant="secondary">Resume viewed {m.pdf_view_count}×</Badge>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <Card><CardContent className="py-3">
