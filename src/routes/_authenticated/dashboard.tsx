@@ -1,13 +1,29 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { dashboardStats } from "@/lib/history.functions";
+import { dashboardStats, listCampaigns, type CampaignSummary } from "@/lib/history.functions";
 import { getGmailStatus, startGmailConnect } from "@/lib/gmail.functions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Mail, Send, AlertTriangle, LayoutTemplate, ArrowUpRight, CheckCircle2, XCircle, Eye } from "lucide-react";
+import {
+  Mail,
+  Send,
+  AlertTriangle,
+  LayoutTemplate,
+  CheckCircle2,
+  XCircle,
+  Eye,
+  Search,
+  Users,
+  FileText,
+  Reply,
+  Paperclip,
+  ChevronRight,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
 
@@ -21,10 +37,18 @@ function Dashboard() {
   const statsFn = useServerFn(dashboardStats);
   const gmailFn = useServerFn(getGmailStatus);
   const startConnect = useServerFn(startGmailConnect);
+  const listFn = useServerFn(listCampaigns);
   const [connecting, setConnecting] = useState(false);
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("all");
 
   const stats = useQuery({ queryKey: ["dashboard-stats"], queryFn: () => statsFn() });
   const gmail = useQuery({ queryKey: ["gmail-status"], queryFn: () => gmailFn() });
+  const campaigns = useQuery({
+    queryKey: ["dashboard-campaigns", search, status],
+    queryFn: () => listFn({ data: { search, status, limit: 500 } }),
+  });
+  const rows = (campaigns.data ?? []) as CampaignSummary[];
 
   const onConnect = async () => {
     setConnecting(true);
@@ -83,35 +107,78 @@ function Dashboard() {
       </div>
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
-          <CardTitle>Recent emails</CardTitle>
-          <Button asChild variant="ghost" size="sm">
-            <Link to="/history">View all <ArrowUpRight className="h-3.5 w-3.5 ml-0.5" /></Link>
-          </Button>
+        <CardHeader className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <CardTitle>Campaigns</CardTitle>
+              <p className="page-subtitle mt-1">
+                {campaigns.isLoading ? "Loading…" : `${rows.length} campaign${rows.length === 1 ? "" : "s"}`}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <div className="relative flex-1 min-w-[220px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search subject, recipient or template…"
+                className="pl-9"
+              />
+            </div>
+            <Select value={status} onValueChange={setStatus}>
+              <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                <SelectItem value="sent">Sent</SelectItem>
+                <SelectItem value="partial">Partial</SelectItem>
+                <SelectItem value="failed">Failed</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </CardHeader>
         <CardContent>
-          {stats.isLoading ? (
-            <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 w-full rounded-xl" />)}</div>
-          ) : stats.data?.recent.length ? (
+          {campaigns.isLoading ? (
+            <div className="space-y-2">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-14 w-full rounded-xl" />)}</div>
+          ) : rows.length ? (
             <ul className="divide-y divide-border/70">
-              {stats.data.recent.map((r) => (
+              {rows.map((c) => (
                 <li
-                  key={r.id}
-                  className="flex items-center justify-between py-3 gap-3 cursor-pointer rounded-xl px-2 -mx-2 transition-orbit hover:bg-muted/60"
-                  onClick={() => navigate({ to: "/campaigns/$id", params: { id: r.id } })}
+                  key={c.id}
+                  className="flex items-center gap-3 py-3 px-2 -mx-2 rounded-xl cursor-pointer transition-orbit hover:bg-muted/60"
+                  onClick={() => navigate({ to: "/campaigns/$id", params: { id: c.id } })}
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium truncate">{r.subject}</div>
+                    <div className="text-sm font-medium truncate">{c.subject}</div>
                     <div className="text-xs text-muted-foreground truncate mt-0.5">
-                      to {r.recipient_count} recipient{r.recipient_count === 1 ? "" : "s"} · {new Date(r.sent_at).toLocaleString()}
-                      {r.template_name ? ` · ${r.template_name}` : ""}
+                      {new Date(c.sent_at).toLocaleString()}
+                      {c.sender_email ? ` · from ${c.sender_email}` : ""}
+                      {c.template_name ? ` · ${c.template_name}` : ""}
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {r.open_count > 0 && (
-                      <Badge variant="secondary" className="gap-1"><Eye className="h-3 w-3" />{r.open_count}</Badge>
+                    {c.status === "failed" && c.error && (
+                      <div className="text-xs text-destructive truncate mt-0.5">{c.error}</div>
                     )}
-                    <StatusBadge status={r.status} />
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+                    <Badge variant="outline" className="gap-1">
+                      <Users className="h-3 w-3" />{c.recipients}
+                    </Badge>
+                    {c.opened > 0 && (
+                      <Badge variant="secondary" className="gap-1">
+                        <Eye className="h-3 w-3" />{c.opened}/{c.recipients}
+                      </Badge>
+                    )}
+                    {c.resume_views > 0 && (
+                      <Badge variant="secondary" className="gap-1"><FileText className="h-3 w-3" />{c.resume_views}</Badge>
+                    )}
+                    {c.replied > 0 && (
+                      <Badge className="gap-1"><Reply className="h-3 w-3" />{c.replied}</Badge>
+                    )}
+                    {c.attachment_count > 0 && (
+                      <Badge variant="outline" className="gap-1"><Paperclip className="h-3 w-3" />{c.attachment_count}</Badge>
+                    )}
+                    <StatusBadge status={c.status} />
+                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
                   </div>
                 </li>
               ))}
@@ -119,9 +186,17 @@ function Dashboard() {
           ) : (
             <EmptyState
               icon={Send}
-              title="No emails yet"
-              desc="Once you send your first email, it will show up here."
-              action={<Button onClick={() => navigate({ to: "/send" })}>Send an email</Button>}
+              title={search || status !== "all" ? "No campaigns match" : "No emails yet"}
+              desc={
+                search || status !== "all"
+                  ? "Try changing the search or status filter."
+                  : "Once you send your first email, it will show up here."
+              }
+              action={
+                search || status !== "all" ? undefined : (
+                  <Button onClick={() => navigate({ to: "/send" })}>Send an email</Button>
+                )
+              }
             />
           )}
         </CardContent>
