@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { TemplateCombobox } from "@/components/template-combobox";
 import { Sparkles, Send, X, Check, Loader2, Circle, AlertTriangle, RotateCcw } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { bulkSendReply, generateBulkReplyDraft } from "@/lib/bulk-reply.functions";
@@ -21,23 +21,36 @@ export type BulkReplyRecipient = {
   subject: string;
 };
 
+export type BulkReplyTemplate = {
+  id: string;
+  name: string;
+  body: string;
+  is_default?: boolean;
+};
+
 type RowState = "pending" | "sending" | "success" | "failed";
+type ComposeMode = "free" | "template" | "followup";
 
 export function BulkReplyDialog({
   open,
   onOpenChange,
   recipients,
   templates,
+  followUpTemplateId = null,
+  initialMode = "free",
   onDone,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   recipients: BulkReplyRecipient[];
-  templates: Array<{ id: string; name: string }>;
+  templates: BulkReplyTemplate[];
+  /** Preferred follow-up template from user prefs (fills body when Follow-up mode is used). */
+  followUpTemplateId?: string | null;
+  initialMode?: ComposeMode;
   onDone: () => void;
 }) {
   const [removed, setRemoved] = useState<Set<string>>(new Set());
-  const [mode, setMode] = useState<"free" | "template">("free");
+  const [mode, setMode] = useState<ComposeMode>(initialMode);
   const [templateId, setTemplateId] = useState<string>("");
   const [body, setBody] = useState("");
   const [assistOpen, setAssistOpen] = useState(false);
@@ -50,6 +63,40 @@ export function BulkReplyDialog({
 
   const active = useMemo(() => recipients.filter((r) => !removed.has(r.id)), [recipients, removed]);
 
+  const followUpTpl = useMemo(
+    () => (followUpTemplateId ? templates.find((t) => t.id === followUpTemplateId) : null) ?? null,
+    [templates, followUpTemplateId],
+  );
+
+  const applyTemplateBody = (id: string) => {
+    const t = templates.find((x) => x.id === id);
+    if (!t) return;
+    setTemplateId(id);
+    setBody(t.body ?? "");
+  };
+
+  // When dialog opens, hydrate mode + follow-up body if requested.
+  useEffect(() => {
+    if (!open) return;
+    setRemoved(new Set());
+    setProgress({});
+    setRunning(false);
+    setFinished(false);
+    setAssistOpen(false);
+    setMode(initialMode);
+
+    if (initialMode === "followup" && followUpTpl) {
+      setTemplateId(followUpTpl.id);
+      setBody(followUpTpl.body ?? "");
+    } else if (initialMode === "template") {
+      setTemplateId("");
+      setBody("");
+    } else {
+      setTemplateId("");
+      setBody("");
+    }
+  }, [open, initialMode, followUpTpl]);
+
   const generate = useMutation({
     mutationFn: (opts: { tone: ReplyTone; length: ReplyLength; instruction: string }) =>
       draftFn({
@@ -58,7 +105,7 @@ export function BulkReplyDialog({
           tone: opts.tone,
           length: opts.length,
           instruction: opts.instruction || undefined,
-          templateId: mode === "template" && templateId ? templateId : undefined,
+          templateId: templateId || undefined,
         },
       }),
     onSuccess: (r) => {
@@ -72,6 +119,8 @@ export function BulkReplyDialog({
   const reset = () => {
     setRemoved(new Set());
     setBody("");
+    setTemplateId("");
+    setMode("free");
     setProgress({});
     setRunning(false);
     setFinished(false);
@@ -87,8 +136,7 @@ export function BulkReplyDialog({
       return next;
     });
 
-    // One server call per recipient: real per-recipient progress, and one
-    // individual Gmail reply per recipient (never a combined/BCC message).
+    // Body-only send (template is applied into the textarea). One Gmail reply per recipient.
     for (const t of targets) {
       setProgress((p) => ({ ...p, [t.id]: { state: "sending" } }));
       try {
@@ -96,7 +144,6 @@ export function BulkReplyDialog({
           data: {
             recipientIds: [t.id],
             body,
-            templateId: mode === "template" && templateId ? templateId : undefined,
           },
         });
         if (res.success.length > 0) {
@@ -121,6 +168,22 @@ export function BulkReplyDialog({
   const doneCount = active.filter((r) => ["success", "failed"].includes(progress[r.id]?.state ?? "")).length;
   const canSend = !running && body.trim().length > 0 && active.length > 0;
 
+  const selectMode = (next: ComposeMode) => {
+    setMode(next);
+    if (next === "followup") {
+      if (followUpTpl) applyTemplateBody(followUpTpl.id);
+      else {
+        setTemplateId("");
+        toast.message("No follow-up template set", {
+          description: "Pick any template below, or set a follow-up template in preferences later.",
+        });
+      }
+    }
+    if (next === "free") {
+      // keep body editable; don't wipe what they wrote
+    }
+  };
+
   return (
     <>
       <Dialog
@@ -133,15 +196,79 @@ export function BulkReplyDialog({
       >
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col p-0 sm:rounded-lg">
           <DialogHeader className="p-5 pb-3">
-            <DialogTitle>Reply to selected</DialogTitle>
+            <DialogTitle>{initialMode === "followup" ? "Follow-up reply" : "Reply to selected"}</DialogTitle>
             <DialogDescription>
               {active.length} individual repl{active.length === 1 ? "y" : "ies"} — one per recipient, each inside their own
-              Gmail conversation. No BCC.
+              Gmail conversation. No BCC. Template / follow-up content is attached as the reply body.
             </DialogDescription>
           </DialogHeader>
 
           <ScrollArea className="flex-1 px-5">
             <div className="space-y-4 pb-4">
+              {!finished && (
+                <>
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <Label>Reply body</Label>
+                      <Button size="sm" variant="outline" onClick={() => setAssistOpen(true)} disabled={generate.isPending}>
+                        <Sparkles className="h-3.5 w-3.5 mr-1" /> {generate.isPending ? "Drafting…" : "Generate AI reply"}
+                      </Button>
+                    </div>
+                    <Textarea
+                      rows={8}
+                      value={body}
+                      onChange={(e) => setBody(e.target.value)}
+                      placeholder="Write your reply. Use {{first_name}} for the recipient's name — each reply is personalized individually."
+                      className="min-h-[160px]"
+                      autoFocus
+                    />
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Subject uses each original email with a <span className="font-mono">Re:</span> prefix. Each person gets this body in their own thread.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <Button size="sm" variant={mode === "free" ? "default" : "outline"} onClick={() => selectMode("free")}>
+                      Free-form
+                    </Button>
+                    <Button size="sm" variant={mode === "template" ? "default" : "outline"} onClick={() => selectMode("template")}>
+                      Template
+                    </Button>
+                    <Button size="sm" variant={mode === "followup" ? "default" : "outline"} onClick={() => selectMode("followup")}>
+                      Follow-up template
+                    </Button>
+                  </div>
+
+                  {(mode === "template" || mode === "followup") && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">
+                        {mode === "followup" ? "Follow-up template (fills body above)" : "Template (fills body above)"}
+                      </Label>
+                      <TemplateCombobox
+                        templates={templates}
+                        value={templateId}
+                        onValueChange={(id) => {
+                          if (!id) {
+                            setTemplateId("");
+                            return;
+                          }
+                          applyTemplateBody(id);
+                        }}
+                        placeholder={mode === "followup" ? "Choose follow-up template…" : "Choose a reply template…"}
+                        searchPlaceholder="Search templates…"
+                        allowClear
+                        clearLabel="Clear template"
+                      />
+                      {mode === "followup" && !followUpTpl && (
+                        <p className="text-xs text-muted-foreground">
+                          No default follow-up template saved — pick any template to use as the reply body.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+
               <div>
                 <Label className="text-xs uppercase tracking-wide text-muted-foreground">
                   Recipients ({active.length})
@@ -191,50 +318,6 @@ export function BulkReplyDialog({
                   )}
                 </ul>
               </div>
-
-              {!finished && (
-                <>
-                  <div className="flex items-center gap-1">
-                    <Button size="sm" variant={mode === "free" ? "default" : "outline"} onClick={() => setMode("free")}>
-                      Free-form
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant={mode === "template" ? "default" : "outline"}
-                      onClick={() => setMode("template")}
-                    >
-                      Template
-                    </Button>
-                    <div className="flex-1" />
-                    <Button size="sm" variant="outline" onClick={() => setAssistOpen(true)} disabled={generate.isPending}>
-                      <Sparkles className="h-3.5 w-3.5 mr-1" /> {generate.isPending ? "Drafting…" : "Generate AI reply"}
-                    </Button>
-                  </div>
-
-                  {mode === "template" && (
-                    <TemplateCombobox
-                      templates={templates}
-                      value={templateId}
-                      onValueChange={setTemplateId}
-                      placeholder="Choose a reply template"
-                      searchPlaceholder="Search templates…"
-                    />
-                  )}
-
-                  <div>
-                    <Label>Reply body</Label>
-                    <Textarea
-                      rows={8}
-                      value={body}
-                      onChange={(e) => setBody(e.target.value)}
-                      placeholder="Write your reply. Use {{first_name}} for the recipient's name — each reply is personalized individually."
-                    />
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Subject is taken from each original email with a <span className="font-mono">Re:</span> prefix.
-                    </p>
-                  </div>
-                </>
-              )}
 
               {running && (
                 <div className="text-sm text-muted-foreground">

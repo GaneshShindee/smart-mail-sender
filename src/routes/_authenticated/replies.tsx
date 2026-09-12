@@ -2,6 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { listReplies, syncReplies, getReply, updateReplyState, generateReplyDraft, sendReply } from "@/lib/replies.functions";
+import { listTemplates } from "@/lib/templates.functions";
+import { getUserPreferences } from "@/lib/profile.functions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +17,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { relativeTime } from "@/lib/user-agent";
 import { ReplyAssistantModal, type ReplyTone, type ReplyLength } from "@/components/reply-assistant-modal";
+import { TemplateCombobox } from "@/components/template-combobox";
 
 export const Route = createFileRoute("/_authenticated/replies")({
   head: () => ({ meta: [{ title: "Reply Center — Smart Email Sender" }] }),
@@ -29,12 +32,15 @@ function RepliesPage() {
   const updFn = useServerFn(updateReplyState);
   const genFn = useServerFn(generateReplyDraft);
   const sendFn = useServerFn(sendReply);
+  const templatesFn = useServerFn(listTemplates);
+  const prefsFn = useServerFn(getUserPreferences);
 
   const [filter, setFilter] = useState<"unread" | "read" | "archived" | "all">("unread");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [assistOpen, setAssistOpen] = useState(false);
+  const [tplId, setTplId] = useState("");
 
   const list = useQuery({ queryKey: ["replies", filter], queryFn: () => listFn({ data: { filter } }) });
   const detail = useQuery({
@@ -42,6 +48,8 @@ function RepliesPage() {
     queryFn: () => getFn({ data: { id: selectedId! } }),
     enabled: !!selectedId,
   });
+  const templates = useQuery({ queryKey: ["templates"], queryFn: () => templatesFn({}) });
+  const prefs = useQuery({ queryKey: ["user-prefs"], queryFn: () => prefsFn() });
 
   const sync = useMutation({
     mutationFn: () => syncFn(),
@@ -90,6 +98,8 @@ function RepliesPage() {
     setSelectedId(id);
     setSubject("");
     setBody("");
+    setTplId("");
+    setRead.mutate(id);
   };
 
   return (
@@ -177,12 +187,50 @@ function RepliesPage() {
                   {detail.data.reply.body ?? detail.data.reply.snippet ?? ""}
                 </div>
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
                     <Label>Your reply</Label>
-                    <Button size="sm" variant="outline" onClick={() => setAssistOpen(true)} disabled={generate.isPending}>
-                      <Sparkles className="h-3.5 w-3.5 mr-1" /> {generate.isPending ? "Drafting…" : "AI Draft"}
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          const id = prefs.data?.followUpTemplateId;
+                          const t = (templates.data ?? []).find((x) => x.id === id);
+                          if (t) {
+                            setTplId(t.id);
+                            setBody(t.body ?? "");
+                            toast.success("Follow-up template applied to body");
+                          } else {
+                            toast.message("No follow-up template set", {
+                              description: "Pick a template below to fill the reply body.",
+                            });
+                          }
+                        }}
+                      >
+                        Use follow-up template
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => setAssistOpen(true)} disabled={generate.isPending}>
+                        <Sparkles className="h-3.5 w-3.5 mr-1" /> {generate.isPending ? "Drafting…" : "AI Draft"}
+                      </Button>
+                    </div>
                   </div>
+                  <TemplateCombobox
+                    templates={(templates.data ?? []).map((t) => ({
+                      id: t.id,
+                      name: t.name,
+                      is_default: !!(t as { is_default?: boolean }).is_default,
+                    }))}
+                    value={tplId}
+                    onValueChange={(id) => {
+                      setTplId(id);
+                      const t = (templates.data ?? []).find((x) => x.id === id);
+                      if (t) setBody(t.body ?? "");
+                    }}
+                    placeholder="Optional: fill body from a template…"
+                    searchPlaceholder="Search templates…"
+                    allowClear
+                    clearLabel="Clear template"
+                  />
                   <Input
                     placeholder="Subject"
                     value={subject || `Re: ${detail.data.reply.subject ?? ""}`}

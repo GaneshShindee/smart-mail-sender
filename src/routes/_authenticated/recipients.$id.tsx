@@ -1,7 +1,9 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getRecipient, getRecipientThread, type ThreadMessage } from "@/lib/history.functions";
+import { listTemplates } from "@/lib/templates.functions";
+import { getUserPreferences } from "@/lib/profile.functions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowLeft, Eye, Flame, Monitor, Smartphone, Tablet, Globe, Send } from "lucide-react";
 import { useMemo, useState } from "react";
 import { relativeTime } from "@/lib/user-agent";
+import { BulkReplyDialog } from "@/components/bulk-reply-dialog";
+import { replyPreviewSubject } from "@/lib/reply-subject";
 
 export const Route = createFileRoute("/_authenticated/recipients/$id")({
   head: () => ({ meta: [{ title: "Recipient — Smart Email Sender" }] }),
@@ -33,16 +37,20 @@ type OpenRow = {
 
 function RecipientDetailsPage() {
   const { id } = Route.useParams();
-  const navigate = useNavigate();
   const fn = useServerFn(getRecipient);
   const threadFn = useServerFn(getRecipientThread);
+  const templatesFn = useServerFn(listTemplates);
+  const prefsFn = useServerFn(getUserPreferences);
   const { data, isLoading } = useQuery({ queryKey: ["recipient", id], queryFn: () => fn({ data: { id } }) });
   const { data: thread, isLoading: loadingThread } = useQuery({
     queryKey: ["recipient-thread", id],
     queryFn: () => threadFn({ data: { id } }),
   });
+  const { data: templates } = useQuery({ queryKey: ["templates"], queryFn: () => templatesFn({}) });
+  const { data: prefs } = useQuery({ queryKey: ["user-prefs"], queryFn: () => prefsFn() });
   const [search, setSearch] = useState("");
   const [device, setDevice] = useState("all");
+  const [replyOpen, setReplyOpen] = useState(false);
 
   const filtered = useMemo(() => {
     const opens = (data?.opens ?? []) as OpenRow[];
@@ -107,14 +115,7 @@ function RecipientDetailsPage() {
     return null;
   })();
 
-  const startFollowUp = () => {
-    const sp = new URLSearchParams({ to: recipient.email, followUp: "1" });
-    if (campaign?.gmail_account_id) sp.set("sender", campaign.gmail_account_id);
-    if (campaign?.id) sp.set("campaignId", campaign.id);
-    if (recipient.name) sp.set("name", recipient.name);
-    if (recipient.company) sp.set("company", recipient.company);
-    navigate({ to: "/send", search: Object.fromEntries(sp.entries()) as never });
-  };
+  const startFollowUp = () => setReplyOpen(true);
 
   const hot = total >= 3;
 
@@ -245,6 +246,28 @@ function RecipientDetailsPage() {
           </CardContent>
         </Card>
       </div>
+
+      <BulkReplyDialog
+        open={replyOpen}
+        onOpenChange={setReplyOpen}
+        recipients={[
+          {
+            id: recipient.id,
+            email: recipient.email,
+            name: recipient.name,
+            subject: replyPreviewSubject(campaign?.subject ?? ""),
+          },
+        ]}
+        templates={(templates ?? []).map((t) => ({
+          id: t.id,
+          name: t.name,
+          body: t.body ?? "",
+          is_default: !!(t as { is_default?: boolean }).is_default,
+        }))}
+        followUpTemplateId={prefs?.followUpTemplateId ?? null}
+        initialMode="followup"
+        onDone={() => setReplyOpen(false)}
+      />
     </div>
   );
 }

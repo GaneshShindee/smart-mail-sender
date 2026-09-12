@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getCampaign, listHistoryRecipients } from "@/lib/history.functions";
 import { listTemplates } from "@/lib/templates.functions";
+import { getUserPreferences } from "@/lib/profile.functions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,7 +16,7 @@ import { StatusBadge } from "./dashboard";
 import { relativeTime } from "@/lib/user-agent";
 import { useMemo, useState } from "react";
 import { defaultHistoryFilters, type HistoryFilters, type HistoryRecipientRow } from "@/lib/history-filters";
-import { BulkReplyDialog } from "@/components/bulk-reply-dialog";
+import { BulkReplyDialog, type BulkReplyRecipient } from "@/components/bulk-reply-dialog";
 import { replyPreviewSubject } from "@/lib/reply-subject";
 
 export const Route = createFileRoute("/_authenticated/campaigns/$id")({
@@ -40,10 +41,13 @@ function CampaignDetailsPage() {
   const fn = useServerFn(getCampaign);
   const listFn = useServerFn(listHistoryRecipients);
   const templatesFn = useServerFn(listTemplates);
+  const prefsFn = useServerFn(getUserPreferences);
 
   const [filters, setFilters] = useState<HistoryFilters>(defaultHistoryFilters);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [replyOpen, setReplyOpen] = useState(false);
+  const [replyMode, setReplyMode] = useState<"free" | "template" | "followup">("free");
+  const [replyTargets, setReplyTargets] = useState<BulkReplyRecipient[] | null>(null);
 
   const { data, isLoading } = useQuery({ queryKey: ["campaign", id], queryFn: () => fn({ data: { id } }) });
   const { data: recipientData, isLoading: loadingRecipients, refetch } = useQuery({
@@ -62,10 +66,22 @@ function CampaignDetailsPage() {
       }),
   });
   const { data: templates } = useQuery({ queryKey: ["templates"], queryFn: () => templatesFn({}) });
+  const { data: prefs } = useQuery({ queryKey: ["user-prefs"], queryFn: () => prefsFn() });
 
   const rows = (recipientData ?? []) as HistoryRecipientRow[];
   const allSelected = rows.length > 0 && rows.every((r) => selected.has(r.id));
   const selectedRows = useMemo(() => rows.filter((r) => selected.has(r.id)), [rows, selected]);
+
+  const templateOptions = useMemo(
+    () =>
+      (templates ?? []).map((t) => ({
+        id: t.id,
+        name: t.name,
+        body: t.body ?? "",
+        is_default: !!(t as { is_default?: boolean }).is_default,
+      })),
+    [templates],
+  );
 
   const set = <K extends keyof HistoryFilters>(k: K, v: HistoryFilters[K]) =>
     setFilters((f) => ({ ...f, [k]: v }));
@@ -78,6 +94,21 @@ function CampaignDetailsPage() {
       return next;
     });
 
+  const toReplyRecipient = (r: HistoryRecipientRow): BulkReplyRecipient => ({
+    id: r.id,
+    email: r.email,
+    name: r.name,
+    subject: replyPreviewSubject(r.subject),
+  });
+
+  const openReply = (targets: HistoryRecipientRow[], mode: "free" | "template" | "followup" = "free") => {
+    setReplyTargets(targets.map(toReplyRecipient));
+    setReplyMode(mode);
+    setReplyOpen(true);
+  };
+
+  const followUp = (r: HistoryRecipientRow) => openReply([r], "followup");
+
   if (isLoading || !data) {
     return (
       <div className="mx-auto max-w-6xl space-y-4">
@@ -89,14 +120,6 @@ function CampaignDetailsPage() {
   const opened = recipients.filter((r) => (r.open_count ?? 0) > 0);
   const openRate = recipients.length ? opened.length / recipients.length : 0;
   const attachments = Array.isArray(campaign.attachments) ? (campaign.attachments as Array<{ name: string }>) : [];
-
-  const followUp = (r: HistoryRecipientRow) => {
-    const sp = new URLSearchParams({ to: r.email, followUp: "1", campaignId: campaign.id });
-    if (campaign.gmail_account_id) sp.set("sender", campaign.gmail_account_id);
-    if (r.name) sp.set("name", r.name);
-    if (r.company) sp.set("company", r.company);
-    navigate({ to: "/send", search: Object.fromEntries(sp.entries()) as never });
-  };
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 pb-24">
@@ -270,7 +293,7 @@ function CampaignDetailsPage() {
             <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
               <X className="h-4 w-4 mr-1" /> Clear
             </Button>
-            <Button size="sm" onClick={() => setReplyOpen(true)}>
+            <Button size="sm" onClick={() => openReply(selectedRows, "free")}>
               <Reply className="h-4 w-4 mr-1" /> Reply to selected
             </Button>
           </div>
@@ -279,14 +302,14 @@ function CampaignDetailsPage() {
 
       <BulkReplyDialog
         open={replyOpen}
-        onOpenChange={setReplyOpen}
-        recipients={selectedRows.map((r) => ({
-          id: r.id,
-          email: r.email,
-          name: r.name,
-          subject: replyPreviewSubject(r.subject),
-        }))}
-        templates={(templates ?? []).map((t) => ({ id: t.id, name: t.name }))}
+        onOpenChange={(o) => {
+          setReplyOpen(o);
+          if (!o) setReplyTargets(null);
+        }}
+        recipients={replyTargets ?? selectedRows.map(toReplyRecipient)}
+        templates={templateOptions}
+        followUpTemplateId={prefs?.followUpTemplateId ?? null}
+        initialMode={replyMode}
         onDone={() => refetch()}
       />
     </div>
