@@ -4,7 +4,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { TemplateCombobox } from "@/components/template-combobox";
 import { Sparkles, Send, X, Check, Loader2, Circle, AlertTriangle, RotateCcw } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
@@ -212,18 +212,13 @@ export function BulkReplyDialog({
                   </div>
 
                   {mode === "template" && (
-                    <Select value={templateId} onValueChange={setTemplateId}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Choose a reply template" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {templates.map((t) => (
-                          <SelectItem key={t.id} value={t.id}>
-                            {t.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <TemplateCombobox
+                      templates={templates}
+                      value={templateId}
+                      onValueChange={setTemplateId}
+                      placeholder="Choose a reply template"
+                      searchPlaceholder="Search templates…"
+                    />
                   )}
 
                   <div>

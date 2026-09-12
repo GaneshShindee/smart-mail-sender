@@ -12,12 +12,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { TemplateCombobox } from "@/components/template-combobox";
+import { ResumeCombobox } from "@/components/resume-combobox";
 import { Badge } from "@/components/ui/badge";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { extractVariables, applyTemplate } from "@/lib/templating";
 import { parseRecipients } from "@/lib/recipients";
 import { toast } from "sonner";
-import { Send, Sparkles, Paperclip, X, FileText, Upload, Flame } from "lucide-react";
+import { Send, Sparkles, Paperclip, X, FileText, Upload, Flame, Pencil, Eye } from "lucide-react";
 import { EmailGeneratorDialog } from "@/components/email-generator-dialog";
 import { AiBodyDialog } from "@/components/ai-body-dialog";
 import { DraftManager, type DraftState, type LoadedDraft } from "@/components/draft-manager";
@@ -80,6 +82,7 @@ function SendPage() {
     skipped: Array<{ email: string; reason: string; note?: string }>;
     recipientCount: number;
   }>(null);
+  const [editingPreview, setEditingPreview] = useState(false);
 
   const isFollowUp = search.followUp === "1";
 
@@ -320,19 +323,34 @@ function SendPage() {
             getState={collectDraftState}
             onLoad={applyLoadedDraft}
           />
-          <div className="min-w-[260px]">
-          <Label className="text-xs">Send from</Label>
-          <Select value={senderId} onValueChange={setSenderId}>
-            <SelectTrigger><SelectValue placeholder="Select a Gmail account" /></SelectTrigger>
-            <SelectContent>
-              {accounts.data?.map((a) => (
-                <SelectItem key={a.id} value={a.id}>
-                  {(a.label ?? a.full_name ?? a.gmail_email)}{a.is_default ? " · Default" : ""} — {a.gmail_email}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="min-w-[220px]">
+            <Label className="text-xs">Send from</Label>
+            <Select value={senderId} onValueChange={setSenderId}>
+              <SelectTrigger><SelectValue placeholder="Select a Gmail account" /></SelectTrigger>
+              <SelectContent>
+                {accounts.data?.map((a) => (
+                  <SelectItem key={a.id} value={a.id}>
+                    {(a.label ?? a.full_name ?? a.gmail_email)}{a.is_default ? " · Default" : ""} — {a.gmail_email}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
+          <Button
+            onClick={() => send.mutate()}
+            disabled={
+              send.isPending ||
+              parsed.valid.length === 0 ||
+              !subject.trim() ||
+              !body.trim() ||
+              !senderId ||
+              overLimit
+            }
+            className="shrink-0"
+          >
+            <Send className="h-4 w-4 mr-2" />
+            {send.isPending ? "Sending…" : "Send"}
+          </Button>
         </div>
       </div>
 
@@ -342,16 +360,19 @@ function SendPage() {
             <CardContent className="py-4 space-y-4">
               <div>
                 <Label>Template</Label>
-                <Select value={tplId} onValueChange={selectTemplate}>
-                  <SelectTrigger><SelectValue placeholder="Choose a template (optional)" /></SelectTrigger>
-                  <SelectContent>
-                    {templates.data?.map((t) => (
-                      <SelectItem key={t.id} value={t.id}>
-                        {t.name}{(t as { is_default?: boolean }).is_default ? " · Default" : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <TemplateCombobox
+                  templates={(templates.data ?? []).map((t) => ({
+                    id: t.id,
+                    name: t.name,
+                    is_default: !!(t as { is_default?: boolean }).is_default,
+                  }))}
+                  value={tplId}
+                  onValueChange={selectTemplate}
+                  placeholder="Choose a template (optional)"
+                  searchPlaceholder="Search templates by name…"
+                  allowClear
+                  clearLabel="No template"
+                />
               </div>
 
               {variables.length > 0 && (
@@ -389,8 +410,8 @@ function SendPage() {
                 )}
               </div>
 
-              <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-3">
-                <div className="flex items-center justify-between">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
                   <Label className="flex items-center gap-1.5"><Paperclip className="h-3.5 w-3.5" /> Attachments</Label>
                   <div>
                     <input
@@ -406,39 +427,33 @@ function SendPage() {
                     </Button>
                   </div>
                 </div>
+
                 {resumes.data && resumes.data.length > 0 && (
-                  <div>
-                    <div className="text-xs text-muted-foreground mb-1">From your Resume Library</div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {resumes.data.map((r) => {
-                        const on = resumeIds.includes(r.id);
-                        return (
-                          <button
-                            key={r.id}
-                            type="button"
-                            onClick={() => toggleResume(r.id)}
-                            className={`text-xs rounded-full border px-2.5 py-1 inline-flex items-center gap-1 transition-colors ${on ? "bg-primary text-primary-foreground border-primary" : "bg-background hover:bg-accent"}`}
-                          >
-                            <FileText className="h-3 w-3" />
-                            {r.name}{r.is_default ? " ·★" : ""}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
+                  <ResumeCombobox
+                    resumes={resumes.data.map((r) => ({
+                      id: r.id,
+                      name: r.name,
+                      is_default: !!r.is_default,
+                    }))}
+                    value={resumeIds}
+                    onToggle={toggleResume}
+                    placeholder="Attach from Resume Library…"
+                    searchPlaceholder="Search resumes by name…"
+                  />
                 )}
+
                 {(selectedResumes.length > 0 || uploads.length > 0) && (
                   <div className="space-y-1">
                     {selectedResumes.map((r) => (
-                      <div key={r.id} className="flex items-center justify-between text-xs rounded-md bg-background border border-border px-2 py-1.5">
-                        <span className="truncate flex items-center gap-1.5"><FileText className="h-3 w-3" /> {r.original_filename} <span className="text-muted-foreground">· {formatBytes(r.size_bytes)} · saved</span></span>
-                        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => toggleResume(r.id)}><X className="h-3 w-3" /></Button>
+                      <div key={r.id} className="flex items-center justify-between text-xs rounded-md bg-muted/40 border border-border px-2 py-1.5">
+                        <span className="truncate flex items-center gap-1.5"><FileText className="h-3 w-3 shrink-0" /> {r.original_filename} <span className="text-muted-foreground">· {formatBytes(r.size_bytes)}</span></span>
+                        <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={() => toggleResume(r.id)}><X className="h-3 w-3" /></Button>
                       </div>
                     ))}
                     {uploads.map((f, i) => (
-                      <div key={`u-${i}`} className="flex items-center justify-between text-xs rounded-md bg-background border border-border px-2 py-1.5">
-                        <span className="truncate flex items-center gap-1.5"><FileText className="h-3 w-3" /> {f.name} <span className="text-muted-foreground">· {formatBytes(f.size)} · temporary</span></span>
-                        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setUploads((u) => u.filter((_, j) => j !== i))}><X className="h-3 w-3" /></Button>
+                      <div key={`u-${i}`} className="flex items-center justify-between text-xs rounded-md bg-muted/40 border border-border px-2 py-1.5">
+                        <span className="truncate flex items-center gap-1.5"><FileText className="h-3 w-3 shrink-0" /> {f.name} <span className="text-muted-foreground">· {formatBytes(f.size)} · temp</span></span>
+                        <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={() => setUploads((u) => u.filter((_, j) => j !== i))}><X className="h-3 w-3" /></Button>
                       </div>
                     ))}
                     <div className={`text-xs ${overLimit ? "text-destructive" : "text-muted-foreground"}`}>
@@ -450,27 +465,6 @@ function SendPage() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
-              <CardTitle className="text-base">Subject &amp; body</CardTitle>
-              <Button type="button" size="sm" variant="outline" onClick={() => setAiOpen(true)}>
-                <Sparkles className="h-3.5 w-3.5 mr-1" /> Generate Body Using AI
-              </Button>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div><Label>Subject</Label><Input value={subject} onChange={(e) => setSubject(e.target.value)} /></div>
-              <div><Label>Body</Label><Textarea rows={8} value={body} onChange={(e) => setBody(e.target.value)} /></div>
-            </CardContent>
-          </Card>
-
-          <div className="rounded-lg border border-border bg-muted/20 px-3 py-2.5 text-xs text-muted-foreground flex items-start gap-2">
-            <Sparkles className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-            <span>
-              Each recipient gets a personalized greeting like <span className="font-medium text-foreground">Hello Ganesh,</span> —
-              the rest of the template is sent exactly as written. Invalid, duplicate, and unroutable addresses are automatically skipped.
-            </span>
-          </div>
-
           <Button
             onClick={() => send.mutate()}
             disabled={send.isPending || parsed.valid.length === 0 || !subject.trim() || !body.trim() || !senderId || overLimit}
@@ -478,29 +472,66 @@ function SendPage() {
             size="lg"
           >
             <Send className="h-4 w-4 mr-2" />
-            {send.isPending ? "Sending…" : `Send to ${parsed.valid.length} recipient${parsed.valid.length === 1 ? "" : "s"}`}
+            {send.isPending ? "Sending…" : "Send"}
           </Button>
         </div>
 
         <div className="lg:sticky lg:top-4 h-fit">
           <Card>
-            <CardHeader className="pb-3"><CardTitle className="text-base">Preview</CardTitle></CardHeader>
-            <CardContent>
-              <div className="rounded-lg border border-border bg-background p-4 text-sm space-y-2 max-h-[70vh] overflow-auto">
-                <div><span className="text-muted-foreground">From:</span> {selectedSender?.gmail_email ?? "—"}</div>
-                <div className="break-words">
-                  <span className="text-muted-foreground">Bcc ({parsed.valid.length}):</span>{" "}
-                  {parsed.valid.length ? parsed.valid.slice(0, 8).join(", ") + (parsed.valid.length > 8 ? ` +${parsed.valid.length - 8} more` : "") : "—"}
-                </div>
-                <div><span className="text-muted-foreground">Subject:</span> {previewSubject || "—"}</div>
-                {(selectedResumes.length > 0 || uploads.length > 0) && (
-                  <div>
-                    <span className="text-muted-foreground">Attachments ({selectedResumes.length + uploads.length}):</span>{" "}
-                    {[...selectedResumes.map((r) => r.original_filename), ...uploads.map((u) => u.name)].join(", ")}
-                  </div>
-                )}
-                <div className="border-t border-border pt-2 whitespace-pre-wrap">{previewBody || "—"}</div>
+            <CardHeader className="pb-3 flex-row items-center justify-between space-y-0 gap-2 flex-wrap">
+              <CardTitle className="text-base">Preview</CardTitle>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={editingPreview ? "default" : "outline"}
+                  onClick={() => setEditingPreview((v) => !v)}
+                >
+                  {editingPreview ? (
+                    <><Eye className="h-3.5 w-3.5 mr-1" /> Preview</>
+                  ) : (
+                    <><Pencil className="h-3.5 w-3.5 mr-1" /> Edit</>
+                  )}
+                </Button>
+                <Button type="button" size="sm" variant="outline" onClick={() => setAiOpen(true)}>
+                  <Sparkles className="h-3.5 w-3.5 mr-1" /> Generate Body Using AI
+                </Button>
               </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {editingPreview ? (
+                <>
+                  <div>
+                    <Label>Subject</Label>
+                    <Input
+                      value={subject}
+                      onChange={(e) => setSubject(e.target.value)}
+                      placeholder="Email subject…"
+                    />
+                  </div>
+                  <div>
+                    <Label>Body</Label>
+                    <Textarea
+                      rows={16}
+                      value={body}
+                      onChange={(e) => setBody(e.target.value)}
+                      placeholder="Write your email body…"
+                      className="min-h-[280px]"
+                    />
+                  </div>
+                </>
+              ) : (
+                <div className="rounded-lg border border-border bg-background p-4 text-sm space-y-3 max-h-[70vh] overflow-auto">
+                  <div>
+                    <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">Subject</div>
+                    <div className="font-medium break-words">{previewSubject || subject || "—"}</div>
+                  </div>
+                  <div className="border-t border-border pt-3">
+                    <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">Body</div>
+                    <div className="whitespace-pre-wrap leading-relaxed">{previewBody || body || "—"}</div>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -530,6 +561,7 @@ function SendPage() {
           if (r.subject) setSubject(r.subject);
           setBody(r.body);
           setJobMeta({ company: r.company, role: r.role, jobDescription: r.jobDescription, instructions: r.instructions });
+          setEditingPreview(false);
           toast.success("AI email applied");
         }}
       />
