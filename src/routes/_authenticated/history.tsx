@@ -40,7 +40,7 @@ function HistoryPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Email History</h1>
+        <h1 className="page-title">Email History</h1>
         <p className="text-sm text-muted-foreground">
           One row per campaign. Open a campaign to see its recipients, filters and bulk reply tools.
         </p>

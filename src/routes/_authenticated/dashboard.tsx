@@ -41,28 +41,34 @@ function Dashboard() {
     <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-          <p className="text-sm text-muted-foreground">Overview of your sending activity.</p>
+          <h1 className="page-title">Dashboard</h1>
+          <p className="page-subtitle">Overview of your sending activity.</p>
         </div>
-        <Button onClick={() => navigate({ to: "/send" })}><Send className="h-4 w-4 mr-2" />Quick send</Button>
+        <Button onClick={() => navigate({ to: "/send" })}>
+          <Send className="h-4 w-4" />Quick send
+        </Button>
       </div>
 
       {gmail.data && !gmail.data.connected && (
-        <Card className="border-primary/40 bg-primary/5">
-          <CardContent className="flex flex-wrap items-center justify-between gap-3 py-5">
-            <div className="flex items-start gap-3">
-              <div className="grid h-10 w-10 place-items-center rounded-lg bg-primary text-primary-foreground"><Mail className="h-5 w-5" /></div>
+        <Card className="border-primary/25 bg-primary/[0.06]">
+          <CardContent className="flex flex-wrap items-center justify-between gap-4 py-4">
+            <div className="flex items-center gap-3">
+              <div className="grid h-10 w-10 place-items-center rounded-xl bg-primary text-primary-foreground">
+                <Mail className="h-4 w-4" />
+              </div>
               <div>
-                <div className="font-medium">Connect your Gmail account</div>
+                <div className="text-sm font-semibold tracking-tight">Connect your Gmail account</div>
                 <div className="text-sm text-muted-foreground">Grant send permission once. We'll handle token refresh from then on.</div>
               </div>
             </div>
-            <Button onClick={onConnect} disabled={connecting}>{connecting ? "Redirecting…" : "Connect Gmail"}</Button>
+            <Button onClick={onConnect} disabled={connecting}>
+              {connecting ? "Redirecting…" : "Connect Gmail"}
+            </Button>
           </CardContent>
         </Card>
       )}
 
-      <div className="grid gap-4 md:grid-cols-5">
+      <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-5">
         <StatCard icon={Mail} label="Gmail" value={gmail.data?.connected ? "Connected" : "Not connected"} sub={gmail.data?.email ?? "—"} loading={gmail.isLoading} />
         <StatCard icon={Send} label="Total sent" value={stats.data?.sent ?? 0} loading={stats.isLoading} />
         <StatCard
@@ -77,24 +83,26 @@ function Dashboard() {
       </div>
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">Recent emails</CardTitle>
-          <Button asChild variant="ghost" size="sm"><Link to="/history">View all <ArrowUpRight className="h-4 w-4 ml-1" /></Link></Button>
+        <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
+          <CardTitle>Recent emails</CardTitle>
+          <Button asChild variant="ghost" size="sm">
+            <Link to="/history">View all <ArrowUpRight className="h-3.5 w-3.5 ml-0.5" /></Link>
+          </Button>
         </CardHeader>
         <CardContent>
           {stats.isLoading ? (
-            <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
+            <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 w-full rounded-xl" />)}</div>
           ) : stats.data?.recent.length ? (
-            <ul className="divide-y divide-border">
+            <ul className="divide-y divide-border/70">
               {stats.data.recent.map((r) => (
                 <li
                   key={r.id}
-                  className="flex items-center justify-between py-3 gap-3 cursor-pointer hover:bg-accent/40 rounded-md px-2 -mx-2"
+                  className="flex items-center justify-between py-3 gap-3 cursor-pointer rounded-xl px-2 -mx-2 transition-orbit hover:bg-muted/60"
                   onClick={() => navigate({ to: "/campaigns/$id", params: { id: r.id } })}
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="font-medium truncate">{r.subject}</div>
-                    <div className="text-xs text-muted-foreground truncate">
+                    <div className="text-sm font-medium truncate">{r.subject}</div>
+                    <div className="text-xs text-muted-foreground truncate mt-0.5">
                       to {r.recipient_count} recipient{r.recipient_count === 1 ? "" : "s"} · {new Date(r.sent_at).toLocaleString()}
                       {r.template_name ? ` · ${r.template_name}` : ""}
                     </div>
@@ -124,19 +132,19 @@ function Dashboard() {
 
 function StatCard({ icon: Icon, label, value, sub, loading }: { icon: any; label: string; value: any; sub?: string; loading?: boolean }) {
   return (
-    <Card>
-      <CardContent className="py-5">
-        <div className="flex items-center justify-between">
-          <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
-          <Icon className="h-4 w-4 text-muted-foreground" />
+    <Card className="transition-orbit hover:border-primary/25 hover:shadow-[var(--shadow-lift)]">
+      <div className="stat-tile">
+        <div className="grid size-8 place-items-center rounded-lg bg-primary/10 text-primary">
+          <Icon className="h-3.5 w-3.5" strokeWidth={1.85} />
         </div>
-        {loading ? <Skeleton className="h-7 w-24 mt-2" /> : (
+        <div className="text-xs font-medium uppercase tracking-[0.06em] text-muted-foreground">{label}</div>
+        {loading ? <Skeleton className="h-7 w-16" /> : (
           <>
-            <div className="text-2xl font-semibold mt-1">{value}</div>
-            {sub && <div className="text-xs text-muted-foreground truncate">{sub}</div>}
+            <div className="text-2xl font-semibold tracking-tight leading-none">{value}</div>
+            {sub && <div className="text-xs text-muted-foreground truncate max-w-full px-2">{sub}</div>}
           </>
         )}
-      </CardContent>
+      </div>
     </Card>
   );
 }
@@ -149,10 +157,12 @@ export function StatusBadge({ status }: { status: string }) {
 
 export function EmptyState({ icon: Icon, title, desc, action }: { icon: any; title: string; desc: string; action?: React.ReactNode }) {
   return (
-    <div className="text-center py-10">
-      <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-muted text-muted-foreground"><Icon className="h-5 w-5" /></div>
-      <div className="mt-3 font-medium">{title}</div>
-      <div className="text-sm text-muted-foreground">{desc}</div>
+    <div className="text-center py-12 px-4">
+      <div className="mx-auto grid h-10 w-10 place-items-center rounded-xl bg-muted text-muted-foreground">
+        <Icon className="h-4 w-4" strokeWidth={1.85} />
+      </div>
+      <div className="mt-3 text-base font-semibold tracking-tight">{title}</div>
+      <div className="mt-1 text-sm text-muted-foreground max-w-sm mx-auto">{desc}</div>
       {action && <div className="mt-4">{action}</div>}
     </div>
   );

@@ -138,7 +138,7 @@ function WorkspacePage() {
             <Link to="/resume-studio"><ArrowLeft className="h-4 w-4 mr-1" /> All resumes</Link>
           </Button>
           <div className="min-w-0">
-            <h1 className="text-xl font-semibold tracking-tight truncate">{v.job_title || "Untitled role"}{v.company ? ` · ${v.company}` : ""}</h1>
+            <h1 className="page-title truncate">{v.job_title || "Untitled role"}{v.company ? ` · ${v.company}` : ""}</h1>
             <div className="text-xs text-muted-foreground">Version updated {new Date(v.updated_at).toLocaleString()}</div>
           </div>
         </div>

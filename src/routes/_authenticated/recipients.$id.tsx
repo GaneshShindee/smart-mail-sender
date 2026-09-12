@@ -126,7 +126,7 @@ function RecipientDetailsPage() {
         </Button>
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="min-w-0">
-            <h1 className="text-2xl font-semibold tracking-tight">{recipient.name ?? recipient.email}</h1>
+            <h1 className="page-title">{recipient.name ?? recipient.email}</h1>
             <p className="text-sm text-muted-foreground">{recipient.email}{recipient.company ? ` · ${recipient.company}` : ""}</p>
           </div>
           {total > 0 ? (
@@ -286,10 +286,12 @@ function ThreadBubble({ m }: { m: ThreadMessage }) {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <Card><CardContent className="py-3">
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="font-semibold truncate">{value}</div>
-    </CardContent></Card>
+    <Card className="transition-orbit hover:border-primary/25">
+      <div className="stat-tile">
+        <div className="text-xs font-medium uppercase tracking-[0.06em] text-muted-foreground">{label}</div>
+        <div className="text-sm font-semibold leading-snug break-words max-w-full px-2">{value}</div>
+      </div>
+    </Card>
   );
 }
 

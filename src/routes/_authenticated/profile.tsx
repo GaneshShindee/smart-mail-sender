@@ -60,8 +60,8 @@ function ProfilePage() {
   return (
     <div className="mx-auto max-w-5xl space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
-          <UserRound className="h-6 w-6 text-primary" /> Your Profile
+        <h1 className="page-title flex items-center gap-2">
+          <UserRound className="h-4 w-4 text-primary" /> Your Profile
         </h1>
         <p className="text-sm text-muted-foreground">
           The single source of truth for every AI-generated resume, cover letter and email. AI never invents anything that is not here.

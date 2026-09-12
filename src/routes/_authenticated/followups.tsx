@@ -50,7 +50,7 @@ function FollowupsPage() {
     <div className="mx-auto max-w-5xl space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2"><ListChecks className="h-6 w-6" /> Follow-up Queue</h1>
+          <h1 className="page-title flex items-center gap-2"><ListChecks className="h-4 w-4" /> Follow-up Queue</h1>
           <p className="text-sm text-muted-foreground">Approved follow-ups are scheduled for the next day at 3:00 PM IST.</p>
         </div>
         <Button variant="outline" onClick={() => refresh.mutate()} disabled={refresh.isPending}>

@@ -105,8 +105,8 @@ function CampaignDetailsPage() {
           <Button variant="ghost" size="sm" asChild className="mb-2 -ml-2">
             <Link to="/history"><ArrowLeft className="h-4 w-4 mr-1" /> Back to history</Link>
           </Button>
-          <h1 className="text-2xl font-semibold tracking-tight truncate">{campaign.subject}</h1>
-          <p className="text-sm text-muted-foreground truncate">
+          <h1 className="page-title truncate">{campaign.subject}</h1>
+          <p className="text-[13px] text-muted-foreground truncate">
             Sent {new Date(campaign.sent_at).toLocaleString()} · from {campaign.sender_email}
             {campaign.template_name ? ` · ${campaign.template_name}` : ""}
           </p>
@@ -294,9 +294,14 @@ function CampaignDetailsPage() {
 
 function Stat({ label, value, icon: Icon }: { label: string; value: string; icon: React.ComponentType<{ className?: string }> }) {
   return (
-    <Card><CardContent className="py-4 flex items-center gap-3">
-      <div className="h-9 w-9 rounded-md bg-primary/10 text-primary flex items-center justify-center"><Icon className="h-4 w-4" /></div>
-      <div><div className="text-xs text-muted-foreground">{label}</div><div className="text-lg font-semibold">{value}</div></div>
-    </CardContent></Card>
+    <Card className="transition-orbit hover:border-primary/25">
+      <div className="stat-tile">
+        <div className="grid size-8 place-items-center rounded-lg bg-primary/10 text-primary">
+          <Icon className="h-3.5 w-3.5" />
+        </div>
+        <div className="text-xs font-medium uppercase tracking-[0.06em] text-muted-foreground">{label}</div>
+        <div className="text-xl font-semibold tracking-tight leading-none">{value}</div>
+      </div>
+    </Card>
   );
 }

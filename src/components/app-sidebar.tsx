@@ -49,22 +49,31 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader>
-        <div className="flex items-center gap-2 px-2 py-1.5">
-          <img src={logoAsset.url} alt="Logo" className="h-8 w-8 shrink-0 rounded-lg" />
-          {!collapsed && <div className="font-semibold text-sm">Email Sender</div>}
+      <SidebarHeader className="px-3 pt-3 pb-1">
+        <div className="flex items-center gap-2.5 px-2 py-2">
+          <img src={logoAsset.url} alt="Logo" className="h-9 w-9 shrink-0 rounded-xl ring-1 ring-sidebar-border" />
+          {!collapsed && (
+            <div className="min-w-0">
+              <div className="text-sm font-semibold leading-none tracking-tight">Email Sender</div>
+              <div className="mt-1 text-xs text-sidebar-foreground/45">Workspace</div>
+            </div>
+          )}
         </div>
       </SidebarHeader>
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Workspace</SidebarGroupLabel>
+      <SidebarContent className="px-2">
+        <SidebarGroup className="px-0.5">
+          <SidebarGroupLabel>Menu</SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>
+            <SidebarMenu className="gap-0.5">
               {items.map((item) => (
                 <SidebarMenuItem key={item.url}>
-                  <SidebarMenuButton asChild isActive={pathname === item.url || pathname.startsWith(item.url + "/")}>
-                    <Link to={item.url} className="flex items-center gap-2">
-                      <item.icon className="h-4 w-4" />
+                  <SidebarMenuButton
+                    asChild
+                    tooltip={item.title}
+                    isActive={pathname === item.url || pathname.startsWith(item.url + "/")}
+                  >
+                    <Link to={item.url} className="flex items-center gap-2.5">
+                      <item.icon className="h-[18px] w-[18px]" strokeWidth={1.85} />
                       {!collapsed && <span>{item.title}</span>}
                     </Link>
                   </SidebarMenuButton>
@@ -74,11 +83,11 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter>
+      <SidebarFooter className="px-2.5 pb-3">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton onClick={signOut}>
-              <LogOut className="h-4 w-4" />
+            <SidebarMenuButton onClick={signOut} className="text-sidebar-foreground/70 hover:text-destructive">
+              <LogOut className="h-[18px] w-[18px]" strokeWidth={1.85} />
               {!collapsed && <span>Sign out</span>}
             </SidebarMenuButton>
           </SidebarMenuItem>

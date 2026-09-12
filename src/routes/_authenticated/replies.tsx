@@ -96,7 +96,7 @@ function RepliesPage() {
     <div className="mx-auto max-w-6xl space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Reply Center</h1>
+          <h1 className="page-title">Reply Center</h1>
           <p className="text-sm text-muted-foreground">Every reply on your connected Gmail account, matched to a campaign when possible.</p>
         </div>
         <Button onClick={() => sync.mutate()} disabled={sync.isPending} variant="secondary">

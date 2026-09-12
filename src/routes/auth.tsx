@@ -81,41 +81,44 @@ function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground grid place-items-center px-4">
-      <Link to="/" className="absolute left-6 top-6 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-        <ArrowLeft className="h-4 w-4" /> Back
+    <div className="min-h-screen orbit-mesh text-foreground grid place-items-center px-4">
+      <Link
+        to="/"
+        className="absolute left-5 top-5 z-10 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-orbit hover:text-foreground"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" /> Back
       </Link>
-      <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-8 shadow-xl">
-        <div className="mb-6 flex items-center gap-2">
-          <img src={logoAsset.url} alt="Logo" className="h-9 w-9 rounded-lg" />
+      <div className="w-full max-w-sm rounded-2xl border border-border/80 bg-card p-7 shadow-[var(--shadow-soft)]">
+        <div className="mb-6 flex items-center gap-2.5">
+          <img src={logoAsset.url} alt="Logo" className="h-9 w-9 rounded-xl ring-1 ring-border/70" />
           <div>
-            <div className="font-semibold">Smart Email Sender</div>
+            <div className="text-[15px] font-semibold tracking-tight">Smart Email Sender</div>
             <div className="text-xs text-muted-foreground">
               {mode === "signup" ? "Create your account" : mode === "forgot" ? "Reset your password" : "Sign in to continue"}
             </div>
           </div>
         </div>
-        <Button onClick={signIn} disabled={loading} size="lg" className="w-full" variant="secondary">
+        <Button onClick={signIn} disabled={loading} className="w-full" variant="secondary">
           <GoogleIcon /> Continue with Google
         </Button>
 
-        <div className="my-5 flex items-center gap-2 text-xs text-muted-foreground">
+        <div className="my-5 flex items-center gap-2 text-[11px] text-muted-foreground">
           <div className="h-px flex-1 bg-border" /> or continue with email <div className="h-px flex-1 bg-border" />
         </div>
 
         <form onSubmit={submitEmail} className="space-y-3">
           {mode === "signup" && (
-            <div>
+            <div className="space-y-1.5">
               <Label htmlFor="fn" className="text-xs">Full name</Label>
               <Input id="fn" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Jane Doe" />
             </div>
           )}
-          <div>
+          <div className="space-y-1.5">
             <Label htmlFor="em" className="text-xs">Email</Label>
             <Input id="em" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="you@example.com" />
           </div>
           {mode !== "forgot" && (
-            <div>
+            <div className="space-y-1.5">
               <Label htmlFor="pw" className="text-xs">Password</Label>
               <Input id="pw" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} placeholder="••••••••" />
             </div>
@@ -128,15 +131,15 @@ function AuthPage() {
         <div className="mt-4 flex items-center justify-between text-xs">
           {mode === "signin" ? (
             <>
-              <button type="button" className="text-muted-foreground hover:text-foreground" onClick={() => setMode("forgot")}>
+              <button type="button" className="text-muted-foreground transition-orbit hover:text-foreground" onClick={() => setMode("forgot")}>
                 Forgot password?
               </button>
-              <button type="button" className="text-muted-foreground hover:text-foreground" onClick={() => setMode("signup")}>
+              <button type="button" className="text-muted-foreground transition-orbit hover:text-foreground" onClick={() => setMode("signup")}>
                 Create an account
               </button>
             </>
           ) : (
-            <button type="button" className="text-muted-foreground hover:text-foreground" onClick={() => setMode("signin")}>
+            <button type="button" className="text-muted-foreground transition-orbit hover:text-foreground" onClick={() => setMode("signin")}>
               ← Back to sign in
             </button>
           )}

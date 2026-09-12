@@ -123,8 +123,8 @@ function ResumeStudioPage() {
     <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
-            <Wand2 className="h-6 w-6 text-primary" /> AI Resume Studio
+          <h1 className="page-title flex items-center gap-2">
+            <Wand2 className="h-4 w-4 text-primary" /> AI Resume Studio
           </h1>
           <p className="text-sm text-muted-foreground">Tailor an ATS-optimised resume to any job description — without ever fabricating facts.</p>
         </div>

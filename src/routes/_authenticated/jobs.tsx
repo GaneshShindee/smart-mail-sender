@@ -197,7 +197,7 @@ function JobsPage() {
     <div className="mx-auto max-w-6xl space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2"><Briefcase className="h-6 w-6" /> Community Jobs Board</h1>
+          <h1 className="page-title flex items-center gap-2"><Briefcase className="h-4 w-4" /> Community Jobs Board</h1>
           <p className="text-sm text-muted-foreground">Discover opportunities shared by other users. Generate tailored resumes in one click.</p>
         </div>
         <div className="flex gap-2">
