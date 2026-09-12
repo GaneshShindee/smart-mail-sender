@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/sidebar";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
+import { cn } from "@/lib/utils";
 
 const items = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
@@ -50,8 +51,15 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="px-3 pt-3 pb-1">
-        <div className="flex items-center gap-2.5 px-2 py-2">
-          <img src={logoAsset.url} alt="Logo" className="h-9 w-9 shrink-0 rounded-xl ring-1 ring-sidebar-border" />
+        <div className={cn("flex items-center gap-2.5 py-2", collapsed ? "justify-center px-0" : "px-2")}>
+          <img
+            src={logoAsset.url}
+            alt="Logo"
+            className={cn(
+              "shrink-0 rounded-xl ring-1 ring-sidebar-border",
+              collapsed ? "h-11 w-11" : "h-9 w-9",
+            )}
+          />
           {!collapsed && (
             <div className="min-w-0">
               <div className="text-sm font-semibold leading-none tracking-tight">Email Sender</div>
@@ -64,16 +72,17 @@ export function AppSidebar() {
         <SidebarGroup className="px-0.5">
           <SidebarGroupLabel>Menu</SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu className="gap-0.5">
+            <SidebarMenu className="gap-1">
               {items.map((item) => (
                 <SidebarMenuItem key={item.url}>
                   <SidebarMenuButton
                     asChild
+                    size="lg"
                     tooltip={item.title}
                     isActive={pathname === item.url || pathname.startsWith(item.url + "/")}
                   >
                     <Link to={item.url} className="flex items-center gap-2.5">
-                      <item.icon className="h-[18px] w-[18px]" strokeWidth={1.85} />
+                      <item.icon className={collapsed ? "h-5 w-5" : "h-[18px] w-[18px]"} strokeWidth={1.85} />
                       {!collapsed && <span>{item.title}</span>}
                     </Link>
                   </SidebarMenuButton>
@@ -86,8 +95,12 @@ export function AppSidebar() {
       <SidebarFooter className="px-2.5 pb-3">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton onClick={signOut} className="text-sidebar-foreground/70 hover:text-destructive">
-              <LogOut className="h-[18px] w-[18px]" strokeWidth={1.85} />
+            <SidebarMenuButton
+              size="lg"
+              onClick={signOut}
+              className="text-sidebar-foreground/70 hover:text-destructive"
+            >
+              <LogOut className={collapsed ? "h-5 w-5" : "h-[18px] w-[18px]"} strokeWidth={1.85} />
               {!collapsed && <span>Sign out</span>}
             </SidebarMenuButton>
           </SidebarMenuItem>
