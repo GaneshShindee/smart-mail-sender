@@ -27,6 +27,8 @@ type ResumeComboboxProps = {
   emptyText?: string;
   disabled?: boolean;
   className?: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
 export function ResumeCombobox({
@@ -38,8 +40,12 @@ export function ResumeCombobox({
   emptyText = "No resumes found.",
   disabled = false,
   className,
+  open: openProp,
+  onOpenChange,
 }: ResumeComboboxProps) {
-  const [open, setOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const open = openProp ?? uncontrolledOpen;
+  const setOpen = onOpenChange ?? setUncontrolledOpen;
 
   const selected = useMemo(
     () => resumes.filter((r) => value.includes(r.id)),

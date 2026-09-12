@@ -29,6 +29,8 @@ type TemplateComboboxProps = {
   clearLabel?: string;
   disabled?: boolean;
   className?: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
 export function TemplateCombobox({
@@ -42,8 +44,12 @@ export function TemplateCombobox({
   clearLabel = "No template",
   disabled = false,
   className,
+  open: openProp,
+  onOpenChange,
 }: TemplateComboboxProps) {
-  const [open, setOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const open = openProp ?? uncontrolledOpen;
+  const setOpen = onOpenChange ?? setUncontrolledOpen;
 
   const selected = useMemo(
     () => templates.find((t) => t.id === value),

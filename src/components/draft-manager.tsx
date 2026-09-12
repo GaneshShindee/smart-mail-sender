@@ -24,9 +24,26 @@ export type DraftState = {
   role: string;
   jobDescription: string;
   instructions: string;
+  metadata?: Record<string, string | number | boolean | null>;
 };
 
 export type LoadedDraft = { draft: EmailDraft; files: File[] };
+
+export async function filesFromDraftAttachments(
+  attachments: Array<{ filename: string; mimeType: string; size: number; storagePath: string; url: string | null }>,
+): Promise<File[]> {
+  const files: File[] = [];
+  for (const a of attachments) {
+    if (!a.url) continue;
+    try {
+      const buf = await (await fetch(a.url)).arrayBuffer();
+      files.push(new File([buf], a.filename, { type: a.mimeType || "application/octet-stream" }));
+    } catch {
+      toast.error(`Could not restore ${a.filename}`);
+    }
+  }
+  return files;
+}
 
 export function DraftManager({
   draftId,
@@ -35,7 +52,7 @@ export function DraftManager({
   onLoad,
 }: {
   draftId: string | null;
-  onDraftIdChange: (id: string) => void;
+  onDraftIdChange: (id: string | null) => void;
   getState: () => Promise<DraftState>;
   onLoad: (loaded: LoadedDraft) => void;
 }) {
@@ -54,7 +71,14 @@ export function DraftManager({
   const save = useMutation({
     mutationFn: async () => {
       const state = await getState();
-      return saveFn({ data: { ...state, id: draftId ?? undefined, name: name.trim() || state.name || "Untitled draft" } });
+      return saveFn({
+        data: {
+          ...state,
+          id: draftId ?? undefined,
+          name: name.trim() || state.name || "Untitled draft",
+          metadata: { ...(state.metadata ?? {}), autosave: false },
+        },
+      });
     },
     onSuccess: (r) => {
       onDraftIdChange(r.id);
@@ -68,16 +92,7 @@ export function DraftManager({
   const load = useMutation({
     mutationFn: async (id: string) => {
       const r = await getFn({ data: { id } });
-      const files: File[] = [];
-      for (const a of r.attachments) {
-        if (!a.url) continue;
-        try {
-          const buf = await (await fetch(a.url)).arrayBuffer();
-          files.push(new File([buf], a.filename, { type: a.mimeType || "application/octet-stream" }));
-        } catch {
-          toast.error(`Could not restore ${a.filename}`);
-        }
-      }
+      const files = await filesFromDraftAttachments(r.attachments);
       return { draft: r.draft, files } as LoadedDraft;
     },
     onSuccess: (loaded) => {
@@ -91,18 +106,36 @@ export function DraftManager({
 
   const del = useMutation({
     mutationFn: (id: string) => delFn({ data: { id } }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["email-drafts"] }); toast.success("Draft deleted"); },
+    onSuccess: (_r, id) => {
+      if (draftId === id) onDraftIdChange(null);
+      qc.invalidateQueries({ queryKey: ["email-drafts"] });
+      toast.success("Draft deleted");
+    },
     onError: (e) => toast.error("Could not delete draft", { description: (e as Error).message }),
   });
 
   return (
     <>
-      <div className="flex items-center gap-2">
-        <Button type="button" size="sm" variant="outline" onClick={() => setOpenSave(true)}>
-          <Save className="h-3.5 w-3.5 mr-1" /> {draftId ? "Update draft" : "Save draft"}
+      <div className="flex items-center gap-1.5">
+        <Button
+          type="button"
+          size="icon"
+          variant="outline"
+          className="h-10 w-10"
+          title={draftId ? "Update draft" : "Save draft"}
+          onClick={() => setOpenSave(true)}
+        >
+          <Save className="h-4 w-4" />
         </Button>
-        <Button type="button" size="sm" variant="outline" onClick={() => setOpenList(true)}>
-          <FolderOpen className="h-3.5 w-3.5 mr-1" /> Drafts
+        <Button
+          type="button"
+          size="icon"
+          variant="outline"
+          className="h-10 w-10"
+          title="Drafts"
+          onClick={() => setOpenList(true)}
+        >
+          <FolderOpen className="h-4 w-4" />
         </Button>
       </div>
 

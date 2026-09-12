@@ -45,10 +45,10 @@ export const listResumeProjects = createServerFn({ method: "GET" })
   });
 
 const createProjectSchema = z.object({
-  name: z.string().trim().min(1).max(120),
+  name: z.string().trim().max(120).default(""),
   description: z.string().max(1000).optional().nullable(),
-  mainTexFilename: z.string().min(1).max(255).default("resume.tex"),
-  mainTexContent: z.string().min(1).max(500_000),
+  mainTexFilename: z.string().max(255).default("resume.tex"),
+  mainTexContent: z.string().max(500_000).default(""),
   extraFiles: z.array(z.object({
     filename: z.string().min(1).max(255),
     mimeType: z.string().max(128).optional(),
@@ -67,11 +67,14 @@ export const createResumeProject = createServerFn({ method: "POST" })
     const projectId = crypto.randomUUID();
     const prefix = `${userId}/${projectId}/`;
 
+    const mainFilename = (data.mainTexFilename || "resume.tex").replace(/\.tex$/i, "") + ".tex";
+    const projectName = data.name.trim() || mainFilename.replace(/\.tex$/i, "") || "Master resume";
+
     // Upload main.tex + assets.
-    const mainPath = `${prefix}${data.mainTexFilename}`;
+    const mainPath = `${prefix}${mainFilename}`;
     const mainUp = await context.supabase.storage
       .from("resume-latex")
-      .upload(mainPath, new Blob([data.mainTexContent], { type: "application/x-tex" }), {
+      .upload(mainPath, new Blob([data.mainTexContent ?? ""], { type: "application/x-tex" }), {
         contentType: "application/x-tex",
         upsert: true,
       });
@@ -107,10 +110,10 @@ export const createResumeProject = createServerFn({ method: "POST" })
       .insert({
         id: projectId,
         user_id: userId,
-        name: data.name,
+        name: projectName,
         description: data.description ?? null,
         storage_prefix: prefix,
-        main_tex_filename: data.mainTexFilename,
+        main_tex_filename: mainFilename,
         is_default: shouldDefault,
       })
       .select()
@@ -182,7 +185,7 @@ export const listResumeVersions = createServerFn({ method: "GET" })
 
 const generateSchema = z.object({
   projectId: z.string().uuid(),
-  jobDescription: z.string().min(20).max(50_000),
+  jobDescription: z.string().max(50_000).default(""),
   jobTitle: z.string().max(200).optional().nullable(),
   company: z.string().max(200).optional().nullable(),
   customInstructions: z.string().max(4000).optional().nullable(),

@@ -138,6 +138,7 @@ function CampaignDetailsPage() {
               <SelectContent>
                 <SelectItem value="all">Any opens</SelectItem>
                 <SelectItem value="0">0 opens</SelectItem>
+                <SelectItem value="1+">1+ viewed</SelectItem>
                 <SelectItem value="1">1 open</SelectItem>
                 <SelectItem value="2">2 opens</SelectItem>
                 <SelectItem value="3+">3+ opens</SelectItem>

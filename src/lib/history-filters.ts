@@ -1,6 +1,6 @@
 /** Shared (client + server) filter logic for the Email History recipient list. */
 
-export type OpenCountFilter = "all" | "0" | "1" | "2" | "3+";
+export type OpenCountFilter = "all" | "0" | "1" | "1+" | "2" | "3+";
 export type ReplyStatusFilter = "all" | "replied" | "not_replied";
 export type ResumeFilter = "all" | "viewed" | "not_viewed";
 
@@ -58,6 +58,8 @@ export function matchesOpenCount(openCount: number, f: OpenCountFilter): boolean
       return openCount === 0;
     case "1":
       return openCount === 1;
+    case "1+":
+      return openCount >= 1;
     case "2":
       return openCount === 2;
     case "3+":

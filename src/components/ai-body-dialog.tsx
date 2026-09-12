@@ -61,9 +61,11 @@ export function AiBodyDialog({
     <Dialog open={open} onOpenChange={(o) => !run.isPending && onOpenChange(o)}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Sparkles className="h-4 w-4" /> Generate body using AI</DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><Sparkles className="h-4 w-4" /> Generate subject & body with AI</DialogTitle>
           <DialogDescription>
-            Your selected template keeps its structure, tone and variables — only about 10% is tailored to this role.
+            {templateId
+              ? "Your selected template keeps its structure, tone and variables — only about 10% is tailored to this role."
+              : "Generate a subject and body from the role, company, and job description. You can edit before saving."}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">

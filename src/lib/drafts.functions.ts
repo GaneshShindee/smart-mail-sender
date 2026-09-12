@@ -60,6 +60,8 @@ const draftSchema = z.object({
   metadata: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).default({}),
 });
 
+const isAutosave = (d: EmailDraft) => !!(d.metadata && d.metadata.autosave === true);
+
 export const listEmailDrafts = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<EmailDraft[]> => {
@@ -71,7 +73,34 @@ export const listEmailDrafts = createServerFn({ method: "GET" })
       .order("updated_at", { ascending: false })
       .limit(100);
     if (error) throw new Error(error.message);
-    return (data ?? []) as EmailDraft[];
+    // Named drafts only — autosave is restored separately on Send.
+    return ((data ?? []) as EmailDraft[]).filter((d) => !isAutosave(d));
+  });
+
+/** Latest working autosave for the signed-in user (cross-device resume). */
+export const getAutosaveDraft = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { untyped } = await import("./user-profile.server.helpers");
+    const db = untyped(context.supabase);
+    const { data, error } = await db
+      .from("email_drafts")
+      .select("*")
+      .eq("user_id", context.userId)
+      .order("updated_at", { ascending: false })
+      .limit(40);
+    if (error) throw new Error(error.message);
+    const draft = ((data ?? []) as EmailDraft[]).find(isAutosave) ?? null;
+    if (!draft) return { draft: null, attachments: [] as Array<DraftAttachment & { url: string | null }> };
+
+    const attachments: Array<DraftAttachment & { url: string | null }> = [];
+    for (const a of draft.attachments ?? []) {
+      const { data: signed } = await context.supabase.storage
+        .from("draft-attachments")
+        .createSignedUrl(a.storagePath, 60 * 30);
+      attachments.push({ ...a, url: signed?.signedUrl ?? null });
+    }
+    return { draft, attachments };
   });
 
 export const getEmailDraft = createServerFn({ method: "GET" })
@@ -143,6 +172,7 @@ export const saveEmailDraft = createServerFn({ method: "POST" })
       job_description: data.jobDescription,
       instructions: data.instructions,
       metadata: data.metadata,
+      updated_at: new Date().toISOString(),
     };
 
     const { error } = await db.from("email_drafts").upsert(row, { onConflict: "id" });

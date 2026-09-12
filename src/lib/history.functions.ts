@@ -118,7 +118,7 @@ export const listHistoryRecipients = createServerFn({ method: "GET" })
     z
       .object({
         search: z.string().default(""),
-        openCount: z.enum(["all", "0", "1", "2", "3+"]).default("all"),
+        openCount: z.enum(["all", "0", "1", "1+", "2", "3+"]).default("all"),
         replyStatus: z.enum(["all", "replied", "not_replied"]).default("all"),
         resume: z.enum(["all", "viewed", "not_viewed"]).default("all"),
         status: z.string().default("all"),

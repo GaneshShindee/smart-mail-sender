@@ -22,7 +22,8 @@ import { toast } from "sonner";
 import { Send, Sparkles, Paperclip, X, FileText, Upload, Flame, Pencil, Eye } from "lucide-react";
 import { EmailGeneratorDialog } from "@/components/email-generator-dialog";
 import { AiBodyDialog } from "@/components/ai-body-dialog";
-import { DraftManager, type DraftState, type LoadedDraft } from "@/components/draft-manager";
+import { DraftManager, filesFromDraftAttachments, type DraftState, type LoadedDraft } from "@/components/draft-manager";
+import { getAutosaveDraft, saveEmailDraft, deleteEmailDraft } from "@/lib/drafts.functions";
 import { z } from "zod";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { getResumeVersion } from "@/lib/resume-studio.functions";
@@ -69,6 +70,9 @@ function SendPage() {
   const [genOpen, setGenOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
   const [draftId, setDraftId] = useState<string | null>(null);
+  const [autosaveId, setAutosaveId] = useState<string | null>(null);
+  const [tplPickerOpen, setTplPickerOpen] = useState(false);
+  const [resumePickerOpen, setResumePickerOpen] = useState(false);
   const [jobMeta, setJobMeta] = useState({ company: "", role: "", jobDescription: "", instructions: "" });
   const [resumeIds, setResumeIds] = useState<string[]>([]);
   const [uploads, setUploads] = useState<File[]>([]);
@@ -77,6 +81,8 @@ function SendPage() {
   >([]);
   const uploadRef = useRef<HTMLInputElement | null>(null);
   const initedRef = useRef(false);
+  const skipAutosaveUntilRef = useRef(0);
+  const autosaveIdRef = useRef<string | null>(null);
   const [report, setReport] = useState<null | {
     total: number; sent: number; failed: number;
     skipped: Array<{ email: string; reason: string; note?: string }>;
@@ -84,7 +90,12 @@ function SendPage() {
   }>(null);
   const [editingPreview, setEditingPreview] = useState(false);
 
+  const autosaveFn = useServerFn(saveEmailDraft);
+  const getAutosaveFn = useServerFn(getAutosaveDraft);
+  const deleteDraftFn = useServerFn(deleteEmailDraft);
+
   const isFollowUp = search.followUp === "1";
+  const hasUrlPrefill = !!(search.to || search.followUp || search.resumeVersionId || search.campaignId);
 
   const selectedSender = useMemo(
     () => accounts.data?.find((a) => a.id === senderId) ?? null,
@@ -106,36 +117,90 @@ function SendPage() {
     if (preferred) setResumeIds((cur) => (cur.includes(preferred) ? cur : [...cur, preferred]));
   };
 
-  // One-time hydration: default sender, default/follow-up template, URL prefill.
+  // One-time hydration: URL prefill, cross-device autosave, or defaults.
   useEffect(() => {
     if (initedRef.current) return;
     if (!accounts.data || !templates.data || !prefs.data) return;
-    initedRef.current = true;
 
     const urlSender = search.sender ? accounts.data.find((a) => a.id === search.sender) : null;
     const defAcc = accounts.data.find((a) => a.is_default) ?? accounts.data[0];
     setSenderId((urlSender ?? defAcc)?.id ?? "");
 
-    let templateToUse: string | null = null;
-    if (search.template && templates.data.some((t) => t.id === search.template)) {
-      templateToUse = search.template;
-    } else if (isFollowUp && prefs.data.followUpTemplateId && templates.data.some((t) => t.id === prefs.data.followUpTemplateId)) {
-      templateToUse = prefs.data.followUpTemplateId;
-    } else if (!isFollowUp && prefs.data.defaultTemplateId && templates.data.some((t) => t.id === prefs.data.defaultTemplateId)) {
-      templateToUse = prefs.data.defaultTemplateId;
-    } else {
-      const marked = templates.data.find((t) => (t as { is_default?: boolean }).is_default);
-      if (marked) templateToUse = marked.id;
-    }
-    if (templateToUse) selectTemplate(templateToUse);
+    const applyDefaultTemplate = () => {
+      let templateToUse: string | null = null;
+      if (search.template && templates.data.some((t) => t.id === search.template)) {
+        templateToUse = search.template;
+      } else if (isFollowUp && prefs.data.followUpTemplateId && templates.data.some((t) => t.id === prefs.data.followUpTemplateId)) {
+        templateToUse = prefs.data.followUpTemplateId;
+      } else if (!isFollowUp && prefs.data.defaultTemplateId && templates.data.some((t) => t.id === prefs.data.defaultTemplateId)) {
+        templateToUse = prefs.data.defaultTemplateId;
+      } else {
+        const marked = templates.data.find((t) => (t as { is_default?: boolean }).is_default);
+        if (marked) templateToUse = marked.id;
+      }
+      if (templateToUse) selectTemplate(templateToUse);
+    };
 
     if (search.to) setRecipientText(search.to);
     const preVars: Record<string, string> = {};
     if (search.name) preVars.name = search.name;
     if (search.company) preVars.company = search.company;
     if (Object.keys(preVars).length) setVars((v) => ({ ...preVars, ...v }));
+
+    if (hasUrlPrefill) {
+      applyDefaultTemplate();
+      initedRef.current = true;
+      skipAutosaveUntilRef.current = Date.now() + 2000;
+      return;
+    }
+
+    initedRef.current = true; // block re-entry while fetching
+    (async () => {
+      try {
+        const r = await getAutosaveFn();
+        const d = r.draft;
+        const hasContent = !!(d && (d.recipients?.trim() || d.subject?.trim() || d.body?.trim()));
+        if (!hasContent || !d) {
+          applyDefaultTemplate();
+          if (d) {
+            setAutosaveId(d.id);
+            autosaveIdRef.current = d.id;
+          }
+        } else {
+          const files = await filesFromDraftAttachments(r.attachments);
+          setTplId(d.template_id ?? "");
+          if (d.gmail_account_id) setSenderId(d.gmail_account_id);
+          setRecipientText(d.recipients ?? "");
+          setSubject(d.subject ?? "");
+          setBody(d.body ?? "");
+          setVars(d.variables ?? {});
+          setResumeIds(d.resume_ids ?? []);
+          setUploads(files);
+          setSavedAttachments(d.attachments ?? []);
+          setJobMeta({
+            company: d.company ?? "",
+            role: d.role ?? "",
+            jobDescription: d.job_description ?? "",
+            instructions: d.instructions ?? "",
+          });
+          setAutosaveId(d.id);
+          autosaveIdRef.current = d.id;
+          toast.message("Restored autosaved draft", {
+            description: `Last saved ${new Date(d.updated_at).toLocaleString()}`,
+          });
+        }
+      } catch {
+        applyDefaultTemplate();
+      } finally {
+        skipAutosaveUntilRef.current = Date.now() + 2000;
+      }
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accounts.data, templates.data, prefs.data]);
+
+  useEffect(() => {
+    autosaveIdRef.current = autosaveId;
+  }, [autosaveId]);
 
   const toggleResume = (id: string) =>
     setResumeIds((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
@@ -171,6 +236,7 @@ function SendPage() {
 
   const applyLoadedDraft = ({ draft, files }: LoadedDraft) => {
     initedRef.current = true;
+    skipAutosaveUntilRef.current = Date.now() + 2500;
     setTplId(draft.template_id ?? "");
     setSenderId(draft.gmail_account_id ?? senderId);
     setRecipientText(draft.recipients ?? "");
@@ -236,7 +302,7 @@ function SendPage() {
         },
       });
     },
-    onSuccess: (r) => {
+    onSuccess: async (r) => {
       toast.success(`Email sent to ${r.sent} recipient${r.sent === 1 ? "" : "s"}`);
       qc.invalidateQueries({ queryKey: ["dashboard-stats"] });
       qc.invalidateQueries({ queryKey: ["history"] });
@@ -249,9 +315,89 @@ function SendPage() {
       });
       setRecipientText("");
       setUploads([]);
+      skipAutosaveUntilRef.current = Date.now() + 5000;
+      const id = autosaveIdRef.current;
+      if (id) {
+        try {
+          await deleteDraftFn({ data: { id } });
+        } catch {
+          /* ignore */
+        }
+        setAutosaveId(null);
+        autosaveIdRef.current = null;
+      }
     },
     onError: (e) => toast.error("Send failed", { description: (e as Error).message }),
   });
+
+  // Debounced cross-device autosave (text + attachments to Supabase).
+  useEffect(() => {
+    if (!initedRef.current) return;
+    const meaningful = !!(recipientText.trim() || subject.trim() || body.trim() || resumeIds.length || uploads.length);
+    if (!meaningful) return;
+
+    const delay = Math.max(1600, skipAutosaveUntilRef.current - Date.now());
+    const timer = window.setTimeout(async () => {
+      try {
+        const state = await collectDraftState();
+        const r = await autosaveFn({
+          data: {
+            ...state,
+            id: autosaveIdRef.current ?? undefined,
+            name: "Autosaved draft",
+            metadata: { autosave: true },
+          },
+        });
+        setAutosaveId(r.id);
+        autosaveIdRef.current = r.id;
+        if (r.attachments?.length) {
+          setSavedAttachments(r.attachments);
+        }
+      } catch {
+        /* silent — named Save draft still works */
+      }
+    }, delay);
+
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recipientText, subject, body, vars, tplId, senderId, resumeIds, uploads, jobMeta]);
+
+  // Keyboard: ⌘/Ctrl+Enter send · ⌘/Ctrl+⌥/Alt+T template · ⌘/Ctrl+⌥/Alt+R resumes
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) return;
+      if (genOpen || aiOpen || report) return;
+
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (
+          !send.isPending &&
+          parsed.valid.length > 0 &&
+          subject.trim() &&
+          body.trim() &&
+          senderId &&
+          !overLimit
+        ) {
+          send.mutate();
+        }
+        return;
+      }
+      if (e.altKey && (e.key === "t" || e.key === "T")) {
+        e.preventDefault();
+        setTplPickerOpen(true);
+        setResumePickerOpen(false);
+        return;
+      }
+      if (e.altKey && (e.key === "r" || e.key === "R")) {
+        e.preventDefault();
+        setResumePickerOpen(true);
+        setTplPickerOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [genOpen, aiOpen, report, send, parsed.valid.length, subject, body, senderId, overLimit]);
 
   // Auto-attach the compiled PDF from Resume Studio. Only attach PDFs — never .tex.
   const getVersionFn = useServerFn(getResumeVersion);
@@ -306,7 +452,7 @@ function SendPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-4">
-      <div className="flex items-start justify-between flex-wrap gap-3">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="page-title flex items-center gap-2">
             {isFollowUp && <Flame className="h-4 w-4 text-primary" />}
@@ -316,26 +462,25 @@ function SendPage() {
             {isFollowUp ? "Review the pre-filled details and hit send." : "Pick a template, drop in recipients, and send."}
           </p>
         </div>
-        <div className="flex items-end gap-3 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
           <DraftManager
             draftId={draftId}
             onDraftIdChange={setDraftId}
             getState={collectDraftState}
             onLoad={applyLoadedDraft}
           />
-          <div className="min-w-[220px]">
-            <Label className="text-xs">Send from</Label>
-            <Select value={senderId} onValueChange={setSenderId}>
-              <SelectTrigger><SelectValue placeholder="Select a Gmail account" /></SelectTrigger>
-              <SelectContent>
-                {accounts.data?.map((a) => (
-                  <SelectItem key={a.id} value={a.id}>
-                    {(a.label ?? a.full_name ?? a.gmail_email)}{a.is_default ? " · Default" : ""} — {a.gmail_email}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <Select value={senderId} onValueChange={setSenderId}>
+            <SelectTrigger className="w-[220px] h-10">
+              <SelectValue placeholder="Gmail account" />
+            </SelectTrigger>
+            <SelectContent>
+              {accounts.data?.map((a) => (
+                <SelectItem key={a.id} value={a.id}>
+                  {(a.label ?? a.full_name ?? a.gmail_email)}{a.is_default ? " · Default" : ""} — {a.gmail_email}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button
             onClick={() => send.mutate()}
             disabled={
@@ -346,7 +491,7 @@ function SendPage() {
               !senderId ||
               overLimit
             }
-            className="shrink-0"
+            className="shrink-0 h-10"
           >
             <Send className="h-4 w-4 mr-2" />
             {send.isPending ? "Sending…" : "Send"}
@@ -372,6 +517,8 @@ function SendPage() {
                   searchPlaceholder="Search templates by name…"
                   allowClear
                   clearLabel="No template"
+                  open={tplPickerOpen}
+                  onOpenChange={setTplPickerOpen}
                 />
               </div>
 
@@ -439,6 +586,8 @@ function SendPage() {
                     onToggle={toggleResume}
                     placeholder="Attach from Resume Library…"
                     searchPlaceholder="Search resumes by name…"
+                    open={resumePickerOpen}
+                    onOpenChange={setResumePickerOpen}
                   />
                 )}
 
