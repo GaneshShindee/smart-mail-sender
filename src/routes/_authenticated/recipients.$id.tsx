@@ -273,11 +273,11 @@ function RecipientDetailsPage() {
             subject: campaign?.subject ?? "",
           },
         ]}
-        templates={(templates ?? []).map((t) => ({
+        templates={(templates ?? []).map((t: { id: string; name: string; body: string | null; is_default?: boolean }) => ({
           id: t.id,
           name: t.name,
           body: t.body ?? "",
-          is_default: !!(t as { is_default?: boolean }).is_default,
+          is_default: !!t.is_default,
         }))}
         followUpTemplateId={prefs?.followUpTemplateId ?? null}
         initialMode={replyMode}
@@ -363,6 +363,3 @@ function formatDuration(ms: number): string {
   const d = Math.floor(h / 24);
   return `${d}d ${h % 24}h`;
 }
-
-// Suppress unused import lint for icon list; used within component.
-void Eye;
