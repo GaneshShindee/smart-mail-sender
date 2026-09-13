@@ -452,17 +452,17 @@ function SendPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
           <h1 className="page-title flex items-center gap-2">
-            {isFollowUp && <Flame className="h-4 w-4 text-primary" />}
+            {isFollowUp && <Flame className="h-4 w-4 text-primary shrink-0" />}
             {isFollowUp ? "Follow-up Email" : "Send Email"}
           </h1>
           <p className="text-sm text-muted-foreground">
             {isFollowUp ? "Review the pre-filled details and hit send." : "Pick a template, drop in recipients, and send."}
           </p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-stretch sm:items-center gap-2 flex-wrap w-full sm:w-auto">
           <DraftManager
             draftId={draftId}
             onDraftIdChange={setDraftId}
@@ -470,7 +470,7 @@ function SendPage() {
             onLoad={applyLoadedDraft}
           />
           <Select value={senderId} onValueChange={setSenderId}>
-            <SelectTrigger className="w-[220px] h-10">
+            <SelectTrigger className="w-full sm:w-[220px] h-10 min-w-0">
               <SelectValue placeholder="Gmail account" />
             </SelectTrigger>
             <SelectContent>
@@ -491,7 +491,7 @@ function SendPage() {
               !senderId ||
               overLimit
             }
-            className="shrink-0 h-10"
+            className="shrink-0 h-10 w-full sm:w-auto"
           >
             <Send className="h-4 w-4 mr-2" />
             {send.isPending ? "Sending…" : "Send"}
@@ -526,7 +526,7 @@ function SendPage() {
                 <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
                   <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Variables</div>
                   {variables.map((v) => (
-                    <div key={v} className="grid grid-cols-[120px_1fr] items-center gap-2">
+                    <div key={v} className="grid grid-cols-1 sm:grid-cols-[120px_1fr] items-start sm:items-center gap-1.5 sm:gap-2">
                       <Label className="text-xs">{`{{${v}}}`}</Label>
                       <Input value={vars[v] ?? ""} onChange={(e) => setVars({ ...vars, [v]: e.target.value })} />
                     </div>
@@ -535,9 +535,9 @@ function SendPage() {
               )}
 
               <div>
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <Label>Recipients</Label>
-                  <Button type="button" variant="outline" size="sm" onClick={() => setGenOpen(true)}>
+                  <Button type="button" variant="outline" size="sm" className="w-full sm:w-auto" onClick={() => setGenOpen(true)}>
                     <Sparkles className="h-3.5 w-3.5 mr-1" /> Generate Emails
                   </Button>
                 </div>

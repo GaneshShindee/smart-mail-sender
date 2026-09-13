@@ -46,8 +46,8 @@ function HistoryPage() {
         </p>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <div className="relative flex-1 min-w-[220px]">
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+        <div className="relative w-full sm:flex-1 sm:min-w-[220px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             value={search}
@@ -57,7 +57,7 @@ function HistoryPage() {
           />
         </div>
         <Select value={status} onValueChange={setStatus}>
-          <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-full sm:w-40"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All statuses</SelectItem>
             <SelectItem value="sent">Sent</SelectItem>
@@ -78,7 +78,7 @@ function HistoryPage() {
               {rows.map((c) => (
                 <li
                   key={c.id}
-                  className="flex items-center gap-3 py-3 px-2 -mx-2 rounded-md cursor-pointer hover:bg-accent/40 transition-colors"
+                  className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3 py-3 px-2 -mx-2 rounded-md cursor-pointer hover:bg-accent/40 transition-colors"
                   onClick={() => navigate({ to: "/campaigns/$id", params: { id: c.id } })}
                 >
                   <div className="min-w-0 flex-1">
@@ -92,7 +92,7 @@ function HistoryPage() {
                       <div className="text-xs text-destructive truncate">{c.error}</div>
                     )}
                   </div>
-                  <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+                  <div className="flex items-center gap-1.5 flex-wrap sm:justify-end sm:shrink-0">
                     <Badge variant="outline" className="gap-1">
                       <Users className="h-3 w-3" />{c.recipients}
                     </Badge>
@@ -111,7 +111,7 @@ function HistoryPage() {
                       <Badge variant="outline" className="gap-1"><Paperclip className="h-3 w-3" />{c.attachment_count}</Badge>
                     )}
                     <StatusBadge status={c.status} />
-                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    <ChevronRight className="h-4 w-4 text-muted-foreground hidden sm:block" />
                   </div>
                 </li>
               ))}

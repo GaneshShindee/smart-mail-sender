@@ -116,8 +116,8 @@ function Dashboard() {
               </p>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <div className="relative flex-1 min-w-[220px]">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+            <div className="relative w-full sm:flex-1 sm:min-w-[220px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 value={search}
@@ -127,7 +127,7 @@ function Dashboard() {
               />
             </div>
             <Select value={status} onValueChange={setStatus}>
-              <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-full sm:w-40"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All statuses</SelectItem>
                 <SelectItem value="sent">Sent</SelectItem>

@@ -32,12 +32,12 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full orbit-mesh text-foreground">
+      <div className="min-h-svh flex w-full max-w-[100vw] overflow-x-hidden orbit-mesh text-foreground">
         <AppSidebar />
-        <div className="flex-1 flex flex-col min-w-0">
-          <header className="h-14 flex items-center gap-3 border-b border-border/50 px-4 md:px-5 sticky top-0 glass-header z-10">
-            <SidebarTrigger className="size-9 rounded-lg" />
-            <div className="h-4 w-px bg-border/80" />
+        <div className="flex-1 flex flex-col min-w-0 max-w-full">
+          <header className="h-14 flex items-center gap-2 sm:gap-3 border-b border-border/50 px-3 sm:px-4 md:px-5 sticky top-0 glass-header z-10 safe-top">
+            <SidebarTrigger className="size-9 shrink-0 rounded-lg" />
+            <div className="h-4 w-px bg-border/80 shrink-0" />
             <div className="min-w-0 flex-1">
               <div className="text-sm font-semibold tracking-tight truncate">{title}</div>
               <div className="text-[11px] text-muted-foreground truncate hidden sm:block">Smart Email Sender</div>
@@ -47,7 +47,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
               Live workspace
             </div>
           </header>
-          <main className="flex-1 p-5 md:p-7 lg:p-8">{children}</main>
+          <main className="flex-1 w-full min-w-0 p-3 sm:p-5 md:p-7 lg:p-8 pb-[max(1rem,env(safe-area-inset-bottom))]">
+            {children}
+          </main>
         </div>
       </div>
     </SidebarProvider>

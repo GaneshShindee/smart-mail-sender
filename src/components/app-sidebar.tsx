@@ -35,7 +35,7 @@ const items = [
 ];
 
 export function AppSidebar() {
-  const { state } = useSidebar();
+  const { state, isMobile, setOpenMobile } = useSidebar();
   const collapsed = state === "collapsed";
   const pathname = useRouterState({ select: (r) => r.location.pathname });
   const navigate = useNavigate();
@@ -48,19 +48,23 @@ export function AppSidebar() {
     navigate({ to: "/auth", replace: true });
   };
 
+  const closeMobile = () => {
+    if (isMobile) setOpenMobile(false);
+  };
+
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="px-3 pt-3 pb-1">
-        <div className={cn("flex items-center gap-2.5 py-2", collapsed ? "justify-center px-0" : "px-2")}>
+        <div className={cn("flex items-center gap-2.5 py-2", collapsed && !isMobile ? "justify-center px-0" : "px-2")}>
           <img
             src={logoAsset.url}
             alt="Logo"
             className={cn(
               "shrink-0 rounded-xl ring-1 ring-sidebar-border",
-              collapsed ? "h-11 w-11" : "h-9 w-9",
+              collapsed && !isMobile ? "h-11 w-11" : "h-9 w-9",
             )}
           />
-          {!collapsed && (
+          {(!collapsed || isMobile) && (
             <div className="min-w-0">
               <div className="text-sm font-semibold leading-none tracking-tight">Email Sender</div>
               <div className="mt-1 text-xs text-sidebar-foreground/45">Workspace</div>
@@ -81,9 +85,9 @@ export function AppSidebar() {
                     tooltip={item.title}
                     isActive={pathname === item.url || pathname.startsWith(item.url + "/")}
                   >
-                    <Link to={item.url} className="flex items-center gap-2.5">
-                      <item.icon className={collapsed ? "h-5 w-5" : "h-[18px] w-[18px]"} strokeWidth={1.85} />
-                      {!collapsed && <span>{item.title}</span>}
+                    <Link to={item.url} className="flex items-center gap-2.5" onClick={closeMobile}>
+                      <item.icon className={collapsed && !isMobile ? "h-5 w-5" : "h-[18px] w-[18px]"} strokeWidth={1.85} />
+                      {(!collapsed || isMobile) && <span>{item.title}</span>}
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -100,8 +104,8 @@ export function AppSidebar() {
               onClick={signOut}
               className="text-sidebar-foreground/70 hover:text-destructive"
             >
-              <LogOut className={collapsed ? "h-5 w-5" : "h-[18px] w-[18px]"} strokeWidth={1.85} />
-              {!collapsed && <span>Sign out</span>}
+              <LogOut className={collapsed && !isMobile ? "h-5 w-5" : "h-[18px] w-[18px]"} strokeWidth={1.85} />
+              {(!collapsed || isMobile) && <span>Sign out</span>}
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

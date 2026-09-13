@@ -90,19 +90,19 @@ function FollowupsPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="page-title flex items-center gap-2"><ListChecks className="h-4 w-4" /> Follow-up Queue</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="page-title flex items-center gap-2"><ListChecks className="h-4 w-4 shrink-0" /> Follow-up Queue</h1>
           <p className="text-sm text-muted-foreground">
             Follow-ups are sent as individual thread replies. Pick your follow-up template — it fills the reply body.
           </p>
         </div>
-        <Button variant="outline" onClick={() => refresh.mutate()} disabled={refresh.isPending}>
+        <Button variant="outline" className="w-full sm:w-auto shrink-0" onClick={() => refresh.mutate()} disabled={refresh.isPending}>
           <RefreshCw className={`h-4 w-4 mr-1 ${refresh.isPending ? "animate-spin" : ""}`} /> Refresh queue
         </Button>
       </div>
 
-      <div className="flex flex-wrap gap-1">
+      <div className="flex flex-wrap gap-1 overflow-x-auto">
         {tabs.map((t) => (
           <Button key={t.key} size="sm" variant={status === t.key ? "default" : "outline"} onClick={() => setStatus(t.key)}>{t.label}</Button>
         ))}
@@ -116,7 +116,7 @@ function FollowupsPage() {
         <div className="space-y-2">
           {(q.data ?? []).map((f) => (
             <Card key={f.id}>
-              <CardContent className="py-3 flex items-center justify-between gap-3">
+              <CardContent className="py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
                   <div className="text-sm font-medium truncate">{f.recipient_name || f.recipient_email}</div>
                   <div className="text-xs text-muted-foreground truncate">
@@ -128,15 +128,15 @@ function FollowupsPage() {
                     {f.scheduled_at && <Badge variant="outline">Scheduled {new Date(f.scheduled_at).toLocaleString()}</Badge>}
                   </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2 flex-wrap sm:shrink-0">
                   {(f.status === "pending" || f.status === "approved") && (
                     <>
                       {f.status === "pending" && (
-                        <Button size="sm" variant="outline" onClick={() => decide.mutate({ id: f.id, action: "reject" })}>
+                        <Button size="sm" variant="outline" className="flex-1 sm:flex-none" onClick={() => decide.mutate({ id: f.id, action: "reject" })}>
                           <X className="h-3.5 w-3.5 mr-1" /> Reject
                         </Button>
                       )}
-                      <Button size="sm" onClick={() => openFollowUpReply(f)}>
+                      <Button size="sm" className="flex-1 sm:flex-none" onClick={() => openFollowUpReply(f)}>
                         <Reply className="h-3.5 w-3.5 mr-1" /> Reply with follow-up
                       </Button>
                     </>

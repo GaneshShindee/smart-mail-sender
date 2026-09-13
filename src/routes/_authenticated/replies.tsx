@@ -104,26 +104,26 @@ function RepliesPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
           <h1 className="page-title">Reply Center</h1>
           <p className="text-sm text-muted-foreground">Every reply on your connected Gmail account, matched to a campaign when possible.</p>
         </div>
-        <Button onClick={() => sync.mutate()} disabled={sync.isPending} variant="secondary">
+        <Button onClick={() => sync.mutate()} disabled={sync.isPending} variant="secondary" className="w-full sm:w-auto shrink-0">
           <RefreshCw className={`h-4 w-4 mr-2 ${sync.isPending ? "animate-spin" : ""}`} /> Sync now
         </Button>
       </div>
 
-      <div className="flex gap-1">
+      <div className="flex gap-1 overflow-x-auto pb-1 -mx-1 px-1">
         {(["unread", "read", "archived", "all"] as const).map((f) => (
-          <Button key={f} size="sm" variant={filter === f ? "default" : "ghost"} onClick={() => setFilter(f)}>
+          <Button key={f} size="sm" variant={filter === f ? "default" : "ghost"} className="shrink-0" onClick={() => setFilter(f)}>
             {f[0].toUpperCase() + f.slice(1)}
           </Button>
         ))}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[360px_1fr]">
-        <Card>
+        <Card className={selectedId ? "hidden lg:block" : undefined}>
           <CardContent className="py-2 max-h-[70vh] overflow-auto">
             {list.isLoading ? (
               <div className="space-y-2 py-4">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}</div>
@@ -153,25 +153,33 @@ function RepliesPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="py-4 min-h-[400px]">
+        <Card className={!selectedId ? "hidden lg:block" : undefined}>
+          <CardContent className="py-4 min-h-[280px] lg:min-h-[400px]">
             {!selectedId ? (
               <EmptyState icon={Inbox} title="Select a reply" desc="Pick a message on the left to read it and draft a response." />
             ) : detail.isLoading || !detail.data ? (
               <div className="space-y-3"><Skeleton className="h-6 w-64" /><Skeleton className="h-4 w-40" /><Skeleton className="h-32 w-full" /></div>
             ) : (
               <div className="space-y-4">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="lg:hidden -ml-2 mb-1"
+                  onClick={() => setSelectedId(null)}
+                >
+                  ← Back to inbox
+                </Button>
                 <div>
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="text-lg font-semibold">{detail.data.reply.subject ?? "(no subject)"}</div>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="text-base sm:text-lg font-semibold break-words">{detail.data.reply.subject ?? "(no subject)"}</div>
                       <div className="text-xs text-muted-foreground">
                         From <span className="font-medium">{detail.data.reply.from_name ?? detail.data.reply.from_email}</span>
                         {" · "}{new Date(detail.data.reply.received_at).toLocaleString()}
                       </div>
                     </div>
                     <Button
-                      size="sm" variant="outline"
+                      size="sm" variant="outline" className="w-full sm:w-auto shrink-0"
                       onClick={() => archive.mutate({ id: detail.data!.reply.id, isArchived: !detail.data!.reply.is_archived })}
                     >
                       {detail.data.reply.is_archived ? <><ArchiveRestore className="h-3.5 w-3.5 mr-1" /> Unarchive</> : <><Archive className="h-3.5 w-3.5 mr-1" /> Archive</>}

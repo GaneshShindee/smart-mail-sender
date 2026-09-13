@@ -17,7 +17,6 @@ import { relativeTime } from "@/lib/user-agent";
 import { useMemo, useState } from "react";
 import { defaultHistoryFilters, type HistoryFilters, type HistoryRecipientRow } from "@/lib/history-filters";
 import { BulkReplyDialog, type BulkReplyRecipient } from "@/components/bulk-reply-dialog";
-import { replyPreviewSubject } from "@/lib/reply-subject";
 
 export const Route = createFileRoute("/_authenticated/campaigns/$id")({
   head: () => ({
@@ -30,7 +29,11 @@ export const Route = createFileRoute("/_authenticated/campaigns/$id")({
       { name: "twitter:card", content: "summary" },
     ],
   }),
-  errorComponent: ({ error }) => <div className="p-6 text-sm text-destructive">{error.message}</div>,
+  errorComponent: ({ error }) => (
+    <div className="p-6 text-sm text-destructive">
+      {error instanceof Error ? error.message : String(error)}
+    </div>
+  ),
   notFoundComponent: () => <div className="p-6 text-sm">Campaign not found.</div>,
   component: CampaignDetailsPage,
 });
@@ -98,7 +101,7 @@ function CampaignDetailsPage() {
     id: r.id,
     email: r.email,
     name: r.name,
-    subject: replyPreviewSubject(r.subject),
+    subject: r.subject,
   });
 
   const openReply = (targets: HistoryRecipientRow[], mode: "free" | "template" | "followup" = "free") => {
@@ -108,6 +111,7 @@ function CampaignDetailsPage() {
   };
 
   const followUp = (r: HistoryRecipientRow) => openReply([r], "followup");
+  const replyOne = (r: HistoryRecipientRow) => openReply([r], "free");
 
   if (isLoading || !data) {
     return (
@@ -146,8 +150,8 @@ function CampaignDetailsPage() {
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-3">
-          <div className="flex flex-wrap gap-2">
-            <div className="relative flex-1 min-w-[200px]">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+            <div className="relative w-full sm:flex-1 sm:min-w-[200px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 value={filters.search}
@@ -156,33 +160,35 @@ function CampaignDetailsPage() {
                 className="pl-9"
               />
             </div>
-            <Select value={filters.openCount} onValueChange={(v) => set("openCount", v as HistoryFilters["openCount"])}>
-              <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Any opens</SelectItem>
-                <SelectItem value="0">0 opens</SelectItem>
-                <SelectItem value="1+">1+ viewed</SelectItem>
-                <SelectItem value="1">1 open</SelectItem>
-                <SelectItem value="2">2 opens</SelectItem>
-                <SelectItem value="3+">3+ opens</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={filters.replyStatus} onValueChange={(v) => set("replyStatus", v as HistoryFilters["replyStatus"])}>
-              <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Any reply status</SelectItem>
-                <SelectItem value="replied">Replied</SelectItem>
-                <SelectItem value="not_replied">Not replied</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={filters.resume} onValueChange={(v) => set("resume", v as HistoryFilters["resume"])}>
-              <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Any resume view</SelectItem>
-                <SelectItem value="viewed">Resume viewed</SelectItem>
-                <SelectItem value="not_viewed">Resume not viewed</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="grid grid-cols-1 sm:flex sm:flex-wrap gap-2">
+              <Select value={filters.openCount} onValueChange={(v) => set("openCount", v as HistoryFilters["openCount"])}>
+                <SelectTrigger className="w-full sm:w-32"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Any opens</SelectItem>
+                  <SelectItem value="0">0 opens</SelectItem>
+                  <SelectItem value="1+">1+ viewed</SelectItem>
+                  <SelectItem value="1">1 open</SelectItem>
+                  <SelectItem value="2">2 opens</SelectItem>
+                  <SelectItem value="3+">3+ opens</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={filters.replyStatus} onValueChange={(v) => set("replyStatus", v as HistoryFilters["replyStatus"])}>
+                <SelectTrigger className="w-full sm:w-36"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Any reply status</SelectItem>
+                  <SelectItem value="replied">Replied</SelectItem>
+                  <SelectItem value="not_replied">Not replied</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={filters.resume} onValueChange={(v) => set("resume", v as HistoryFilters["resume"])}>
+                <SelectTrigger className="w-full sm:w-40"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Any resume view</SelectItem>
+                  <SelectItem value="viewed">Resume viewed</SelectItem>
+                  <SelectItem value="not_viewed">Resume not viewed</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <Card>
@@ -211,31 +217,34 @@ function CampaignDetailsPage() {
                     return (
                       <li
                         key={r.id}
-                        className={`flex items-center gap-3 px-4 py-3 transition-colors ${
+                        className={`flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3 px-3 sm:px-4 py-3 transition-colors ${
                           selected.has(r.id) ? "bg-accent/50" : "hover:bg-accent/30"
                         }`}
                       >
-                        <Checkbox
-                          checked={selected.has(r.id)}
-                          aria-label={`Select ${r.email}`}
-                          onCheckedChange={() => toggle(r.id)}
-                        />
-                        <button
-                          type="button"
-                          className="min-w-0 flex-1 text-left"
-                          onClick={() => navigate({ to: "/recipients/$id", params: { id: r.id } })}
-                        >
-                          <div className="font-medium truncate">{r.name ?? r.email}</div>
-                          <div className="text-xs text-muted-foreground truncate">
-                            {r.email}{r.company ? ` · ${r.company}` : ""}
-                          </div>
-                          <div className="text-xs text-muted-foreground mt-0.5">
-                            {opens > 0
-                              ? `Opened ${opens} time${opens === 1 ? "" : "s"} · last ${r.last_opened_at ? relativeTime(r.last_opened_at) : "—"}`
-                              : "Not opened"}
-                          </div>
-                        </button>
-                        <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+                        <div className="flex items-start gap-3 min-w-0 flex-1">
+                          <Checkbox
+                            checked={selected.has(r.id)}
+                            aria-label={`Select ${r.email}`}
+                            onCheckedChange={() => toggle(r.id)}
+                            className="mt-1"
+                          />
+                          <button
+                            type="button"
+                            className="min-w-0 flex-1 text-left"
+                            onClick={() => navigate({ to: "/recipients/$id", params: { id: r.id } })}
+                          >
+                            <div className="font-medium truncate">{r.name ?? r.email}</div>
+                            <div className="text-xs text-muted-foreground truncate">
+                              {r.email}{r.company ? ` · ${r.company}` : ""}
+                            </div>
+                            <div className="text-xs text-muted-foreground mt-0.5">
+                              {opens > 0
+                                ? `Opened ${opens} time${opens === 1 ? "" : "s"} · last ${r.last_opened_at ? relativeTime(r.last_opened_at) : "—"}`
+                                : "Not opened"}
+                            </div>
+                          </button>
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-wrap pl-8 sm:pl-0 sm:justify-end sm:shrink-0">
                           {opens > 0 && <Badge variant="secondary" className="gap-1"><Eye className="h-3 w-3" />{opens}</Badge>}
                           {r.pdf_view_count > 0 && (
                             <Badge variant="secondary" className="gap-1"><FileText className="h-3 w-3" />{r.pdf_view_count}</Badge>
@@ -250,6 +259,9 @@ function CampaignDetailsPage() {
                             <Badge variant="outline" className="gap-1"><MailCheck className="h-3 w-3" />{r.followup_count}</Badge>
                           )}
                           <StatusBadge status={r.status} />
+                          <Button size="sm" variant="outline" onClick={() => replyOne(r)}>
+                            <Reply className="h-3 w-3 mr-1" />Reply
+                          </Button>
                           {opens > 0 && !r.has_reply && (
                             <Button size="sm" variant={hot ? "default" : "outline"} onClick={() => followUp(r)}>
                               {hot && <Flame className="h-3 w-3 mr-1" />}Follow-up
@@ -283,18 +295,18 @@ function CampaignDetailsPage() {
       </div>
 
       {selectedRows.length > 0 && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-[min(680px,calc(100%-2rem))]">
-          <div className="flex items-center gap-3 rounded-lg border border-border bg-card/95 backdrop-blur px-4 py-3 shadow-lg">
-            <span className="text-sm font-medium">{selectedRows.length} selected</span>
+        <div className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 z-40 w-[min(680px,calc(100%-1.5rem))]">
+          <div className="flex items-center gap-2 sm:gap-3 rounded-lg border border-border bg-card/95 backdrop-blur px-3 sm:px-4 py-3 shadow-lg">
+            <span className="text-sm font-medium shrink-0">{selectedRows.length} selected</span>
             <span className="text-xs text-muted-foreground hidden sm:inline">
               Each gets an individual reply in their own thread
             </span>
             <div className="flex-1" />
             <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
-              <X className="h-4 w-4 mr-1" /> Clear
+              <X className="h-4 w-4 sm:mr-1" /> <span className="hidden sm:inline">Clear</span>
             </Button>
             <Button size="sm" onClick={() => openReply(selectedRows, "free")}>
-              <Reply className="h-4 w-4 mr-1" /> Reply to selected
+              <Reply className="h-4 w-4 mr-1" /> Reply
             </Button>
           </div>
         </div>

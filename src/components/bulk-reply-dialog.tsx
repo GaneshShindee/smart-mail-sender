@@ -194,7 +194,7 @@ export function BulkReplyDialog({
           onOpenChange(o);
         }}
       >
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col p-0 sm:rounded-lg">
+        <DialogContent className="max-w-2xl max-h-[90dvh] overflow-hidden flex flex-col p-0 w-[calc(100%-1rem)] sm:w-full sm:rounded-lg">
           <DialogHeader className="p-5 pb-3">
             <DialogTitle>{initialMode === "followup" ? "Follow-up reply" : "Reply to selected"}</DialogTitle>
             <DialogDescription>
