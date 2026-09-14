@@ -186,6 +186,8 @@ export const listResumeVersions = createServerFn({ method: "GET" })
 const generateSchema = z.object({
   projectId: z.string().uuid(),
   jobDescription: z.string().max(50_000).default(""),
+  /** Optional richer dump from community jobs (skills, salary, etc.). Merged into JD. */
+  jobContext: z.string().max(50_000).optional().nullable(),
   jobTitle: z.string().max(200).optional().nullable(),
   company: z.string().max(200).optional().nullable(),
   customInstructions: z.string().max(4000).optional().nullable(),
@@ -222,6 +224,10 @@ export const generateResumeVersion = createServerFn({ method: "POST" })
     if (dErr || !blob) throw new Error(dErr?.message ?? "Could not read main.tex");
     const originalTex = await blob.text();
 
+    const ctx = (data.jobContext ?? "").trim();
+    const jd = (data.jobDescription ?? "").trim();
+    const fullJd = ctx && jd && ctx !== jd ? `${ctx}\n\n${jd}` : ctx || jd;
+
     const sys = [
       "You are a senior technical recruiter AND an expert LaTeX resume editor.",
       "GOAL: rewrite the resume so it feels hand-crafted for THIS role, while remaining 100% truthful.",
@@ -250,7 +256,7 @@ export const generateResumeVersion = createServerFn({ method: "POST" })
       `  {"tex":"<full updated .tex file>","ats_score":<0-100>,"matched_keywords":[...],"missing_keywords":[...],"strengths":[...],"suggestions":[...]}`,
     ].join("\n");
     const user = [
-      `JOB DESCRIPTION:\n${data.jobDescription}`,
+      `JOB POSTING (use ALL of this — title, company, location, mode, experience, salary, skills, technologies, responsibilities, description):\n${fullJd}`,
       data.jobTitle ? `\n\nTARGET ROLE: ${data.jobTitle}` : "",
       data.company ? `\nTARGET COMPANY: ${data.company}` : "",
       data.customInstructions ? `\n\nCUSTOM INSTRUCTIONS (respect while still following the truthfulness rules):\n${data.customInstructions}` : "",
@@ -287,7 +293,7 @@ export const generateResumeVersion = createServerFn({ method: "POST" })
     const tex = (parsed.tex ?? "").trim();
     if (!tex || !tex.includes("\\")) throw new Error("AI did not return a valid LaTeX file");
 
-    const guess = guessTitleCompany(data.jobDescription);
+    const guess = guessTitleCompany(fullJd);
     const { data: row, error: iErr } = await context.supabase
       .from("resume_versions")
       .insert({
@@ -295,7 +301,7 @@ export const generateResumeVersion = createServerFn({ method: "POST" })
         project_id: data.projectId,
         job_title: data.jobTitle ?? guess.title ?? null,
         company: data.company ?? guess.company ?? null,
-        job_description: data.jobDescription,
+        job_description: fullJd,
         custom_instructions: data.customInstructions ?? null,
         tex_content: tex,
         ats_score: typeof parsed.ats_score === "number" ? Math.max(0, Math.min(100, Math.round(parsed.ats_score))) : null,
@@ -349,6 +355,94 @@ export const updateResumeVersionTex = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+async function mirrorVersionPdfToLibrary(
+  supabase: {
+    storage: {
+      from: (b: string) => {
+        upload: (
+          p: string,
+          buf: Buffer,
+          o: { contentType: string; upsert: boolean },
+        ) => Promise<{ error: { message: string } | null }>;
+      };
+    };
+    from: (t: string) => any;
+  },
+  userId: string,
+  v: { id: string; job_title: string | null; company: string | null },
+  buf: Buffer,
+) {
+  const { AI_JD_RESUME_FOLDER } = await import("./linkedin");
+  const libraryPath = `${userId}/ai-jd/${v.id}.pdf`;
+  const libUp = await supabase.storage
+    .from("resumes")
+    .upload(libraryPath, buf, { contentType: "application/pdf", upsert: true });
+  if (libUp.error) throw new Error(libUp.error.message);
+
+  const displayName = [v.company, v.job_title].filter(Boolean).join(" — ") || "AI tailored resume";
+  const filename = `${displayName.replace(/[^\w.\- ]+/g, "").trim() || "resume"}.pdf`.slice(0, 200);
+  const payload = {
+    name: displayName.slice(0, 120),
+    original_filename: filename,
+    storage_path: libraryPath,
+    mime_type: "application/pdf",
+    size_bytes: buf.length,
+    folder: AI_JD_RESUME_FOLDER,
+  };
+
+  const findExisting = async () => {
+    const { data, error } = await supabase
+      .from("resumes")
+      .select("id, version")
+      .eq("user_id", userId)
+      .eq("source_resume_version_id", v.id)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return data as { id: string; version: number | null } | null;
+  };
+
+  const updateExisting = async (existing: { id: string; version: number | null }) => {
+    const { error } = await supabase
+      .from("resumes")
+      .update({
+        ...payload,
+        version: (existing.version ?? 1) + 1,
+      })
+      .eq("id", existing.id)
+      .eq("user_id", userId);
+    if (error) throw new Error(error.message);
+    return { resumeId: existing.id, folder: AI_JD_RESUME_FOLDER, updated: true as const };
+  };
+
+  const existing = await findExisting();
+  if (existing) return updateExisting(existing);
+
+  const { data: inserted, error } = await supabase
+    .from("resumes")
+    .insert({
+      user_id: userId,
+      is_default: false,
+      source_resume_version_id: v.id,
+      ...payload,
+    })
+    .select("id")
+    .single();
+
+  // Compile auto-save + "Save to Resumes" (or double-click) can race the unique index.
+  if (error) {
+    const isDup =
+      error.code === "23505" ||
+      /resumes_user_source_version_uidx|duplicate key/i.test(error.message ?? "");
+    if (isDup) {
+      const again = await findExisting();
+      if (again) return updateExisting(again);
+    }
+    throw new Error(error.message);
+  }
+
+  return { resumeId: inserted.id as string, folder: AI_JD_RESUME_FOLDER, updated: false as const };
+}
+
 export const uploadResumeVersionPdf = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
@@ -357,7 +451,7 @@ export const uploadResumeVersionPdf = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { data: v } = await context.supabase
       .from("resume_versions")
-      .select("id, project_id")
+      .select("id, project_id, job_title, company")
       .eq("id", data.id)
       .eq("user_id", context.userId)
       .single();
@@ -372,7 +466,38 @@ export const uploadResumeVersionPdf = createServerFn({ method: "POST" })
       .from("resume_versions")
       .update({ pdf_storage_path: path })
       .eq("id", v.id);
+
+    // Also mirror into Resume Library under the AI-from-JD folder.
+    try {
+      await mirrorVersionPdfToLibrary(context.supabase as never, context.userId, v, buf);
+    } catch {
+      /* library mirror is best-effort on compile; user can Save to Resumes explicitly */
+    }
+
     return { ok: true, path };
+  });
+
+/** Explicitly save a compiled Resume Studio PDF into the Resumes library. */
+export const saveResumeVersionToLibrary = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { data: v } = await context.supabase
+      .from("resume_versions")
+      .select("id, project_id, job_title, company, pdf_storage_path")
+      .eq("id", data.id)
+      .eq("user_id", context.userId)
+      .single();
+    if (!v) throw new Error("Version not found");
+    if (!v.pdf_storage_path) {
+      throw new Error("Compile the resume first so a PDF exists, then save to Resumes.");
+    }
+    const { data: file, error: dlErr } = await context.supabase.storage
+      .from("resume-latex")
+      .download(v.pdf_storage_path);
+    if (dlErr || !file) throw new Error(dlErr?.message ?? "Could not download compiled PDF");
+    const buf = Buffer.from(await file.arrayBuffer());
+    return mirrorVersionPdfToLibrary(context.supabase as never, context.userId, v, buf);
   });
 
 export const deleteResumeVersion = createServerFn({ method: "POST" })

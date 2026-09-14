@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { aiExtractJobFields, normalizeHttpUrl } from "@/lib/job-ai";
 
 export type Job = {
   id: string;
@@ -158,55 +159,31 @@ export const toggleJobBookmark = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export type { ParsedJobFields } from "@/lib/job-ai";
+export { aiExtractJobFields } from "@/lib/job-ai";
+
 /** AI Job Parser — extract structured fields from raw text/URL content. */
 export const parseJobText = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
     z.object({ text: z.string().max(50_000) }).parse(d),
   )
+  .handler(async ({ data }) => aiExtractJobFields(data.text));
+
+/** Fetch a careers / LinkedIn / ATS page and extract job fields for review. */
+export const parseJobFromUrl = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ url: z.string().min(4).max(2_000) }).parse(d),
+  )
   .handler(async ({ data }) => {
-    const key = process.env.LOVABLE_API_KEY;
-    if (!key) throw new Error("AI gateway not configured");
-    const sys =
-      "You extract job information from arbitrary text (LinkedIn, Greenhouse, Lever, careers pages, emails, PDFs). Return STRICT JSON with keys: title, company, location, work_mode (remote|hybrid|onsite|''), employment_type (full-time|intern|contract|part-time|''), experience, salary, description, responsibilities (string[]), skills (string[]), technologies (string[]), tags (string[]), recruiter_email, apply_url, company_website. If a field is unknown, use an empty string or empty array. Do not invent facts. No markdown, no prose.";
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: sys },
-          { role: "user", content: data.text },
-        ],
-        response_format: { type: "json_object" },
-      }),
-    });
-    if (res.status === 429) throw new Error("AI rate limit reached. Try again shortly.");
-    if (res.status === 402) throw new Error("AI credits exhausted.");
-    if (!res.ok) throw new Error(`AI error ${res.status}`);
-    const j = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-    const content = j.choices?.[0]?.message?.content ?? "";
-    const m = content.match(/\{[\s\S]*\}/);
-    if (!m) throw new Error("AI returned invalid JSON");
-    const parsed = JSON.parse(m[0]) as Record<string, unknown>;
-    const asStr = (k: string) => (typeof parsed[k] === "string" ? (parsed[k] as string) : "");
-    const asArr = (k: string) =>
-      Array.isArray(parsed[k]) ? ((parsed[k] as unknown[]).filter((x) => typeof x === "string") as string[]) : [];
+    const { fetchUrlAsJobText } = await import("./job-import");
+    const url = normalizeHttpUrl(data.url);
+    const { text, finalUrl } = await fetchUrlAsJobText(url);
+    const fields = await aiExtractJobFields(text);
     return {
-      title: asStr("title"),
-      company: asStr("company"),
-      location: asStr("location"),
-      work_mode: asStr("work_mode"),
-      employment_type: asStr("employment_type"),
-      experience: asStr("experience"),
-      salary: asStr("salary"),
-      description: asStr("description"),
-      responsibilities: asArr("responsibilities"),
-      skills: asArr("skills"),
-      technologies: asArr("technologies"),
-      tags: asArr("tags"),
-      recruiter_email: asStr("recruiter_email"),
-      apply_url: asStr("apply_url"),
-      company_website: asStr("company_website"),
+      ...fields,
+      source_url: finalUrl,
+      apply_url: fields.apply_url || finalUrl,
     };
   });

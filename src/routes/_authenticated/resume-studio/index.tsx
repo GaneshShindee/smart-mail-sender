@@ -23,6 +23,8 @@ import { toast } from "sonner";
 import { fileToBase64 } from "@/lib/resumes";
 import { relativeTime } from "@/lib/user-agent";
 import { z } from "zod";
+import { getJob } from "@/lib/jobs.functions";
+import { jobToContextFields } from "@/lib/job-context";
 
 const searchSchema = z.object({
   jd: z.string().optional(),
@@ -46,6 +48,7 @@ function ResumeStudioPage() {
   const delFn = useServerFn(deleteResumeProject);
   const listVersionsFn = useServerFn(listResumeVersions);
   const genFn = useServerFn(generateResumeVersion);
+  const getJobFn = useServerFn(getJob);
 
   const projects = useQuery({ queryKey: ["resume-projects"], queryFn: () => listFn() });
   const versions = useQuery({ queryKey: ["resume-versions"], queryFn: () => listVersionsFn({ data: {} }) });
@@ -54,8 +57,41 @@ function ResumeStudioPage() {
   const [genOpen, setGenOpen] = useState(false);
   const [genProjectId, setGenProjectId] = useState<string>("");
   const [prefill, setPrefill] = useState<{ jd: string; title: string; company: string } | null>(null);
+  const jobHydratedRef = useRef<string | null>(null);
 
   useEffect(() => {
+    if (!search.jobId || !projects.data?.length) return;
+    if (jobHydratedRef.current === search.jobId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const job = await getJobFn({ data: { id: search.jobId! } });
+        if (cancelled) return;
+        const fields = jobToContextFields(job);
+        jobHydratedRef.current = search.jobId!;
+        setGenProjectId(projects.data!.find((p) => p.is_default)?.id ?? projects.data![0].id);
+        setPrefill({
+          jd: fields.jobContext,
+          title: fields.role || search.title || "",
+          company: fields.company || search.company || "",
+        });
+        setGenOpen(true);
+      } catch (e) {
+        toast.error("Could not load job", { description: (e as Error).message });
+        // Fall back to thin search params if present
+        if (search.title || search.company || search.jd) {
+          setGenProjectId(projects.data!.find((p) => p.is_default)?.id ?? projects.data![0].id);
+          setPrefill({ jd: search.jd ?? "", title: search.title ?? "", company: search.company ?? "" });
+          setGenOpen(true);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search.jobId, projects.data]);
+
+  useEffect(() => {
+    if (search.jobId) return; // handled above with full job load
     if ((search.jd || search.title || search.company) && projects.data?.length && !genOpen) {
       setGenProjectId(projects.data.find((p) => p.is_default)?.id ?? projects.data[0].id);
       setPrefill({ jd: search.jd ?? "", title: search.title ?? "", company: search.company ?? "" });
@@ -105,6 +141,7 @@ function ResumeStudioPage() {
         data: {
           projectId: payload.projectId,
           jobDescription: payload.jd,
+          jobContext: payload.jd || null,
           jobTitle: payload.jobTitle || null,
           company: payload.company || null,
           customInstructions: payload.instructions || null,
@@ -112,7 +149,7 @@ function ResumeStudioPage() {
       }),
     onSuccess: (v) => {
       qc.invalidateQueries({ queryKey: ["resume-versions"] });
-      toast.success("Tailored resume generated");
+      toast.success("Tailored resume generated — compile PDF, then Save to Resumes");
       setGenOpen(false);
       nav({ to: "/resume-studio/$id", params: { id: v.id } });
     },
@@ -398,8 +435,8 @@ function GenerateDialog({
             </div>
           </div>
           <div>
-            <Label>Job description</Label>
-            <Textarea rows={8} value={jd} onChange={(e) => setJd(e.target.value)} placeholder="Paste the full JD here…" />
+            <Label>Full job posting</Label>
+            <Textarea rows={8} value={jd} onChange={(e) => setJd(e.target.value)} placeholder="Paste the full posting — skills, location, salary, responsibilities, description…" />
           </div>
           <div>
             <Label>Custom instructions (optional)</Label>

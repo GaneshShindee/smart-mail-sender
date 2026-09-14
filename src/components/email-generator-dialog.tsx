@@ -36,8 +36,9 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { Sparkles, Copy, Loader2, Plus, Pencil, Files, Trash2, ChevronDown, Settings2, X } from "lucide-react";
+import { Sparkles, Copy, Loader2, Plus, Pencil, Files, Trash2, ChevronDown, Settings2, X, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
+import { companyKeywordFromDomain, linkedInCompanyKeyword, linkedInCompanySearchUrl } from "@/lib/linkedin";
 
 const LAST_TPL_KEY = "ai-gen:last-template-id";
 
@@ -45,6 +46,8 @@ type Props = {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   onUse: (emails: string[]) => void;
+  /** Company from Send page (job meta / {{company}} variable). */
+  companyFromEmail?: string;
 };
 
 function copyText(t: string) {
@@ -54,7 +57,7 @@ function copyText(t: string) {
   );
 }
 
-export function EmailGeneratorDialog({ open, onOpenChange, onUse }: Props) {
+export function EmailGeneratorDialog({ open, onOpenChange, onUse, companyFromEmail = "" }: Props) {
   const qc = useQueryClient();
   const listFn = useServerFn(listInstructionTemplates);
   const upsertFn = useServerFn(upsertInstructionTemplate);
@@ -97,12 +100,22 @@ export function EmailGeneratorDialog({ open, onOpenChange, onUse }: Props) {
     [templates.data, selectedId],
   );
 
-  // Working copy for live domain/rule tweaks without saving
+  // Working copy for live domain/rule tweaks without saving.
+  // Prefer company from the Send email form — do NOT default to the template domain.
   const [working, setWorking] = useState<InstructionTemplate | null>(null);
   useEffect(() => {
-    setWorking(selected ? { ...selected } : null);
+    if (!selected) {
+      setWorking(null);
+      setPromptOverride(null);
+      return;
+    }
+    const fromEmail = companyFromEmail.trim();
+    setWorking({
+      ...selected,
+      company_domain: fromEmail || "",
+    });
     setPromptOverride(null);
-  }, [selected]);
+  }, [selected, companyFromEmail, open]);
 
   const generatedPrompt = useMemo(() => (working ? buildPrompt(working) : ""), [working]);
   const effectivePrompt = promptOverride ?? generatedPrompt;
@@ -255,10 +268,29 @@ export function EmailGeneratorDialog({ open, onOpenChange, onUse }: Props) {
                       </Select>
                     </div>
                     <div>
-                      <Label className="text-xs">Company Domain</Label>
+                      <div className="flex items-center justify-between gap-1">
+                        <Label className="text-xs">Company</Label>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 px-1.5 text-[10px]"
+                          disabled={!linkedInCompanyKeyword(working.company_domain)}
+                          onClick={() => {
+                            const kw = linkedInCompanyKeyword(working.company_domain);
+                            if (!kw) {
+                              toast.message("Enter a company name first");
+                              return;
+                            }
+                            window.open(linkedInCompanySearchUrl(kw), "_blank", "noopener,noreferrer");
+                          }}
+                        >
+                          <ExternalLink className="h-3 w-3 mr-0.5" /> LinkedIn
+                        </Button>
+                      </div>
                       <Input
                         className="h-8 text-xs"
-                        placeholder="milliman.com"
+                        placeholder="From email form, or type e.g. Nvidia / nvidia.com"
                         value={working.company_domain}
                         onChange={(e) => setWorking({ ...working, company_domain: e.target.value })}
                       />
@@ -291,26 +323,28 @@ export function EmailGeneratorDialog({ open, onOpenChange, onUse }: Props) {
                 </div>
               )}
 
-              <div className="flex-1 min-h-[180px] flex flex-col">
-                <Label className="text-xs uppercase tracking-wide text-muted-foreground">Data</Label>
+              <div className="space-y-1.5 shrink-0">
+                <div className="flex items-center justify-between gap-2">
+                  <Label className="text-xs uppercase tracking-wide text-muted-foreground">Data</Label>
+                  <span className="text-[11px] text-muted-foreground tabular-nums">{totalLines} non-empty lines</span>
+                </div>
                 <Textarea
                   value={data}
                   onChange={(e) => setData(e.target.value)}
                   placeholder="Paste LinkedIn search results, employee list, Excel data, CSV, or any text…"
-                  className="font-mono text-xs mt-1 flex-1 min-h-[180px]"
+                  className="font-mono text-xs min-h-[160px]"
                 />
-                <div className="text-xs text-muted-foreground mt-1">{totalLines} non-empty lines</div>
               </div>
 
               {/* Advanced */}
-              <div className="rounded-lg border">
+              <div className="rounded-lg border shrink-0">
                 <button
                   type="button"
                   onClick={() => setAdvancedOpen((v) => !v)}
-                  className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium"
+                  className="w-full flex items-center justify-between gap-2 px-3 py-2 text-xs font-medium"
                 >
                   <span>Advanced · generated prompt</span>
-                  <ChevronDown className={`h-3.5 w-3.5 transition-transform ${advancedOpen ? "rotate-180" : ""}`} />
+                  <ChevronDown className={`h-3.5 w-3.5 shrink-0 transition-transform ${advancedOpen ? "rotate-180" : ""}`} />
                 </button>
                 {advancedOpen && (
                   <div className="border-t p-3 space-y-2">
@@ -511,7 +545,26 @@ function TemplateEditorDialog({
               </Select>
             </div>
             <div>
-              <Label>Company Domain</Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label>Company Domain</Label>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2 text-xs"
+                  disabled={!companyKeywordFromDomain(t.company_domain)}
+                  onClick={() => {
+                    const kw = companyKeywordFromDomain(t.company_domain);
+                    if (!kw) {
+                      toast.message("Enter a company domain first");
+                      return;
+                    }
+                    window.open(linkedInCompanySearchUrl(kw), "_blank", "noopener,noreferrer");
+                  }}
+                >
+                  <ExternalLink className="h-3 w-3 mr-1" /> LinkedIn search
+                </Button>
+              </div>
               <Input placeholder="milliman.com" value={t.company_domain} onChange={(e) => setT({ ...t, company_domain: e.target.value })} />
             </div>
             {t.email_pattern === "custom" && (

@@ -7,6 +7,7 @@ import {
   deleteJob,
   toggleJobBookmark,
   parseJobText,
+  parseJobFromUrl,
   type Job,
 } from "@/lib/jobs.functions";
 import { Card, CardContent } from "@/components/ui/card";
@@ -19,11 +20,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger,
 } from "@/components/ui/dialog";
-import { Bookmark, BookmarkCheck, Briefcase, Building2, MapPin, Plus, Search, Send, Share2, Sparkles, Trash2, Wand2, ExternalLink, Pencil, CalendarDays } from "lucide-react";
+import { Bookmark, BookmarkCheck, Briefcase, Building2, MapPin, Plus, Search, Send, Share2, Sparkles, Trash2, Wand2, ExternalLink, Pencil, CalendarDays, Link2, RefreshCw } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { relativeTime } from "@/lib/user-agent";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { JobSourcesDialog } from "@/components/job-sources-dialog";
 
 export const Route = createFileRoute("/_authenticated/jobs")({
   head: () => ({ meta: [{ title: "Jobs Board — Smart Email Sender" }] }),
@@ -70,6 +72,7 @@ function JobsPage() {
   const delFn = useServerFn(deleteJob);
   const bookmarkFn = useServerFn(toggleJobBookmark);
   const parseFn = useServerFn(parseJobText);
+  const parseUrlFn = useServerFn(parseJobFromUrl);
 
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "mine" | "bookmarked" | "remote" | "hybrid" | "onsite">("all");
@@ -78,7 +81,10 @@ function JobsPage() {
   const [experienceFilter, setExperienceFilter] = useState<string>("all");
   const [editOpen, setEditOpen] = useState(false);
   const [parseOpen, setParseOpen] = useState(false);
+  const [urlOpen, setUrlOpen] = useState(false);
+  const [sourcesOpen, setSourcesOpen] = useState(false);
   const [parseText, setParseText] = useState("");
+  const [importUrl, setImportUrl] = useState("");
   const [form, setForm] = useState<EditForm>(blankForm());
 
   const jobsQ = useQuery({
@@ -134,6 +140,32 @@ function JobsPage() {
     onError: (e) => toast.error("AI parse failed", { description: (e as Error).message }),
   });
 
+  const parseUrl = useMutation({
+    mutationFn: (url: string) => parseUrlFn({ data: { url } }),
+    onSuccess: (p) => {
+      setForm({
+        id: null,
+        title: p.title, company: p.company, location: p.location,
+        work_mode: p.work_mode, employment_type: p.employment_type,
+        experience: p.experience, salary: p.salary, description: p.description,
+        responsibilities: p.responsibilities.join("\n"),
+        skills: p.skills.join(", "),
+        technologies: p.technologies.join(", "),
+        tags: p.tags.join(", "),
+        recruiter_email: p.recruiter_email,
+        apply_url: p.apply_url,
+        company_website: p.company_website,
+        source_url: p.source_url,
+        is_public: true,
+      });
+      setUrlOpen(false);
+      setImportUrl("");
+      setEditOpen(true);
+      toast.success("Imported from URL — review and publish");
+    },
+    onError: (e) => toast.error("URL import failed", { description: (e as Error).message }),
+  });
+
   const del = useMutation({
     mutationFn: (id: string) => delFn({ data: { id } }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["jobs"] }); toast.success("Job removed"); },
@@ -171,13 +203,14 @@ function JobsPage() {
   };
 
   const generateResume = (j: Job) => {
-    const params = new URLSearchParams({
-      jobId: j.id,
-      title: j.title,
-      company: j.company,
-      jd: j.description || [j.title, j.company, j.location, j.description, j.responsibilities.join("\n"), "Skills: " + j.skills.join(", ")].filter(Boolean).join("\n"),
+    nav({
+      to: "/resume-studio",
+      search: {
+        jobId: j.id,
+        title: j.title,
+        company: j.company,
+      } as never,
     });
-    nav({ to: "/resume-studio", search: Object.fromEntries(params) as never });
   };
 
   const generateEmail = (j: Job) => {
@@ -185,8 +218,8 @@ function JobsPage() {
       to: "/send",
       search: {
         to: j.recruiter_email || undefined,
-        name: "",
         company: j.company,
+        jobId: j.id,
       } as never,
     });
   };
@@ -240,7 +273,38 @@ function JobsPage() {
           <h1 className="page-title flex items-center gap-2"><Briefcase className="h-4 w-4 shrink-0" /> Community Jobs Board</h1>
           <p className="text-sm text-muted-foreground">Discover opportunities shared by other users. Generate tailored resumes in one click.</p>
         </div>
-        <div className="flex gap-2 w-full sm:w-auto">
+        <div className="flex gap-2 w-full sm:w-auto flex-wrap">
+          <Button variant="outline" className="flex-1 sm:flex-none" onClick={() => setSourcesOpen(true)}>
+            <RefreshCw className="h-4 w-4 mr-1" /> Sync sources
+          </Button>
+          <Dialog open={urlOpen} onOpenChange={setUrlOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" className="flex-1 sm:flex-none"><Link2 className="h-4 w-4 mr-1" /> Import URL</Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-lg">
+              <DialogHeader><DialogTitle>Import job from URL</DialogTitle></DialogHeader>
+              <p className="text-xs text-muted-foreground">
+                Paste a Greenhouse, Lever, LinkedIn, or company careers link. We fetch the page, extract fields with AI, then you review before publishing.
+              </p>
+              <Input
+                placeholder="https://boards.greenhouse.io/…/jobs/…"
+                value={importUrl}
+                onChange={(e) => setImportUrl(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && importUrl.trim()) parseUrl.mutate(importUrl.trim());
+                }}
+              />
+              <DialogFooter>
+                <Button variant="ghost" onClick={() => setUrlOpen(false)}>Cancel</Button>
+                <Button
+                  onClick={() => parseUrl.mutate(importUrl.trim())}
+                  disabled={parseUrl.isPending || !importUrl.trim()}
+                >
+                  <Wand2 className="h-4 w-4 mr-1" /> {parseUrl.isPending ? "Fetching…" : "Fetch & extract"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
           <Dialog open={parseOpen} onOpenChange={setParseOpen}>
             <DialogTrigger asChild>
               <Button variant="outline" className="flex-1 sm:flex-none"><Sparkles className="h-4 w-4 mr-1" /> AI Parse</Button>
@@ -409,6 +473,7 @@ function JobsPage() {
             <Field label="Recruiter email"><Input value={form.recruiter_email} onChange={(e) => setForm({ ...form, recruiter_email: e.target.value })} /></Field>
             <Field label="Apply URL"><Input value={form.apply_url} onChange={(e) => setForm({ ...form, apply_url: e.target.value })} /></Field>
             <Field label="Company website"><Input value={form.company_website} onChange={(e) => setForm({ ...form, company_website: e.target.value })} /></Field>
+            <div className="md:col-span-2"><Field label="Source URL"><Input value={form.source_url} onChange={(e) => setForm({ ...form, source_url: e.target.value })} placeholder="Original posting link" /></Field></div>
             <div className="md:col-span-2"><Field label="Description"><Textarea rows={6} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field></div>
             <div className="md:col-span-2"><Field label="Responsibilities (one per line)"><Textarea rows={4} value={form.responsibilities} onChange={(e) => setForm({ ...form, responsibilities: e.target.value })} /></Field></div>
             <Field label="Skills (comma-separated)"><Textarea rows={2} value={form.skills} onChange={(e) => setForm({ ...form, skills: e.target.value })} /></Field>
@@ -427,6 +492,8 @@ function JobsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <JobSourcesDialog open={sourcesOpen} onOpenChange={setSourcesOpen} />
     </div>
   );
 }

@@ -746,6 +746,48 @@ export type Database = {
           },
         ]
       }
+      job_sources: {
+        Row: {
+          config: Json
+          created_at: string
+          enabled: boolean
+          id: string
+          kind: string
+          last_error: string | null
+          last_synced_at: string | null
+          name: string
+          updated_at: string
+          user_id: string
+          webhook_secret: string | null
+        }
+        Insert: {
+          config?: Json
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          kind: string
+          last_error?: string | null
+          last_synced_at?: string | null
+          name?: string
+          updated_at?: string
+          user_id: string
+          webhook_secret?: string | null
+        }
+        Update: {
+          config?: Json
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          kind?: string
+          last_error?: string | null
+          last_synced_at?: string | null
+          name?: string
+          updated_at?: string
+          user_id?: string
+          webhook_secret?: string | null
+        }
+        Relationships: []
+      }
       jobs: {
         Row: {
           apply_url: string | null
@@ -755,6 +797,7 @@ export type Database = {
           description: string | null
           employment_type: string | null
           experience: string | null
+          external_id: string | null
           id: string
           is_public: boolean
           location: string | null
@@ -778,6 +821,7 @@ export type Database = {
           description?: string | null
           employment_type?: string | null
           experience?: string | null
+          external_id?: string | null
           id?: string
           is_public?: boolean
           location?: string | null
@@ -801,6 +845,7 @@ export type Database = {
           description?: string | null
           employment_type?: string | null
           experience?: string | null
+          external_id?: string | null
           id?: string
           is_public?: boolean
           location?: string | null
@@ -1197,6 +1242,8 @@ export type Database = {
           original_filename: string
           size_bytes: number
           storage_path: string
+          folder: string | null
+          source_resume_version_id: string | null
           updated_at: string
           user_id: string
           version: number
@@ -1210,6 +1257,8 @@ export type Database = {
           original_filename: string
           size_bytes: number
           storage_path: string
+          folder?: string | null
+          source_resume_version_id?: string | null
           updated_at?: string
           user_id: string
           version?: number
@@ -1223,6 +1272,8 @@ export type Database = {
           original_filename?: string
           size_bytes?: number
           storage_path?: string
+          folder?: string | null
+          source_resume_version_id?: string | null
           updated_at?: string
           user_id?: string
           version?: number

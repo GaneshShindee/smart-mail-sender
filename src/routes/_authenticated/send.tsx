@@ -19,14 +19,18 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { extractVariables, applyTemplate } from "@/lib/templating";
 import { parseRecipients } from "@/lib/recipients";
 import { toast } from "sonner";
-import { Send, Sparkles, Paperclip, X, FileText, Upload, Flame, Pencil, Eye } from "lucide-react";
+import { Send, Sparkles, Paperclip, X, FileText, Upload, Flame, Pencil, Eye, Wand2 } from "lucide-react";
 import { EmailGeneratorDialog } from "@/components/email-generator-dialog";
 import { AiBodyDialog } from "@/components/ai-body-dialog";
+import { GenerateResumeDialog } from "@/components/generate-resume-dialog";
 import { DraftManager, filesFromDraftAttachments, type DraftState, type LoadedDraft } from "@/components/draft-manager";
 import { getAutosaveDraft, saveEmailDraft, deleteEmailDraft } from "@/lib/drafts.functions";
 import { z } from "zod";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { getResumeVersion } from "@/lib/resume-studio.functions";
+import { getJob } from "@/lib/jobs.functions";
+import { jobToContextFields, jobToTemplateVars } from "@/lib/job-context";
+import { generateAiEmail } from "@/lib/ai-email.functions";
 
 const searchSchema = z
   .object({
@@ -38,6 +42,7 @@ const searchSchema = z
     name: z.string().optional(),
     company: z.string().optional(),
     resumeVersionId: z.string().optional(),
+    jobId: z.string().uuid().optional(),
   })
   .partial();
 
@@ -69,11 +74,18 @@ function SendPage() {
   const [vars, setVars] = useState<Record<string, string>>({});
   const [genOpen, setGenOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
+  const [resumeGenOpen, setResumeGenOpen] = useState(false);
   const [draftId, setDraftId] = useState<string | null>(null);
   const [autosaveId, setAutosaveId] = useState<string | null>(null);
   const [tplPickerOpen, setTplPickerOpen] = useState(false);
   const [resumePickerOpen, setResumePickerOpen] = useState(false);
-  const [jobMeta, setJobMeta] = useState({ company: "", role: "", jobDescription: "", instructions: "" });
+  const [jobMeta, setJobMeta] = useState({
+    company: "",
+    role: "",
+    jobDescription: "",
+    jobContext: "",
+    instructions: "",
+  });
   const [resumeIds, setResumeIds] = useState<string[]>([]);
   const [uploads, setUploads] = useState<File[]>([]);
   const [savedAttachments, setSavedAttachments] = useState<
@@ -81,21 +93,25 @@ function SendPage() {
   >([]);
   const uploadRef = useRef<HTMLInputElement | null>(null);
   const initedRef = useRef(false);
+  const jobHydratedRef = useRef<string | null>(null);
   const skipAutosaveUntilRef = useRef(0);
   const autosaveIdRef = useRef<string | null>(null);
+  const getJobFn = useServerFn(getJob);
   const [report, setReport] = useState<null | {
     total: number; sent: number; failed: number;
     skipped: Array<{ email: string; reason: string; note?: string }>;
     recipientCount: number;
   }>(null);
   const [editingPreview, setEditingPreview] = useState(false);
+  const [aiFilling, setAiFilling] = useState(false);
 
   const autosaveFn = useServerFn(saveEmailDraft);
   const getAutosaveFn = useServerFn(getAutosaveDraft);
   const deleteDraftFn = useServerFn(deleteEmailDraft);
+  const generateAiEmailFn = useServerFn(generateAiEmail);
 
   const isFollowUp = search.followUp === "1";
-  const hasUrlPrefill = !!(search.to || search.followUp || search.resumeVersionId || search.campaignId);
+  const hasUrlPrefill = !!(search.to || search.followUp || search.resumeVersionId || search.campaignId || search.jobId);
 
   const selectedSender = useMemo(
     () => accounts.data?.find((a) => a.id === senderId) ?? null,
@@ -146,6 +162,9 @@ function SendPage() {
     if (search.name) preVars.name = search.name;
     if (search.company) preVars.company = search.company;
     if (Object.keys(preVars).length) setVars((v) => ({ ...preVars, ...v }));
+    if (search.company) {
+      setJobMeta((m) => ({ ...m, company: search.company || m.company }));
+    }
 
     if (hasUrlPrefill) {
       applyDefaultTemplate();
@@ -181,6 +200,7 @@ function SendPage() {
             company: d.company ?? "",
             role: d.role ?? "",
             jobDescription: d.job_description ?? "",
+            jobContext: d.job_description ?? "",
             instructions: d.instructions ?? "",
           });
           setAutosaveId(d.id);
@@ -197,6 +217,87 @@ function SendPage() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accounts.data, templates.data, prefs.data]);
+
+  // Load full Jobs Community posting when navigated with ?jobId=, then auto-fill subject/body via AI.
+  useEffect(() => {
+    if (!search.jobId || jobHydratedRef.current === search.jobId) return;
+    // Wait until template hydration can resolve (same deps as one-time init).
+    if (!accounts.data || !templates.data || !prefs.data) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const job = await getJobFn({ data: { id: search.jobId! } });
+        if (cancelled) return;
+        const fields = jobToContextFields(job);
+        jobHydratedRef.current = search.jobId!;
+        setJobMeta((m) => ({
+          ...m,
+          company: fields.company || m.company,
+          role: fields.role || m.role,
+          jobDescription: fields.jobDescription || m.jobDescription,
+          jobContext: fields.jobContext || m.jobContext,
+        }));
+        setVars((v) => ({
+          ...v,
+          ...jobToTemplateVars(job),
+        }));
+        if (job.recruiter_email) {
+          setRecipientText((cur) => (cur.trim() ? cur : job.recruiter_email));
+        }
+
+        // Resolve template the same way as page init (tplId state may still be stale this tick).
+        let templateId: string | null = null;
+        if (search.template && templates.data.some((t) => t.id === search.template)) {
+          templateId = search.template;
+        } else if (prefs.data.defaultTemplateId && templates.data.some((t) => t.id === prefs.data.defaultTemplateId)) {
+          templateId = prefs.data.defaultTemplateId;
+        } else {
+          const marked = templates.data.find((t) => (t as { is_default?: boolean }).is_default);
+          templateId = marked?.id ?? templates.data[0]?.id ?? null;
+        }
+
+        setAiFilling(true);
+        skipAutosaveUntilRef.current = Date.now() + 8000;
+        toast.message("Generating email from job…", {
+          description: [job.title, job.company].filter(Boolean).join(" · "),
+        });
+
+        const result = await generateAiEmailFn({
+          data: {
+            templateId,
+            resumeVersionId: search.resumeVersionId ?? null,
+            company: fields.company || null,
+            jobTitle: fields.role || null,
+            jobDescription: fields.jobDescription || null,
+            jobContext: fields.jobContext || null,
+            instructions: null,
+          },
+        });
+        if (cancelled) return;
+
+        if (result.subject) setSubject(result.subject);
+        if (result.body) setBody(result.body);
+        setEditingPreview(false);
+        skipAutosaveUntilRef.current = Date.now() + 2000;
+        toast.success("Email filled from job posting", {
+          description: "Review the preview — you can still edit or regenerate.",
+        });
+      } catch (e) {
+        if (!cancelled) {
+          toast.error("Could not load job / generate email", {
+            description: (e as Error).message,
+          });
+        }
+      } finally {
+        if (!cancelled) setAiFilling(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search.jobId, accounts.data, templates.data, prefs.data, getJobFn, generateAiEmailFn]);
 
   useEffect(() => {
     autosaveIdRef.current = autosaveId;
@@ -250,6 +351,7 @@ function SendPage() {
       company: draft.company ?? "",
       role: draft.role ?? "",
       jobDescription: draft.job_description ?? "",
+      jobContext: draft.job_description ?? "",
       instructions: draft.instructions ?? "",
     });
   };
@@ -367,7 +469,7 @@ function SendPage() {
     const onKey = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey;
       if (!mod) return;
-      if (genOpen || aiOpen || report) return;
+      if (genOpen || aiOpen || resumeGenOpen || report) return;
 
       if (e.key === "Enter") {
         e.preventDefault();
@@ -397,7 +499,7 @@ function SendPage() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [genOpen, aiOpen, report, send, parsed.valid.length, subject, body, senderId, overLimit]);
+  }, [genOpen, aiOpen, resumeGenOpen, report, send, parsed.valid.length, subject, body, senderId, overLimit]);
 
   // Auto-attach the compiled PDF from Resume Studio. Only attach PDFs — never .tex.
   const getVersionFn = useServerFn(getResumeVersion);
@@ -642,12 +744,21 @@ function SendPage() {
                     <><Pencil className="h-3.5 w-3.5 mr-1" /> Edit</>
                   )}
                 </Button>
-                <Button type="button" size="sm" variant="outline" onClick={() => setAiOpen(true)}>
-                  <Sparkles className="h-3.5 w-3.5 mr-1" /> Generate Body Using AI
+                <Button type="button" size="sm" variant="outline" onClick={() => setResumeGenOpen(true)} disabled={aiFilling}>
+                  <Wand2 className="h-3.5 w-3.5 mr-1" /> Generate Resume
+                </Button>
+                <Button type="button" size="sm" variant="outline" onClick={() => setAiOpen(true)} disabled={aiFilling}>
+                  <Sparkles className="h-3.5 w-3.5 mr-1" />
+                  {aiFilling ? "Filling from job…" : "Generate Body Using AI"}
                 </Button>
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
+              {aiFilling && (
+                <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                  Tailoring subject & body from the full job posting…
+                </div>
+              )}
               {editingPreview ? (
                 <>
                   <div>
@@ -689,6 +800,7 @@ function SendPage() {
       <EmailGeneratorDialog
         open={genOpen}
         onOpenChange={setGenOpen}
+        companyFromEmail={jobMeta.company || vars.company || ""}
         onUse={(emails) => {
           const existing = parsed.valid;
           const merged = Array.from(new Set([...existing, ...emails.map((e) => e.toLowerCase())]));
@@ -706,13 +818,29 @@ function SendPage() {
         initialCompany={jobMeta.company || (vars.company ?? "")}
         initialRole={jobMeta.role}
         initialJobDescription={jobMeta.jobDescription}
+        initialJobContext={jobMeta.jobContext || jobMeta.jobDescription}
         onUse={(r) => {
           if (r.subject) setSubject(r.subject);
           setBody(r.body);
-          setJobMeta({ company: r.company, role: r.role, jobDescription: r.jobDescription, instructions: r.instructions });
+          setJobMeta({
+            company: r.company,
+            role: r.role,
+            jobDescription: r.jobDescription,
+            jobContext: r.jobContext ?? r.jobDescription,
+            instructions: r.instructions,
+          });
           setEditingPreview(false);
           toast.success("AI email applied");
         }}
+      />
+
+      <GenerateResumeDialog
+        open={resumeGenOpen}
+        onOpenChange={setResumeGenOpen}
+        initialCompany={jobMeta.company || (vars.company ?? "")}
+        initialRole={jobMeta.role}
+        initialJobContext={jobMeta.jobContext || jobMeta.jobDescription}
+        initialInstructions={jobMeta.instructions}
       />
     </div>
   );

@@ -12,6 +12,8 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 const schema = z.object({
   templateId: z.string().uuid().optional().nullable(),
   jobDescription: z.string().max(50_000).optional().nullable(),
+  /** Full community-job dump (skills, location, salary, etc.). */
+  jobContext: z.string().max(50_000).optional().nullable(),
   company: z.string().max(200).optional().nullable(),
   jobTitle: z.string().max(200).optional().nullable(),
   resumeVersionId: z.string().uuid().optional().nullable(),
@@ -82,7 +84,8 @@ export const generateAiEmail = createServerFn({ method: "POST" })
     }
     if (data.jobTitle) parts.push(`ROLE: ${data.jobTitle}`);
     if (data.company) parts.push(`COMPANY: ${data.company}`);
-    if (data.jobDescription) parts.push(`JOB DESCRIPTION (for context only):\n${data.jobDescription.slice(0, 6000)}`);
+    const jobBlob = (data.jobContext || data.jobDescription || "").trim();
+    if (jobBlob) parts.push(`FULL JOB POSTING (use all of this context):\n${jobBlob.slice(0, 12_000)}`);
     if (resumeTex) parts.push(`RESUME (LaTeX source, factual reference only — do not quote LaTeX):\n${resumeTex.slice(0, 8000)}`);
     if (data.instructions) parts.push(`USER'S ADDITIONAL INSTRUCTIONS (highest priority, still respect the 90/10 rule):\n${data.instructions}`);
 

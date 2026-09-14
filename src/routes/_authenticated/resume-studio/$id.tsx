@@ -5,6 +5,7 @@ import {
   getResumeVersion,
   updateResumeVersionTex,
   uploadResumeVersionPdf,
+  saveResumeVersionToLibrary,
   deleteResumeVersion,
   improveResumeSection,
   generateApplicationEmail,
@@ -18,9 +19,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { LatexEditor, type EditorSelection, type LatexEditorApi } from "@/components/latex-editor";
 import { LatexPreview } from "@/components/latex-preview";
 import { UpdateResumeDialog, InlineAskAi } from "@/components/resume-ai-dialogs";
-import { ArrowLeft, Save, Wand2, Sparkles, Trash2, Send, CheckCircle2, AlertCircle } from "lucide-react";
+import { ArrowLeft, Save, Wand2, Sparkles, Trash2, Send, CheckCircle2, AlertCircle, FolderPlus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { AI_JD_RESUME_FOLDER } from "@/lib/linkedin";
 
 export const Route = createFileRoute("/_authenticated/resume-studio/$id")({
   head: () => ({ meta: [{ title: "Resume workspace — Smart Email Sender" }] }),
@@ -35,6 +37,7 @@ function WorkspacePage() {
   const getFn = useServerFn(getResumeVersion);
   const saveFn = useServerFn(updateResumeVersionTex);
   const uploadPdfFn = useServerFn(uploadResumeVersionPdf);
+  const saveLibraryFn = useServerFn(saveResumeVersionToLibrary);
   const delFn = useServerFn(deleteResumeVersion);
   const improveFn = useServerFn(improveResumeSection);
   const emailFn = useServerFn(generateApplicationEmail);
@@ -67,12 +70,29 @@ function WorkspacePage() {
     if (!dirty || save.isPending) return;
     const t = setTimeout(() => save.mutate(), 1500);
     return () => clearTimeout(t);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tex, dirty]);
 
   const uploadPdf = useMutation({
     mutationFn: (b64: string) => uploadPdfFn({ data: { id, pdfBase64: b64 } }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["resume-version", id] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["resume-version", id] });
+      qc.invalidateQueries({ queryKey: ["resumes"] });
+    },
+  });
+
+  const saveToLibrary = useMutation({
+    mutationFn: () => saveLibraryFn({ data: { id } }),
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ["resumes"] });
+      toast.success(r.updated ? "Updated in Resumes" : "Saved to Resumes", {
+        description: `Folder: ${r.folder}`,
+        action: {
+          label: "Open Resumes",
+          onClick: () => nav({ to: "/resumes" }),
+        },
+      });
+    },
+    onError: (e) => toast.error("Could not save to Resumes", { description: (e as Error).message }),
   });
 
   const del = useMutation({
@@ -150,6 +170,22 @@ function WorkspacePage() {
           )}
           <Button size="sm" variant="outline" onClick={() => save.mutate()} disabled={!dirty || save.isPending}>
             <Save className="h-3.5 w-3.5 mr-1" /> {save.isPending ? "Saving…" : dirty ? "Save" : "Saved"}
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => saveToLibrary.mutate()}
+            disabled={!hasPdf || pdfStale || saveToLibrary.isPending}
+            title={
+              !hasPdf
+                ? "Compile the PDF first"
+                : pdfStale
+                  ? "Re-compile so the newest PDF is saved"
+                  : `Save PDF to Resumes → ${AI_JD_RESUME_FOLDER}`
+            }
+          >
+            <FolderPlus className="h-3.5 w-3.5 mr-1" />
+            {saveToLibrary.isPending ? "Saving…" : "Save to Resumes"}
           </Button>
           <Button
             size="sm"
