@@ -4,6 +4,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { applyTemplate } from "@/lib/templating";
 import { deriveNames, greetingFor, bodyHasGreeting } from "@/lib/recipients";
+import { parseAiJson } from "@/lib/parse-ai-json";
 
 
 const targetSchema = z.object({
@@ -336,9 +337,7 @@ export const generateBulkReplyDraft = createServerFn({ method: "POST" })
     if (!res.ok) throw new Error(`AI error ${res.status}`);
     const j = (await res.json()) as { choices?: { message?: { content?: string } }[] };
     const content = j.choices?.[0]?.message?.content ?? "";
-    const m = content.match(/\{[\s\S]*\}/);
-    if (!m) throw new Error("AI returned an unexpected response");
-    const parsed = JSON.parse(m[0]) as { body?: string };
+    const parsed = parseAiJson<{ body?: string }>(content);
     const body = (parsed.body ?? "").trim();
     if (!body) throw new Error("AI returned an empty draft");
     return { body };

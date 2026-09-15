@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { parseAiJson } from "@/lib/parse-ai-json";
 
 const schema = z.object({
   instructions: z.string().min(10).max(20_000),
@@ -62,14 +63,7 @@ export const generateEmails = createServerFn({ method: "POST" })
 
     const json = (await res.json()) as { choices?: { message?: { content?: string } }[] };
     const content = json.choices?.[0]?.message?.content ?? "";
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(content);
-    } catch {
-      const m = content.match(/\{[\s\S]*\}/);
-      if (!m) throw new Error("AI returned invalid JSON");
-      parsed = JSON.parse(m[0]);
-    }
+    const parsed = parseAiJson(content);
 
     const out = parsed as { emails?: unknown; skipped?: unknown };
     const emailsRaw = Array.isArray(out.emails) ? out.emails : [];

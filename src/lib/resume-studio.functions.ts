@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { parseAiJson } from "@/lib/parse-ai-json";
 
 export type ResumeProject = {
   id: string;
@@ -280,16 +281,14 @@ export const generateResumeVersion = createServerFn({ method: "POST" })
     if (!res.ok) throw new Error(`AI error ${res.status}: ${(await res.text()).slice(0, 300)}`);
     const j = (await res.json()) as { choices?: { message?: { content?: string } }[] };
     const content = j.choices?.[0]?.message?.content ?? "";
-    const m = content.match(/\{[\s\S]*\}/);
-    if (!m) throw new Error("AI returned invalid JSON");
-    const parsed = JSON.parse(m[0]) as {
+    const parsed = parseAiJson<{
       tex?: string;
       ats_score?: number;
       matched_keywords?: string[];
       missing_keywords?: string[];
       strengths?: string[];
       suggestions?: string[];
-    };
+    }>(content);
     const tex = (parsed.tex ?? "").trim();
     if (!tex || !tex.includes("\\")) throw new Error("AI did not return a valid LaTeX file");
 
@@ -632,9 +631,7 @@ export const generateApplicationEmail = createServerFn({ method: "POST" })
     if (!res.ok) throw new Error(`AI error ${res.status}`);
     const j = (await res.json()) as { choices?: { message?: { content?: string } }[] };
     const c = j.choices?.[0]?.message?.content ?? "";
-    const m = c.match(/\{[\s\S]*\}/);
-    if (!m) throw new Error("AI returned invalid JSON");
-    const parsed = JSON.parse(m[0]) as { subject?: string; body?: string };
+    const parsed = parseAiJson<{ subject?: string; body?: string }>(c);
     return {
       subject: (parsed.subject ?? templateSubject ?? `Application: ${v.job_title ?? "Role"}${v.company ? ` at ${v.company}` : ""}`).trim(),
       body: (parsed.body ?? templateBody ?? "").trim(),
@@ -697,9 +694,7 @@ export const improveResumeSection = createServerFn({ method: "POST" })
     if (!res.ok) throw new Error(`AI error ${res.status}`);
     const j = (await res.json()) as { choices?: { message?: { content?: string } }[] };
     const c = j.choices?.[0]?.message?.content ?? "";
-    const m = c.match(/\{[\s\S]*\}/);
-    if (!m) throw new Error("AI returned invalid JSON");
-    const parsed = JSON.parse(m[0]) as { tex?: string };
+    const parsed = parseAiJson<{ tex?: string }>(c);
     const tex = (parsed.tex ?? "").trim();
     if (!tex.includes("\\")) throw new Error("AI did not return valid LaTeX");
     await context.supabase.from("resume_versions").update({ tex_content: tex }).eq("id", data.id);
@@ -765,9 +760,7 @@ export const updateResumeWithInstructions = createServerFn({ method: "POST" })
     if (!res.ok) throw new Error(`AI error ${res.status}`);
     const j = (await res.json()) as { choices?: { message?: { content?: string } }[] };
     const c = j.choices?.[0]?.message?.content ?? "";
-    const m = c.match(/\{[\s\S]*\}/);
-    if (!m) throw new Error("AI returned invalid JSON");
-    const parsed = JSON.parse(m[0]) as { tex?: string; notes?: string };
+    const parsed = parseAiJson<{ tex?: string; notes?: string }>(c);
     const tex = (parsed.tex ?? "").trim();
     if (!tex.includes("\\")) throw new Error("AI did not return valid LaTeX");
     await context.supabase.from("resume_versions").update({ tex_content: tex }).eq("id", data.id).eq("user_id", context.userId);
@@ -834,9 +827,7 @@ export const rewriteResumeSelection = createServerFn({ method: "POST" })
     if (!res.ok) throw new Error(`AI error ${res.status}`);
     const j = (await res.json()) as { choices?: { message?: { content?: string } }[] };
     const c = j.choices?.[0]?.message?.content ?? "";
-    const m = c.match(/\{[\s\S]*\}/);
-    if (!m) throw new Error("AI returned invalid JSON");
-    const parsed = JSON.parse(m[0]) as { replacement?: string };
+    const parsed = parseAiJson<{ replacement?: string }>(c);
     const replacement = (parsed.replacement ?? "").replace(/^```[a-z]*\n?|```$/g, "").trim();
     if (!replacement) throw new Error("AI returned an empty replacement");
     return { replacement };

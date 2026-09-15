@@ -1,3 +1,4 @@
+import { parseAiJson } from "@/lib/parse-ai-json";
 /** AI job field extraction (shared by paste, URL, RSS, ATS, Telegram). */
 
 export async function aiExtractJobFields(text: string) {
@@ -22,9 +23,7 @@ export async function aiExtractJobFields(text: string) {
   if (!res.ok) throw new Error(`AI error ${res.status}`);
   const j = (await res.json()) as { choices?: { message?: { content?: string } }[] };
   const content = j.choices?.[0]?.message?.content ?? "";
-  const m = content.match(/\{[\s\S]*\}/);
-  if (!m) throw new Error("AI returned invalid JSON");
-  const parsed = JSON.parse(m[0]) as Record<string, unknown>;
+  const parsed = parseAiJson<Record<string, unknown>>(content);
   const asStr = (k: string) => (typeof parsed[k] === "string" ? (parsed[k] as string) : "");
   const asArr = (k: string) =>
     Array.isArray(parsed[k]) ? ((parsed[k] as unknown[]).filter((x) => typeof x === "string") as string[]) : [];

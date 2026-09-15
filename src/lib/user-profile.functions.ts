@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { PROFILE_SECTIONS, type ProfileDetails, type ProfileEntry } from "@/lib/user-profile";
+import { parseAiJson } from "@/lib/parse-ai-json";
 
 const sectionEnum = z.enum(PROFILE_SECTIONS);
 
@@ -224,12 +225,10 @@ export const parseResumeToProfileDraft = createServerFn({ method: "POST" })
     if (!res.ok) throw new Error(`AI error ${res.status}`);
     const j = (await res.json()) as { choices?: { message?: { content?: string } }[] };
     const c = j.choices?.[0]?.message?.content ?? "";
-    const m = c.match(/\{[\s\S]*\}/);
-    if (!m) throw new Error("AI returned invalid JSON");
-    const parsed = JSON.parse(m[0]) as {
+    const parsed = parseAiJson<{
       details?: Partial<ProfileDetails>;
       entries?: Array<Partial<ProfileEntry> & { section?: string }>;
-    };
+    }>(c);
 
     const entries = (parsed.entries ?? [])
       .filter((e) => e.section && (PROFILE_SECTIONS as readonly string[]).includes(e.section))

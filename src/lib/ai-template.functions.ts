@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { parseAiJson } from "@/lib/parse-ai-json";
 
 /** Lightly rewrite an outreach template to align with a pasted Job Description.
  *  Preserves 90-95% of the original wording; only tweaks keywords/skills/tone. */
@@ -40,9 +41,7 @@ export const updateTemplateByJD = createServerFn({ method: "POST" })
     if (!res.ok) throw new Error(`AI error ${res.status}: ${(await res.text()).slice(0, 300)}`);
     const j = (await res.json()) as { choices?: { message?: { content?: string } }[] };
     const content = j.choices?.[0]?.message?.content ?? "";
-    const m = content.match(/\{[\s\S]*\}/);
-    if (!m) throw new Error("AI returned invalid JSON");
-    const parsed = JSON.parse(m[0]) as { subject?: string; body?: string };
+    const parsed = parseAiJson<{ subject?: string; body?: string }>(content);
     return {
       subject: (parsed.subject ?? data.subject).toString(),
       body: (parsed.body ?? data.body).toString(),

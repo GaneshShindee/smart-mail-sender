@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { parseAiJson } from "@/lib/parse-ai-json";
 
 /** Pull recent inbox messages for every connection that granted read scope and
  *  persist those that appear to be replies to our own outreach threads. */
@@ -263,9 +264,7 @@ export const generateReplyDraft = createServerFn({ method: "POST" })
     if (!res.ok) throw new Error(`AI error ${res.status}`);
     const j = (await res.json()) as { choices?: { message?: { content?: string } }[] };
     const content = j.choices?.[0]?.message?.content ?? "";
-    const m = content.match(/\{[\s\S]*\}/);
-    if (!m) throw new Error("AI returned invalid JSON");
-    const parsed = JSON.parse(m[0]) as { subject?: string; body?: string };
+    const parsed = parseAiJson<{ subject?: string; body?: string }>(content);
     return {
       subject: (parsed.subject ?? "").trim() || `Re: ${reply.subject ?? ""}`,
       body: (parsed.body ?? "").trim(),

@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { parseAiJson } from "@/lib/parse-ai-json";
 
 /**
  * AI email generator that preserves the SELECTED template's structure.
@@ -106,9 +107,7 @@ export const generateAiEmail = createServerFn({ method: "POST" })
     if (!res.ok) throw new Error(`AI error ${res.status}: ${(await res.text()).slice(0, 300)}`);
     const j = (await res.json()) as { choices?: { message?: { content?: string } }[] };
     const content = j.choices?.[0]?.message?.content ?? "";
-    const m = content.match(/\{[\s\S]*\}/);
-    if (!m) throw new Error("AI returned invalid JSON");
-    const parsed = JSON.parse(m[0]) as { subject?: string; body?: string };
+    const parsed = parseAiJson<{ subject?: string; body?: string }>(content);
     const subject = (parsed.subject ?? templateSubject ?? "").trim();
     const body = (parsed.body ?? templateBody ?? "").trim();
     if (!body) throw new Error("AI returned empty body");
