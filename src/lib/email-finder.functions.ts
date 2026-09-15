@@ -19,6 +19,11 @@ const providerIdSchema = z.enum([
   "kaspr",
   "surfe",
   "cleanlist",
+  "getprospect",
+  "clearout",
+  "skrapp",
+  "findymail",
+  "experte",
 ]);
 
 /** Which enrichment APIs have keys configured on the server. */

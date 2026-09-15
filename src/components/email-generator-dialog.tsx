@@ -40,7 +40,7 @@ import { Sparkles, Copy, Loader2, Plus, Pencil, Files, Trash2, ChevronDown, Sett
 import { toast } from "sonner";
 import { companyKeywordFromDomain, linkedInCompanyKeyword, linkedInCompanySearchUrl } from "@/lib/linkedin";
 import { findEmailsByDomain, listEmailFinderStatus } from "@/lib/email-finder.functions";
-import { EMAIL_FINDER_PROVIDERS, type FoundEmail } from "@/lib/email-finder";
+import { EMAIL_FIND_PROVIDERS, EMAIL_VERIFY_PROVIDERS, type FoundEmail } from "@/lib/email-finder";
 
 const LAST_TPL_KEY = "ai-gen:last-template-id";
 
@@ -383,7 +383,7 @@ export function EmailGeneratorDialog({ open, onOpenChange, onUse, companyFromEma
                       <div className="min-w-0">
                         <div className="text-xs font-medium">Find sample emails from databases</div>
                         <div className="text-[10px] text-muted-foreground">
-                          Hunter, Apollo, Prospeo, Snov & more — uses API keys in .env when set
+                          Hunter, Snov, GetProspect, Clearout, Skrapp, Findymail & more — API keys in .env when set
                           {(finderStatus.data?.filter((p) => p.configured).length ?? 0) > 0
                             ? ` · ${finderStatus.data!.filter((p) => p.configured).length} API ready`
                             : " · no API keys yet (web links still work)"}
@@ -405,38 +405,70 @@ export function EmailGeneratorDialog({ open, onOpenChange, onUse, companyFromEma
                       </Button>
                     </div>
 
-                    <div className="flex flex-wrap gap-1">
-                      {EMAIL_FINDER_PROVIDERS.map((p) => {
-                        const st = finderStatus.data?.find((x) => x.id === p.id);
-                        const run = finderMeta?.providers.find((x) => x.provider === p.id);
-                        const openProvider = () => {
-                          const domainHint = (finderMeta?.domain || working.company_domain.trim() || "allen.in")
-                            .toLowerCase()
-                            .replace(/^https?:\/\//, "")
-                            .split("/")[0]!;
-                          const domain = domainHint.includes(".")
-                            ? domainHint
-                            : `${domainHint.replace(/[^a-z0-9]+/g, "")}.com`;
-                          window.open(run?.webUrl || p.webSearchUrl(domain), "_blank", "noopener,noreferrer");
-                        };
-                        return (
-                          <button
-                            key={p.id}
-                            type="button"
-                            title={st?.configured ? `${p.name} API ready` : p.freeNote}
-                            className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] ${
-                              st?.configured
-                                ? "border-primary/40 bg-primary/5 text-foreground"
-                                : "border-border text-muted-foreground"
-                            }`}
-                            onClick={openProvider}
-                          >
-                            {p.name}
-                            {run && run.count > 0 ? ` · ${run.count}` : ""}
-                            <ExternalLink className="h-2.5 w-2.5 opacity-60" />
-                          </button>
-                        );
-                      })}
+                    <div className="space-y-1.5">
+                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Search</div>
+                      <div className="flex flex-wrap gap-1">
+                        {EMAIL_FIND_PROVIDERS.map((p) => {
+                          const st = finderStatus.data?.find((x) => x.id === p.id);
+                          const run = finderMeta?.providers.find((x) => x.provider === p.id);
+                          const openProvider = () => {
+                            const domainHint = (finderMeta?.domain || working.company_domain.trim() || "allen.in")
+                              .toLowerCase()
+                              .replace(/^https?:\/\//, "")
+                              .split("/")[0]!;
+                            const domain = domainHint.includes(".")
+                              ? domainHint
+                              : `${domainHint.replace(/[^a-z0-9]+/g, "")}.com`;
+                            window.open(run?.webUrl || p.webSearchUrl(domain), "_blank", "noopener,noreferrer");
+                          };
+                          return (
+                            <button
+                              key={p.id}
+                              type="button"
+                              title={st?.configured ? `${p.name} API ready` : p.freeNote}
+                              className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] ${
+                                st?.configured
+                                  ? "border-primary/40 bg-primary/5 text-foreground"
+                                  : "border-border text-muted-foreground"
+                              }`}
+                              onClick={openProvider}
+                            >
+                              {p.name}
+                              {run && run.count > 0 ? ` · ${run.count}` : ""}
+                              <ExternalLink className="h-2.5 w-2.5 opacity-60" />
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground pt-0.5">Verify</div>
+                      <div className="flex flex-wrap gap-1">
+                        {EMAIL_VERIFY_PROVIDERS.map((p) => {
+                          const openProvider = () => {
+                            const domainHint = (finderMeta?.domain || working.company_domain.trim() || "")
+                              .toLowerCase()
+                              .replace(/^https?:\/\//, "")
+                              .split("/")[0]!;
+                            const domain = domainHint.includes(".")
+                              ? domainHint
+                              : domainHint
+                                ? `${domainHint.replace(/[^a-z0-9]+/g, "")}.com`
+                                : "";
+                            window.open(p.webSearchUrl(domain), "_blank", "noopener,noreferrer");
+                          };
+                          return (
+                            <button
+                              key={p.id}
+                              type="button"
+                              title={p.freeNote}
+                              className="inline-flex items-center gap-1 rounded-md border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-accent"
+                              onClick={openProvider}
+                            >
+                              {p.name}
+                              <ExternalLink className="h-2.5 w-2.5 opacity-60" />
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
 
                     {finderMeta?.sampleEmail && (

@@ -11,7 +11,12 @@ export type EmailFinderProviderId =
   | "lusha"
   | "kaspr"
   | "surfe"
-  | "cleanlist";
+  | "cleanlist"
+  | "getprospect"
+  | "clearout"
+  | "skrapp"
+  | "findymail"
+  | "experte";
 
 export type EmailFinderProviderMeta = {
   id: EmailFinderProviderId;
@@ -19,6 +24,8 @@ export type EmailFinderProviderMeta = {
   freeNote: string;
   hasApi: boolean;
   envKeys: string[];
+  /** find = domain/email search · verify = validate an address */
+  kind?: "find" | "verify";
   /** Public try / discover URL for a domain (browser fallback). */
   webSearchUrl: (domain: string) => string;
 };
@@ -51,10 +58,43 @@ export const EMAIL_FINDER_PROVIDERS: EmailFinderProviderMeta[] = [
   {
     id: "snov",
     name: "Snov.io",
-    freeNote: "Free credits · domain search",
+    freeNote: "50 free searches/mo · by name & domain",
     hasApi: true,
     envKeys: ["SNOV_CLIENT_ID", "SNOV_CLIENT_SECRET"],
-    webSearchUrl: (d) => `https://app.snov.io/domain-search?domain=${encodeURIComponent(d)}&tab=emails`,
+    webSearchUrl: () => `https://snov.io/email-finder`,
+  },
+  {
+    id: "getprospect",
+    name: "GetProspect",
+    freeNote: "Domain email search · 50 free/mo",
+    hasApi: false,
+    envKeys: [],
+    webSearchUrl: (d) =>
+      `https://getprospect.com/email-finder/email-finder-by-domain${d ? `?domain=${encodeURIComponent(d)}` : ""}`,
+  },
+  {
+    id: "clearout",
+    name: "Clearout",
+    freeNote: "B2B finder · pre-verified emails",
+    hasApi: false,
+    envKeys: [],
+    webSearchUrl: () => `https://clearout.io/email-finder/`,
+  },
+  {
+    id: "skrapp",
+    name: "Skrapp",
+    freeNote: "Find by name & company",
+    hasApi: false,
+    envKeys: [],
+    webSearchUrl: () => `https://skrapp.io/email-finder`,
+  },
+  {
+    id: "findymail",
+    name: "Findymail",
+    freeNote: "Verified B2B emails",
+    hasApi: false,
+    envKeys: [],
+    webSearchUrl: () => `https://www.findymail.com/`,
   },
   {
     id: "datagma",
@@ -104,7 +144,19 @@ export const EMAIL_FINDER_PROVIDERS: EmailFinderProviderMeta[] = [
     envKeys: [],
     webSearchUrl: () => `https://cleanlist.ai/`,
   },
+  {
+    id: "experte",
+    name: "EXPERTE",
+    freeNote: "Free verify · name + domain permutations",
+    hasApi: false,
+    envKeys: [],
+    kind: "verify",
+    webSearchUrl: () => `https://www.experte.com/email-finder`,
+  },
 ];
+
+export const EMAIL_FIND_PROVIDERS = EMAIL_FINDER_PROVIDERS.filter((p) => (p.kind ?? "find") === "find");
+export const EMAIL_VERIFY_PROVIDERS = EMAIL_FINDER_PROVIDERS.filter((p) => p.kind === "verify");
 
 export type FoundEmail = {
   email: string;
@@ -494,6 +546,11 @@ export async function searchEmailProviders(
   if (want.has("kaspr")) tasks.push(Promise.resolve(browserOnly("kaspr", domain)));
   if (want.has("surfe")) tasks.push(Promise.resolve(browserOnly("surfe", domain)));
   if (want.has("cleanlist")) tasks.push(Promise.resolve(browserOnly("cleanlist", domain)));
+  if (want.has("getprospect")) tasks.push(Promise.resolve(browserOnly("getprospect", domain)));
+  if (want.has("clearout")) tasks.push(Promise.resolve(browserOnly("clearout", domain)));
+  if (want.has("skrapp")) tasks.push(Promise.resolve(browserOnly("skrapp", domain)));
+  if (want.has("findymail")) tasks.push(Promise.resolve(browserOnly("findymail", domain)));
+  if (want.has("experte")) tasks.push(Promise.resolve(browserOnly("experte", domain)));
 
   const providers = await Promise.all(tasks);
   const seen = new Set<string>();
