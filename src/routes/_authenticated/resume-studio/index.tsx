@@ -25,6 +25,7 @@ import { relativeTime } from "@/lib/user-agent";
 import { z } from "zod";
 import { getJob } from "@/lib/jobs.functions";
 import { jobToContextFields } from "@/lib/job-context";
+import { getLinkedResumeVersionId, setLinkedResumeVersionId } from "@/lib/job-resume-link";
 
 const searchSchema = z.object({
   jd: z.string().optional(),
@@ -62,6 +63,19 @@ function ResumeStudioPage() {
   useEffect(() => {
     if (!search.jobId || !projects.data?.length) return;
     if (jobHydratedRef.current === search.jobId) return;
+
+    const linked = getLinkedResumeVersionId({
+      jobId: search.jobId,
+      company: search.company,
+      role: search.title,
+    });
+    if (linked) {
+      jobHydratedRef.current = search.jobId;
+      toast.message("Opening your existing resume for this job");
+      nav({ to: "/resume-studio/$id", params: { id: linked } });
+      return;
+    }
+
     let cancelled = false;
     (async () => {
       try {
@@ -149,6 +163,14 @@ function ResumeStudioPage() {
       }),
     onSuccess: (v) => {
       qc.invalidateQueries({ queryKey: ["resume-versions"] });
+      setLinkedResumeVersionId(
+        {
+          jobId: search.jobId,
+          company: v.company ?? search.company,
+          role: v.job_title ?? search.title,
+        },
+        v.id,
+      );
       toast.success("Tailored resume generated — compile PDF, then Save to Resumes");
       setGenOpen(false);
       nav({ to: "/resume-studio/$id", params: { id: v.id } });

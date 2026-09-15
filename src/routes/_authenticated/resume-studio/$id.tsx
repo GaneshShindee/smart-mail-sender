@@ -24,14 +24,29 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AI_JD_RESUME_FOLDER } from "@/lib/linkedin";
 import { peekSendResumeHandoff, saveSendResumeHandoff } from "@/lib/send-resume-handoff";
+import { setLinkedResumeVersionId } from "@/lib/job-resume-link";
+import { z } from "zod";
+
+const studioSearchSchema = z
+  .object({
+    /** Came from Send Email — attach PDF only, never AI-draft a new body. */
+    returnToSend: z.union([z.boolean(), z.literal("true"), z.literal("1"), z.literal(1)]).optional(),
+  })
+  .partial();
+
+function isReturnToSend(v: unknown): boolean {
+  return v === true || v === "true" || v === "1" || v === 1;
+}
 
 export const Route = createFileRoute("/_authenticated/resume-studio/$id")({
   head: () => ({ meta: [{ title: "Resume workspace — Smart Email Sender" }] }),
+  validateSearch: (s: Record<string, unknown>) => studioSearchSchema.parse(s),
   component: WorkspacePage,
 });
 
 function WorkspacePage() {
   const { id } = Route.useParams();
+  const search = Route.useSearch();
   const qc = useQueryClient();
   const nav = useNavigate();
 
@@ -54,11 +69,15 @@ function WorkspacePage() {
   const [updateOpen, setUpdateOpen] = useState(false);
   const [selection, setSelection] = useState<EditorSelection | null>(null);
   const editorApi = useRef<LatexEditorApi | null>(null);
-  const [attachOnlyHandoff, setAttachOnlyHandoff] = useState(() => peekSendResumeHandoff()?.attachOnly === true);
+  const [attachOnlyHandoff, setAttachOnlyHandoff] = useState(
+    () => peekSendResumeHandoff()?.attachOnly === true || isReturnToSend(search.returnToSend),
+  );
 
   useEffect(() => {
-    setAttachOnlyHandoff(peekSendResumeHandoff()?.attachOnly === true);
-  }, [id]);
+    setAttachOnlyHandoff(
+      peekSendResumeHandoff()?.attachOnly === true || isReturnToSend(search.returnToSend),
+    );
+  }, [id, search.returnToSend]);
 
   useEffect(() => {
     if (q.data && !dirty) setTex(q.data.version.tex_content);
@@ -153,12 +172,22 @@ function WorkspacePage() {
         resumeVersionId: id,
       });
     }
+    // Keep this version linked to the company/role for future "Generate Resume" clicks.
+    setLinkedResumeVersionId(
+      {
+        jobId: existing?.jobId,
+        company: existing?.company || q.data?.version.company,
+        role: existing?.role || q.data?.version.job_title,
+      },
+      id,
+    );
     nav({
       to: "/send",
       search: {
         resumeVersionId: id,
         company: q.data?.version.company ?? "",
         name: q.data?.version.job_title ?? "",
+        ...(existing?.jobId ? { jobId: existing.jobId } : {}),
       },
     });
     toast.success("Attaching resume to your email", {
@@ -167,7 +196,9 @@ function WorkspacePage() {
   };
 
   const onSendClick = () => {
-    if (attachOnlyHandoff) {
+    // Re-check at click time — handoff / returnToSend must never AI-draft a new email.
+    const handoff = peekSendResumeHandoff();
+    if (handoff?.attachOnly || isReturnToSend(search.returnToSend) || attachOnlyHandoff) {
       attachToExistingEmail();
       return;
     }

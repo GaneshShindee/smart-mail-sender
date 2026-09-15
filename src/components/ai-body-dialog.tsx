@@ -15,6 +15,7 @@ import { Sparkles, ExternalLink, FileText, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "@tanstack/react-router";
 import { saveSendResumeHandoff } from "@/lib/send-resume-handoff";
+import { getLinkedResumeVersionId, setLinkedResumeVersionId } from "@/lib/job-resume-link";
 
 /**
  * "Generate Body Using AI" — customises the SELECTED template (~10% changed,
@@ -30,6 +31,7 @@ export function AiBodyDialog({
   initialRole = "",
   initialJobDescription = "",
   initialJobContext = "",
+  jobId = null,
   /** Current Send Email draft — preserved when opening Resume Studio so body is not regenerated. */
   preserveEmail,
   onUse,
@@ -43,6 +45,7 @@ export function AiBodyDialog({
   initialJobDescription?: string;
   /** Full community-job dump; falls back to initialJobDescription. */
   initialJobContext?: string;
+  jobId?: string | null;
   preserveEmail?: {
     subject: string;
     body: string;
@@ -128,6 +131,10 @@ export function AiBodyDialog({
       // Keep existing email — do not regenerate when returning from Resume Studio.
       const subject = result?.subject || preserveEmail?.subject || "";
       const body = result?.body || preserveEmail?.body || "";
+      setLinkedResumeVersionId(
+        { jobId, company: company.trim(), role: role.trim() },
+        row.id,
+      );
       saveSendResumeHandoff({
         attachOnly: true,
         subject,
@@ -140,12 +147,17 @@ export function AiBodyDialog({
         jobContext: jd.trim(),
         instructions: instructions.trim(),
         resumeVersionId: row.id,
+        jobId: jobId ?? undefined,
       });
       toast.success("Resume generated — compile PDF, then Attach to email", {
         description: "Your email subject & body stay as they are.",
       });
       onOpenChange(false);
-      void navigate({ to: "/resume-studio/$id", params: { id: row.id } });
+      void navigate({
+        to: "/resume-studio/$id",
+        params: { id: row.id },
+        search: { returnToSend: true } as never,
+      });
     },
     onError: (e) => toast.error("Resume generation failed", { description: (e as Error).message }),
   });
@@ -243,11 +255,48 @@ export function AiBodyDialog({
                   type="button"
                   variant="secondary"
                   className="shrink-0"
-                  disabled={busy || !masterId || (!jd.trim() && !role.trim())}
-                  onClick={() => genResume.mutate()}
+                  disabled={busy || (!masterId && !getLinkedResumeVersionId({ jobId, company, role }) && !resumeVersionId) || (!jd.trim() && !role.trim() && !getLinkedResumeVersionId({ jobId, company, role }) && !resumeVersionId)}
+                  onClick={() => {
+                    const existing =
+                      resumeVersionId ||
+                      getLinkedResumeVersionId({ jobId, company: company.trim(), role: role.trim() });
+                    if (existing) {
+                      const subject = result?.subject || preserveEmail?.subject || "";
+                      const body = result?.body || preserveEmail?.body || "";
+                      saveSendResumeHandoff({
+                        attachOnly: true,
+                        subject,
+                        body,
+                        recipientText: preserveEmail?.recipientText,
+                        vars: preserveEmail?.vars,
+                        company: company.trim(),
+                        role: role.trim(),
+                        jobDescription: jd.trim(),
+                        jobContext: jd.trim(),
+                        instructions: instructions.trim(),
+                        resumeVersionId: existing,
+                        jobId: jobId ?? undefined,
+                      });
+                      onOpenChange(false);
+                      toast.message("Opening your existing resume", {
+                        description: "Same tailored version for this job — not generating from scratch.",
+                      });
+                      void navigate({
+                        to: "/resume-studio/$id",
+                        params: { id: existing },
+                        search: { returnToSend: true } as never,
+                      });
+                      return;
+                    }
+                    genResume.mutate();
+                  }}
                 >
                   {genResume.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 mr-1" />}
-                  {genResume.isPending ? "Generating…" : "Generate & edit resume"}
+                  {genResume.isPending
+                    ? "Generating…"
+                    : resumeVersionId || getLinkedResumeVersionId({ jobId, company, role })
+                      ? "Open existing resume"
+                      : "Generate & edit resume"}
                 </Button>
               </div>
             )}

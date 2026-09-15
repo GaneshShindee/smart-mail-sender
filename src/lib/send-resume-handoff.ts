@@ -15,6 +15,8 @@ export type SendResumeHandoff = {
   jobContext?: string;
   instructions?: string;
   resumeVersionId?: string;
+  /** Community job id when started from Jobs → Generate Email. */
+  jobId?: string;
 };
 
 export function saveSendResumeHandoff(payload: SendResumeHandoff): void {

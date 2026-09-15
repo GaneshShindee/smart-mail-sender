@@ -26,6 +26,7 @@ import { toast } from "sonner";
 import { relativeTime } from "@/lib/user-agent";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { JobSourcesDialog } from "@/components/job-sources-dialog";
+import { getLinkedResumeVersionId } from "@/lib/job-resume-link";
 
 export const Route = createFileRoute("/_authenticated/jobs")({
   head: () => ({ meta: [{ title: "Jobs Board — Smart Email Sender" }] }),
@@ -203,6 +204,14 @@ function JobsPage() {
   };
 
   const generateResume = (j: Job) => {
+    const linked = getLinkedResumeVersionId({ jobId: j.id, company: j.company, role: j.title });
+    if (linked) {
+      nav({
+        to: "/resume-studio/$id",
+        params: { id: linked },
+      });
+      return;
+    }
     nav({
       to: "/resume-studio",
       search: {

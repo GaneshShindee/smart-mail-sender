@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { listTemplates } from "@/lib/templates.functions";
@@ -22,7 +22,8 @@ import { toast } from "sonner";
 import { Send, Sparkles, Paperclip, X, FileText, Upload, Flame, Pencil, Eye, Wand2 } from "lucide-react";
 import { EmailGeneratorDialog } from "@/components/email-generator-dialog";
 import { AiBodyDialog } from "@/components/ai-body-dialog";
-import { GenerateResumeDialog } from "@/components/generate-resume-dialog";
+import { GenerateResumeDialog, openLinkedOrGenerateResume } from "@/components/generate-resume-dialog";
+import { getLinkedResumeVersionId } from "@/lib/job-resume-link";
 import { DraftManager, filesFromDraftAttachments, type DraftState, type LoadedDraft } from "@/components/draft-manager";
 import { getAutosaveDraft, saveEmailDraft, deleteEmailDraft } from "@/lib/drafts.functions";
 import { z } from "zod";
@@ -31,7 +32,7 @@ import { getResumeVersion } from "@/lib/resume-studio.functions";
 import { getJob } from "@/lib/jobs.functions";
 import { jobToContextFields, jobToTemplateVars } from "@/lib/job-context";
 import { generateAiEmail } from "@/lib/ai-email.functions";
-import { takeSendResumeHandoff, peekSendResumeHandoff } from "@/lib/send-resume-handoff";
+import { peekSendResumeHandoff, clearSendResumeHandoff } from "@/lib/send-resume-handoff";
 
 const searchSchema = z
   .object({
@@ -55,6 +56,7 @@ export const Route = createFileRoute("/_authenticated/send")({
 
 function SendPage() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const search = Route.useSearch();
   const listFn = useServerFn(listTemplates);
   const sendFn = useServerFn(sendEmail);
@@ -168,7 +170,11 @@ function SendPage() {
     }
 
     if (hasUrlPrefill) {
-      applyDefaultTemplate();
+      // When returning from Resume Studio with a preserved email, don't wipe it with a template.
+      const handoff = peekSendResumeHandoff();
+      if (!(search.resumeVersionId && handoff?.attachOnly && (handoff.subject || handoff.body))) {
+        applyDefaultTemplate();
+      }
       initedRef.current = true;
       skipAutosaveUntilRef.current = Date.now() + 2000;
       return;
@@ -301,22 +307,24 @@ function SendPage() {
   }, [search.jobId, accounts.data, templates.data, prefs.data, getJobFn, generateAiEmailFn]);
 
   // Restore preserved email after returning from Resume Studio (attach-only — no new AI body).
+  // Peek only (do not take) so React Strict Mode remounts / revisits keep the same draft.
+  const handoffRestoredForRef = useRef<string | null>(null);
   useEffect(() => {
     if (!search.resumeVersionId) return;
+    if (handoffRestoredForRef.current === search.resumeVersionId) return;
     const h = peekSendResumeHandoff();
     if (!h?.attachOnly) return;
-    const taken = takeSendResumeHandoff();
-    if (!taken) return;
-    if (taken.subject) setSubject(taken.subject);
-    if (taken.body) setBody(taken.body);
-    if (taken.recipientText) setRecipientText(taken.recipientText);
-    if (taken.vars && Object.keys(taken.vars).length) setVars((v) => ({ ...v, ...taken.vars }));
+    handoffRestoredForRef.current = search.resumeVersionId;
+    if (h.subject) setSubject(h.subject);
+    if (h.body) setBody(h.body);
+    if (h.recipientText) setRecipientText(h.recipientText);
+    if (h.vars && Object.keys(h.vars).length) setVars((v) => ({ ...v, ...h.vars }));
     setJobMeta((m) => ({
-      company: taken.company || m.company,
-      role: taken.role || m.role,
-      jobDescription: taken.jobDescription || m.jobDescription,
-      jobContext: taken.jobContext || m.jobContext,
-      instructions: taken.instructions || m.instructions,
+      company: h.company || m.company,
+      role: h.role || m.role,
+      jobDescription: h.jobDescription || m.jobDescription,
+      jobContext: h.jobContext || m.jobContext,
+      instructions: h.instructions || m.instructions,
     }));
     setEditingPreview(false);
     skipAutosaveUntilRef.current = Date.now() + 2500;
@@ -433,6 +441,7 @@ function SendPage() {
     },
     onSuccess: async (r) => {
       toast.success(`Email sent to ${r.sent} recipient${r.sent === 1 ? "" : "s"}`);
+      clearSendResumeHandoff();
       qc.invalidateQueries({ queryKey: ["dashboard-stats"] });
       qc.invalidateQueries({ queryKey: ["history"] });
       setReport({
@@ -771,8 +780,38 @@ function SendPage() {
                     <><Pencil className="h-3.5 w-3.5 mr-1" /> Edit</>
                   )}
                 </Button>
-                <Button type="button" size="sm" variant="outline" onClick={() => setResumeGenOpen(true)} disabled={aiFilling}>
-                  <Wand2 className="h-3.5 w-3.5 mr-1" /> Generate Resume
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    const company = jobMeta.company || (vars.company ?? "");
+                    const role = jobMeta.role || (vars.name ?? "");
+                    openLinkedOrGenerateResume({
+                      navigate,
+                      jobId: search.jobId,
+                      company,
+                      role,
+                      jobContext: jobMeta.jobContext || jobMeta.jobDescription,
+                      instructions: jobMeta.instructions,
+                      existingResumeVersionId:
+                        search.resumeVersionId ||
+                        getLinkedResumeVersionId({ jobId: search.jobId, company, role }),
+                      preserveEmail: { subject, body, recipientText, vars },
+                      openDialog: () => setResumeGenOpen(true),
+                    });
+                  }}
+                  disabled={aiFilling}
+                >
+                  <Wand2 className="h-3.5 w-3.5 mr-1" />
+                  {search.resumeVersionId ||
+                  getLinkedResumeVersionId({
+                    jobId: search.jobId,
+                    company: jobMeta.company || (vars.company ?? ""),
+                    role: jobMeta.role,
+                  })
+                    ? "Open Resume"
+                    : "Generate Resume"}
                 </Button>
                 <Button type="button" size="sm" variant="outline" onClick={() => setAiOpen(true)} disabled={aiFilling}>
                   <Sparkles className="h-3.5 w-3.5 mr-1" />
@@ -842,6 +881,7 @@ function SendPage() {
         onOpenChange={setAiOpen}
         templateId={tplId || null}
         resumeVersionId={search.resumeVersionId ?? null}
+        jobId={search.jobId ?? null}
         initialCompany={jobMeta.company || (vars.company ?? "")}
         initialRole={jobMeta.role}
         initialJobDescription={jobMeta.jobDescription}
@@ -870,6 +910,8 @@ function SendPage() {
       <GenerateResumeDialog
         open={resumeGenOpen}
         onOpenChange={setResumeGenOpen}
+        jobId={search.jobId ?? null}
+        existingResumeVersionId={search.resumeVersionId ?? null}
         initialCompany={jobMeta.company || (vars.company ?? "")}
         initialRole={jobMeta.role}
         initialJobContext={jobMeta.jobContext || jobMeta.jobDescription}
