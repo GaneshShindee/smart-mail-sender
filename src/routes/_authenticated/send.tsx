@@ -31,6 +31,7 @@ import { getResumeVersion } from "@/lib/resume-studio.functions";
 import { getJob } from "@/lib/jobs.functions";
 import { jobToContextFields, jobToTemplateVars } from "@/lib/job-context";
 import { generateAiEmail } from "@/lib/ai-email.functions";
+import { takeSendResumeHandoff, peekSendResumeHandoff } from "@/lib/send-resume-handoff";
 
 const searchSchema = z
   .object({
@@ -298,6 +299,32 @@ function SendPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search.jobId, accounts.data, templates.data, prefs.data, getJobFn, generateAiEmailFn]);
+
+  // Restore preserved email after returning from Resume Studio (attach-only — no new AI body).
+  useEffect(() => {
+    if (!search.resumeVersionId) return;
+    const h = peekSendResumeHandoff();
+    if (!h?.attachOnly) return;
+    const taken = takeSendResumeHandoff();
+    if (!taken) return;
+    if (taken.subject) setSubject(taken.subject);
+    if (taken.body) setBody(taken.body);
+    if (taken.recipientText) setRecipientText(taken.recipientText);
+    if (taken.vars && Object.keys(taken.vars).length) setVars((v) => ({ ...v, ...taken.vars }));
+    setJobMeta((m) => ({
+      company: taken.company || m.company,
+      role: taken.role || m.role,
+      jobDescription: taken.jobDescription || m.jobDescription,
+      jobContext: taken.jobContext || m.jobContext,
+      instructions: taken.instructions || m.instructions,
+    }));
+    setEditingPreview(false);
+    skipAutosaveUntilRef.current = Date.now() + 2500;
+    toast.message("Email restored", {
+      description: "Subject & body unchanged — resume PDF attaching…",
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search.resumeVersionId]);
 
   useEffect(() => {
     autosaveIdRef.current = autosaveId;
@@ -819,6 +846,12 @@ function SendPage() {
         initialRole={jobMeta.role}
         initialJobDescription={jobMeta.jobDescription}
         initialJobContext={jobMeta.jobContext || jobMeta.jobDescription}
+        preserveEmail={{
+          subject,
+          body,
+          recipientText,
+          vars,
+        }}
         onUse={(r) => {
           if (r.subject) setSubject(r.subject);
           setBody(r.body);
@@ -841,6 +874,12 @@ function SendPage() {
         initialRole={jobMeta.role}
         initialJobContext={jobMeta.jobContext || jobMeta.jobDescription}
         initialInstructions={jobMeta.instructions}
+        preserveEmail={{
+          subject,
+          body,
+          recipientText,
+          vars,
+        }}
       />
     </div>
   );

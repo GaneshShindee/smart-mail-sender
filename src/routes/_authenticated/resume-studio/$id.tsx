@@ -19,10 +19,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { LatexEditor, type EditorSelection, type LatexEditorApi } from "@/components/latex-editor";
 import { LatexPreview } from "@/components/latex-preview";
 import { UpdateResumeDialog, InlineAskAi } from "@/components/resume-ai-dialogs";
-import { ArrowLeft, Save, Wand2, Sparkles, Trash2, Send, CheckCircle2, AlertCircle, FolderPlus } from "lucide-react";
+import { ArrowLeft, Save, Wand2, Sparkles, Trash2, Send, CheckCircle2, AlertCircle, FolderPlus, Paperclip } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AI_JD_RESUME_FOLDER } from "@/lib/linkedin";
+import { peekSendResumeHandoff, saveSendResumeHandoff } from "@/lib/send-resume-handoff";
 
 export const Route = createFileRoute("/_authenticated/resume-studio/$id")({
   head: () => ({ meta: [{ title: "Resume workspace — Smart Email Sender" }] }),
@@ -53,6 +54,11 @@ function WorkspacePage() {
   const [updateOpen, setUpdateOpen] = useState(false);
   const [selection, setSelection] = useState<EditorSelection | null>(null);
   const editorApi = useRef<LatexEditorApi | null>(null);
+  const [attachOnlyHandoff, setAttachOnlyHandoff] = useState(() => peekSendResumeHandoff()?.attachOnly === true);
+
+  useEffect(() => {
+    setAttachOnlyHandoff(peekSendResumeHandoff()?.attachOnly === true);
+  }, [id]);
 
   useEffect(() => {
     if (q.data && !dirty) setTex(q.data.version.tex_content);
@@ -123,7 +129,48 @@ function WorkspacePage() {
   });
 
   const pdfStale = compiledTex !== tex;
+
+  /** Return to Send with existing email + this PDF — no new AI email. */
+  const attachToExistingEmail = () => {
+    if (!hasPdf) {
+      toast.error("Compile the resume first", { description: "Click Compile in the preview to generate the PDF." });
+      return;
+    }
+    if (pdfStale) {
+      toast.error("Source changed since last compile", { description: "Re-compile so the newest PDF is attached." });
+      return;
+    }
+    const existing = peekSendResumeHandoff();
+    if (existing?.attachOnly) {
+      saveSendResumeHandoff({ ...existing, resumeVersionId: id });
+    } else {
+      saveSendResumeHandoff({
+        attachOnly: true,
+        subject: "",
+        body: "",
+        company: q.data?.version.company ?? "",
+        role: q.data?.version.job_title ?? "",
+        resumeVersionId: id,
+      });
+    }
+    nav({
+      to: "/send",
+      search: {
+        resumeVersionId: id,
+        company: q.data?.version.company ?? "",
+        name: q.data?.version.job_title ?? "",
+      },
+    });
+    toast.success("Attaching resume to your email", {
+      description: "Subject & body are unchanged.",
+    });
+  };
+
   const onSendClick = () => {
+    if (attachOnlyHandoff) {
+      attachToExistingEmail();
+      return;
+    }
     if (!hasPdf) {
       toast.error("Compile the resume first", { description: "Click Compile in the preview to generate resume.pdf." });
       return;
@@ -191,10 +238,21 @@ function WorkspacePage() {
             size="sm"
             onClick={onSendClick}
             disabled={draftEmail.isPending}
-            title={!hasPdf ? "Compile first to generate resume.pdf" : pdfStale ? "Source changed — re-compile before sending" : "Attach the latest PDF and open the email composer"}
+            title={
+              !hasPdf
+                ? "Compile first to generate resume.pdf"
+                : pdfStale
+                  ? "Source changed — re-compile before sending"
+                  : attachOnlyHandoff
+                    ? "Attach this PDF to your existing email (no new body)"
+                    : "Attach the latest PDF and open the email composer"
+            }
           >
-            <Send className="h-3.5 w-3.5 mr-1" />
-            {draftEmail.isPending ? "Drafting…" : !hasPdf ? "Compile to send" : pdfStale ? "Re-compile to send" : "Send with email"}
+            {attachOnlyHandoff ? (
+              <><Paperclip className="h-3.5 w-3.5 mr-1" /> {!hasPdf ? "Compile to attach" : pdfStale ? "Re-compile to attach" : "Attach to email"}</>
+            ) : (
+              <><Send className="h-3.5 w-3.5 mr-1" /> {draftEmail.isPending ? "Drafting…" : !hasPdf ? "Compile to send" : pdfStale ? "Re-compile to send" : "Send with email"}</>
+            )}
           </Button>
           <Button size="sm" variant="ghost" onClick={() => { if (confirm("Delete this version?")) del.mutate(); }}>
             <Trash2 className="h-3.5 w-3.5" />

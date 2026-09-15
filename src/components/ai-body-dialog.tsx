@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Sparkles, ExternalLink, FileText, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "@tanstack/react-router";
+import { saveSendResumeHandoff } from "@/lib/send-resume-handoff";
 
 /**
  * "Generate Body Using AI" — customises the SELECTED template (~10% changed,
@@ -29,6 +30,8 @@ export function AiBodyDialog({
   initialRole = "",
   initialJobDescription = "",
   initialJobContext = "",
+  /** Current Send Email draft — preserved when opening Resume Studio so body is not regenerated. */
+  preserveEmail,
   onUse,
 }: {
   open: boolean;
@@ -40,6 +43,12 @@ export function AiBodyDialog({
   initialJobDescription?: string;
   /** Full community-job dump; falls back to initialJobDescription. */
   initialJobContext?: string;
+  preserveEmail?: {
+    subject: string;
+    body: string;
+    recipientText?: string;
+    vars?: Record<string, string>;
+  };
   onUse: (r: {
     subject: string;
     body: string;
@@ -116,7 +125,25 @@ export function AiBodyDialog({
       });
     },
     onSuccess: (row) => {
-      toast.success("Resume generated — opening editor. Compile, then Save to Resumes.");
+      // Keep existing email — do not regenerate when returning from Resume Studio.
+      const subject = result?.subject || preserveEmail?.subject || "";
+      const body = result?.body || preserveEmail?.body || "";
+      saveSendResumeHandoff({
+        attachOnly: true,
+        subject,
+        body,
+        recipientText: preserveEmail?.recipientText,
+        vars: preserveEmail?.vars,
+        company: company.trim(),
+        role: role.trim(),
+        jobDescription: jd.trim(),
+        jobContext: jd.trim(),
+        instructions: instructions.trim(),
+        resumeVersionId: row.id,
+      });
+      toast.success("Resume generated — compile PDF, then Attach to email", {
+        description: "Your email subject & body stay as they are.",
+      });
       onOpenChange(false);
       void navigate({ to: "/resume-studio/$id", params: { id: row.id } });
     },
@@ -188,7 +215,7 @@ export function AiBodyDialog({
               <FileText className="h-4 w-4" /> Tailor resume for this JD
             </div>
             <p className="text-xs text-muted-foreground">
-              Uses the full job posting above. After generate + compile, use Save to Resumes in the editor.
+              Uses the full job posting above. Your email body is kept — after compile, use Attach to email (no new email is generated).
             </p>
             {(projects.data?.length ?? 0) === 0 ? (
               <p className="text-xs text-muted-foreground">

@@ -373,17 +373,60 @@ async function mirrorVersionPdfToLibrary(
   buf: Buffer,
 ) {
   const { AI_JD_RESUME_FOLDER } = await import("./linkedin");
+  const { resumePdfName, resumeFileBaseName } = await import("./naming");
+
+  // Prefer profile first/last for firstName_lastName_Resume_Company.pdf
+  let firstName: string | null = null;
+  let lastName: string | null = null;
+  let fullName: string | null = null;
+  let email: string | null = null;
+  try {
+    const { data: details } = await supabase
+      .from("profile_details")
+      .select("first_name, last_name, email")
+      .eq("user_id", userId)
+      .maybeSingle();
+    firstName = (details?.first_name as string | undefined)?.trim() || null;
+    lastName = (details?.last_name as string | undefined)?.trim() || null;
+    email = (details?.email as string | undefined)?.trim() || null;
+  } catch {
+    /* optional */
+  }
+  try {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("full_name, email")
+      .eq("id", userId)
+      .maybeSingle();
+    fullName = (profile?.full_name as string | undefined)?.trim() || null;
+    email = email || (profile?.email as string | undefined)?.trim() || null;
+  } catch {
+    /* optional */
+  }
+
   const libraryPath = `${userId}/ai-jd/${v.id}.pdf`;
   const libUp = await supabase.storage
     .from("resumes")
     .upload(libraryPath, buf, { contentType: "application/pdf", upsert: true });
   if (libUp.error) throw new Error(libUp.error.message);
 
-  const displayName = [v.company, v.job_title].filter(Boolean).join(" — ") || "AI tailored resume";
-  const filename = `${displayName.replace(/[^\w.\- ]+/g, "").trim() || "resume"}.pdf`.slice(0, 200);
+  const filename = resumePdfName({
+    firstName,
+    lastName,
+    fullName,
+    email,
+    company: v.company,
+  });
+  const displayName = resumeFileBaseName({
+    firstName,
+    lastName,
+    fullName,
+    email,
+    company: v.company,
+  });
   const payload = {
     name: displayName.slice(0, 120),
-    original_filename: filename,
+    original_filename: filename.slice(0, 200),
     storage_path: libraryPath,
     mime_type: "application/pdf",
     size_bytes: buf.length,

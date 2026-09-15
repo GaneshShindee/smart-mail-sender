@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { FileText, Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "@tanstack/react-router";
+import { saveSendResumeHandoff } from "@/lib/send-resume-handoff";
 
 type Props = {
   open: boolean;
@@ -21,6 +22,13 @@ type Props = {
   /** Full community-job dump (skills, location, salary, etc.). */
   initialJobContext?: string;
   initialInstructions?: string;
+  /** Current Send Email draft — restored when attaching resume (no new email body). */
+  preserveEmail?: {
+    subject: string;
+    body: string;
+    recipientText?: string;
+    vars?: Record<string, string>;
+  };
 };
 
 /** Standalone “Generate Resume” from Send Email — uses full job community context. */
@@ -31,6 +39,7 @@ export function GenerateResumeDialog({
   initialRole = "",
   initialJobContext = "",
   initialInstructions = "",
+  preserveEmail,
 }: Props) {
   const navigate = useNavigate();
   const [company, setCompany] = useState(initialCompany);
@@ -79,7 +88,22 @@ export function GenerateResumeDialog({
       });
     },
     onSuccess: (row) => {
-      toast.success("Resume generated — opening editor. Compile PDF, then Save to Resumes.");
+      saveSendResumeHandoff({
+        attachOnly: true,
+        subject: preserveEmail?.subject ?? "",
+        body: preserveEmail?.body ?? "",
+        recipientText: preserveEmail?.recipientText,
+        vars: preserveEmail?.vars,
+        company: company.trim(),
+        role: role.trim(),
+        jobDescription: jobContext.trim(),
+        jobContext: jobContext.trim(),
+        instructions: instructions.trim(),
+        resumeVersionId: row.id,
+      });
+      toast.success("Resume generated — compile PDF, then Attach to email", {
+        description: "Your email subject & body stay as they are.",
+      });
       onOpenChange(false);
       void navigate({ to: "/resume-studio/$id", params: { id: row.id } });
     },
