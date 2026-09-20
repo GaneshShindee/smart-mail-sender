@@ -150,6 +150,24 @@ export const deleteResumeProject = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const setDefaultResumeProject = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    await context.supabase
+      .from("resume_projects")
+      .update({ is_default: false })
+      .eq("user_id", context.userId)
+      .eq("is_default", true);
+    const { error } = await context.supabase
+      .from("resume_projects")
+      .update({ is_default: true })
+      .eq("id", data.id)
+      .eq("user_id", context.userId);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
 export const getResumeProjectMainTex = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))

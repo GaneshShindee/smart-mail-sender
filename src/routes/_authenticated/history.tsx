@@ -82,9 +82,13 @@ function HistoryPage() {
                   onClick={() => navigate({ to: "/campaigns/$id", params: { id: c.id } })}
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="font-medium truncate">{c.company || c.subject}</div>
+                    <div className="font-medium truncate">
+                      {c.role && c.company
+                        ? `${c.role} · ${c.company}`
+                        : c.role || c.company || c.subject}
+                    </div>
                     <div className="text-xs text-muted-foreground truncate">
-                      {c.company ? `${c.subject} · ` : ""}
+                      {c.role || c.company ? `${c.subject} · ` : ""}
                       {new Date(c.sent_at).toLocaleString()}
                       {c.sender_email ? ` · from ${c.sender_email}` : ""}
                       {c.template_name ? ` · ${c.template_name}` : ""}

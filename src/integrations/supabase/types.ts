@@ -344,6 +344,7 @@ export type Database = {
           pdf_view_count: number
           replied_at: string | null
           rfc_message_id: string | null
+          role: string | null
           status: string
           tracking_token: string | null
           user_id: string
@@ -375,6 +376,7 @@ export type Database = {
           pdf_view_count?: number
           replied_at?: string | null
           rfc_message_id?: string | null
+          role?: string | null
           status?: string
           tracking_token?: string | null
           user_id: string
@@ -406,6 +408,7 @@ export type Database = {
           pdf_view_count?: number
           replied_at?: string | null
           rfc_message_id?: string | null
+          role?: string | null
           status?: string
           tracking_token?: string | null
           user_id?: string

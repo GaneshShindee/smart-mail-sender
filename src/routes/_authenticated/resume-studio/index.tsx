@@ -5,6 +5,7 @@ import {
   listResumeProjects,
   createResumeProject,
   deleteResumeProject,
+  setDefaultResumeProject,
   listResumeVersions,
   generateResumeVersion,
   duplicateResumeProjectAsVersion,
@@ -20,7 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "../dashboard";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Trash2, Wand2, FileText, Sparkles, Pencil, Upload, Copy } from "lucide-react";
+import { Plus, Trash2, Wand2, FileText, Sparkles, Pencil, Upload, Copy, Star } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { fileToBase64 } from "@/lib/resumes";
@@ -50,6 +51,7 @@ function ResumeStudioPage() {
   const listFn = useServerFn(listResumeProjects);
   const createFn = useServerFn(createResumeProject);
   const delFn = useServerFn(deleteResumeProject);
+  const setDefaultFn = useServerFn(setDefaultResumeProject);
   const listVersionsFn = useServerFn(listResumeVersions);
   const genFn = useServerFn(generateResumeVersion);
   const duplicateFn = useServerFn(duplicateResumeProjectAsVersion);
@@ -124,6 +126,12 @@ function ResumeStudioPage() {
     mutationFn: (id: string) => delFn({ data: { id } }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["resume-projects"] }); toast.success("Master resume deleted"); },
     onError: (e) => toast.error("Delete failed", { description: (e as Error).message }),
+  });
+
+  const setDefault = useMutation({
+    mutationFn: (id: string) => setDefaultFn({ data: { id } }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["resume-projects"] }); toast.success("Default master resume updated"); },
+    onError: (e) => toast.error("Could not set default", { description: (e as Error).message }),
   });
 
   const create = useMutation({
@@ -259,6 +267,17 @@ function ResumeStudioPage() {
                     >
                       <Copy className="h-3.5 w-3.5 mr-1" /> {duplicate.isPending && duplicate.variables === p.id ? "Duplicating…" : "Duplicate"}
                     </Button>
+                    {!p.is_default && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        title="Set as default master resume"
+                        disabled={setDefault.isPending}
+                        onClick={() => setDefault.mutate(p.id)}
+                      >
+                        <Star className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                     <Button size="sm" variant="ghost" onClick={() => { if (confirm("Delete this master resume and all versions?")) del.mutate(p.id); }}>
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>

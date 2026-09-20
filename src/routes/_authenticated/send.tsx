@@ -425,13 +425,17 @@ function SendPage() {
         })),
       );
       const company = jobMeta.company.trim() || vars.company?.trim() || undefined;
+      const role = jobMeta.role.trim() || undefined;
       return sendFn({
         data: {
           templateId: tplId || null,
           gmailAccountId: senderId || null,
           // Send everything the user typed — the server re-validates and skips.
           recipients: parsed.valid.length ? parsed.valid : [],
-          recipientMeta: company ? parsed.meta.map((m) => ({ ...m, company })) : parsed.meta,
+          recipientMeta:
+            company || role
+              ? parsed.meta.map((m) => ({ ...m, ...(company ? { company } : {}), ...(role ? { role } : {}) }))
+              : parsed.meta,
           subject,
           body,
           variables: vars,
