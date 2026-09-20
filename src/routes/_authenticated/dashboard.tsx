@@ -63,14 +63,9 @@ function Dashboard() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="page-title">Dashboard</h1>
-          <p className="page-subtitle">Overview of your sending activity.</p>
-        </div>
-        <Button onClick={() => navigate({ to: "/send" })}>
-          <Send className="h-4 w-4" />Quick send
-        </Button>
+      <div>
+        <h1 className="page-title">Dashboard</h1>
+        <p className="page-subtitle">Overview of your sending activity.</p>
       </div>
 
       {gmail.data && !gmail.data.connected && (
