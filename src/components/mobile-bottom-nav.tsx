@@ -13,6 +13,9 @@ const rightTabs = [
   { url: "/resumes", icon: FileText },
 ] as const;
 
+/** URLs already reachable from the mobile bottom nav — used to avoid duplicating them elsewhere. */
+export const BOTTOM_NAV_URLS = [...leftTabs, ...rightTabs, { url: "/send" }].map((t) => t.url);
+
 export function MobileBottomNav() {
   const pathname = useRouterState({ select: (r) => r.location.pathname });
   const [hidden, setHidden] = useState(false);
