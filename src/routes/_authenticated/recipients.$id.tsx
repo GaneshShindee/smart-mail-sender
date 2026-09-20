@@ -138,7 +138,11 @@ function RecipientDetailsPage() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <h1 className="page-title break-words">{recipient.name ?? recipient.email}</h1>
-            <p className="text-sm text-muted-foreground break-all">{recipient.email}{recipient.company ? ` · ${recipient.company}` : ""}</p>
+            <p className="text-sm text-muted-foreground break-all">
+              {recipient.email}
+              {recipient.role ? ` · ${recipient.role}` : ""}
+              {recipient.company ? ` · ${recipient.company}` : ""}
+            </p>
           </div>
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
             {total === 0 && <Badge variant="secondary" className="self-start">Not opened</Badge>}

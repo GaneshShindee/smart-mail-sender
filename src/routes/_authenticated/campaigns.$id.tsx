@@ -177,7 +177,7 @@ function CampaignDetailsPage() {
               <Input
                 value={filters.search}
                 onChange={(e) => set("search", e.target.value)}
-                placeholder="Search name, email or company…"
+                placeholder="Search name, email, role or company…"
                 className="pl-9"
               />
             </div>
@@ -256,7 +256,7 @@ function CampaignDetailsPage() {
                           >
                             <div className="font-medium truncate">{r.name ?? r.email}</div>
                             <div className="text-xs text-muted-foreground truncate">
-                              {r.email}{r.company ? ` · ${r.company}` : ""}
+                              {r.email}{r.role ? ` · ${r.role}` : ""}{r.company ? ` · ${r.company}` : ""}
                             </div>
                             <div className="text-xs text-muted-foreground mt-0.5">
                               {opens > 0

@@ -92,6 +92,92 @@ async function fetchFollowupDoneDays(
   return map;
 }
 
+const CAMPAIGN_LIST_SELECT =
+  "id, subject, template_name, sender_email, status, sent_at, error, recipient_count, attachments, kind, followup_enabled";
+
+type CampaignRow = {
+  id: string;
+  subject: string;
+  template_name: string | null;
+  sender_email: string | null;
+  status: string;
+  sent_at: string;
+  error: string | null;
+  recipient_count: number | null;
+  attachments: unknown;
+  followup_enabled: boolean | null;
+};
+
+/** Shared recipient-aggregation + follow-up computation used by every campaign-list endpoint. */
+async function buildCampaignSummaries(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+  campaigns: CampaignRow[],
+): Promise<CampaignSummary[]> {
+  if (campaigns.length === 0) return [];
+
+  const ids = campaigns.map((c) => c.id);
+  const { data: recipients } = await supabase
+    .from("email_recipients")
+    .select("email_history_id, company, role, open_count, pdf_view_count, replied_at, user_reply_sent_at")
+    .eq("user_id", userId)
+    .in("email_history_id", ids);
+
+  const agg = new Map<
+    string,
+    { recipients: number; opened: number; opens: number; resume: number; replied: number; youReplied: number; companies: Set<string>; roles: Set<string> }
+  >();
+  for (const r of recipients ?? []) {
+    const a = agg.get(r.email_history_id) ?? { recipients: 0, opened: 0, opens: 0, resume: 0, replied: 0, youReplied: 0, companies: new Set<string>(), roles: new Set<string>() };
+    a.recipients += 1;
+    a.opens += r.open_count ?? 0;
+    if ((r.open_count ?? 0) > 0) a.opened += 1;
+    if ((r.pdf_view_count ?? 0) > 0) a.resume += 1;
+    if (r.replied_at) a.replied += 1;
+    if (r.user_reply_sent_at) a.youReplied += 1;
+    if (r.company?.trim()) a.companies.add(r.company.trim());
+    if (r.role?.trim()) a.roles.add(r.role.trim());
+    agg.set(r.email_history_id, a);
+  }
+
+  const doneDaysByCampaign = await fetchFollowupDoneDays(supabase, userId, ids);
+
+  return campaigns.map((c) => {
+    const a = agg.get(c.id);
+    const attachments = Array.isArray(c.attachments) ? (c.attachments as unknown[]) : [];
+    const companies = a?.companies ? Array.from(a.companies) : [];
+    const company = companies.length === 1 ? companies[0] : companies.length > 1 ? `${companies.length} companies` : null;
+    const roles = a?.roles ? Array.from(a.roles) : [];
+    const role = roles.length === 1 ? roles[0] : roles.length > 1 ? `${roles.length} roles` : null;
+    const followupEnabled = c.followup_enabled ?? true;
+    const followupDays = followupEnabled ? computeFollowupDays(c.sent_at, doneDaysByCampaign.get(c.id) ?? new Set()) : [];
+    const firstOverdue = followupDays.find((f) => f.overdue) ?? null;
+    return {
+      id: c.id,
+      subject: c.subject,
+      company,
+      role,
+      followupEnabled,
+      followupDays,
+      followupPending: !!firstOverdue,
+      followupDueDay: firstOverdue?.day ?? null,
+      template_name: c.template_name,
+      sender_email: c.sender_email,
+      status: c.status,
+      sent_at: c.sent_at,
+      error: c.error,
+      recipient_count: c.recipient_count ?? 0,
+      recipients: a?.recipients ?? c.recipient_count ?? 0,
+      opened: a?.opened ?? 0,
+      total_opens: a?.opens ?? 0,
+      resume_views: a?.resume ?? 0,
+      replied: a?.replied ?? 0,
+      you_replied: a?.youReplied ?? 0,
+      attachment_count: attachments.length,
+    };
+  });
+}
+
 /** Campaign-level history list (one row per send, replies excluded). */
 export const listCampaigns = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -109,7 +195,7 @@ export const listCampaigns = createServerFn({ method: "GET" })
   .handler(async ({ data, context }): Promise<CampaignSummary[]> => {
     let q = context.supabase
       .from("email_history")
-      .select("id, subject, template_name, sender_email, status, sent_at, error, recipient_count, attachments, kind, followup_enabled")
+      .select(CAMPAIGN_LIST_SELECT)
       .eq("user_id", context.userId)
       .neq("kind", "reply")
       .order("sent_at", { ascending: false })
@@ -120,69 +206,66 @@ export const listCampaigns = createServerFn({ method: "GET" })
     if (data.dateTo) q = q.lte("sent_at", `${data.dateTo}T23:59:59.999Z`);
     const { data: rows, error } = await q;
     if (error) throw new Error(error.message);
-    const campaigns = rows ?? [];
-    if (campaigns.length === 0) return [];
+    return buildCampaignSummaries(context.supabase, context.userId, rows ?? []);
+  });
 
-    const ids = campaigns.map((c) => c.id);
-    const { data: recipients } = await context.supabase
-      .from("email_recipients")
-      .select("email_history_id, company, role, open_count, pdf_view_count, replied_at, user_reply_sent_at")
+export type CampaignPage = { rows: CampaignSummary[]; total: number; page: number; pageSize: number };
+
+/** Paginated campaign-level history list for the history page (25 per page by default). */
+export const listCampaignsPage = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        search: z.string().default(""),
+        status: z.string().default("all"),
+        dateFrom: z.string().optional(),
+        dateTo: z.string().optional(),
+        page: z.number().int().min(1).default(1),
+        pageSize: z.number().int().min(1).max(100).default(25),
+      })
+      .parse(d ?? {}),
+  )
+  .handler(async ({ data, context }): Promise<CampaignPage> => {
+    const from = (data.page - 1) * data.pageSize;
+    const to = from + data.pageSize - 1;
+    let q = context.supabase
+      .from("email_history")
+      .select(CAMPAIGN_LIST_SELECT, { count: "exact" })
       .eq("user_id", context.userId)
-      .in("email_history_id", ids);
+      .neq("kind", "reply")
+      .order("sent_at", { ascending: false })
+      .range(from, to);
+    if (data.status !== "all") q = q.eq("status", data.status);
+    if (data.search) q = q.or(`recipient.ilike.%${data.search}%,subject.ilike.%${data.search}%,template_name.ilike.%${data.search}%`);
+    if (data.dateFrom) q = q.gte("sent_at", `${data.dateFrom}T00:00:00.000Z`);
+    if (data.dateTo) q = q.lte("sent_at", `${data.dateTo}T23:59:59.999Z`);
+    const { data: rows, count, error } = await q;
+    if (error) throw new Error(error.message);
+    const summaries = await buildCampaignSummaries(context.supabase, context.userId, rows ?? []);
+    return { rows: summaries, total: count ?? 0, page: data.page, pageSize: data.pageSize };
+  });
 
-    const agg = new Map<
-      string,
-      { recipients: number; opened: number; opens: number; resume: number; replied: number; youReplied: number; companies: Set<string>; roles: Set<string> }
-    >();
-    for (const r of recipients ?? []) {
-      const a = agg.get(r.email_history_id) ?? { recipients: 0, opened: 0, opens: 0, resume: 0, replied: 0, youReplied: 0, companies: new Set<string>(), roles: new Set<string>() };
-      a.recipients += 1;
-      a.opens += r.open_count ?? 0;
-      if ((r.open_count ?? 0) > 0) a.opened += 1;
-      if ((r.pdf_view_count ?? 0) > 0) a.resume += 1;
-      if (r.replied_at) a.replied += 1;
-      if (r.user_reply_sent_at) a.youReplied += 1;
-      if (r.company?.trim()) a.companies.add(r.company.trim());
-      if (r.role?.trim()) a.roles.add(r.role.trim());
-      agg.set(r.email_history_id, a);
-    }
+/** Permanently deletes a campaign (and its recipients/opens/replies/follow-up tracking via cascade). */
+export const deleteCampaign = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ campaignId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    // Reply-thread rows chained off this campaign have no FK cascade (self-reference), so clear them first.
+    await context.supabase
+      .from("email_history")
+      .delete()
+      .eq("user_id", context.userId)
+      .eq("parent_campaign_id", data.campaignId);
 
-    const doneDaysByCampaign = await fetchFollowupDoneDays(context.supabase, context.userId, ids);
-
-    return campaigns.map((c) => {
-      const a = agg.get(c.id);
-      const attachments = Array.isArray(c.attachments) ? (c.attachments as unknown[]) : [];
-      const companies = a?.companies ? Array.from(a.companies) : [];
-      const company = companies.length === 1 ? companies[0] : companies.length > 1 ? `${companies.length} companies` : null;
-      const roles = a?.roles ? Array.from(a.roles) : [];
-      const role = roles.length === 1 ? roles[0] : roles.length > 1 ? `${roles.length} roles` : null;
-      const followupEnabled = c.followup_enabled ?? true;
-      const followupDays = followupEnabled ? computeFollowupDays(c.sent_at, doneDaysByCampaign.get(c.id) ?? new Set()) : [];
-      const firstOverdue = followupDays.find((f) => f.overdue) ?? null;
-      return {
-        id: c.id,
-        subject: c.subject,
-        company,
-        role,
-        followupEnabled,
-        followupDays,
-        followupPending: !!firstOverdue,
-        followupDueDay: firstOverdue?.day ?? null,
-        template_name: c.template_name,
-        sender_email: c.sender_email,
-        status: c.status,
-        sent_at: c.sent_at,
-        error: c.error,
-        recipient_count: c.recipient_count ?? 0,
-        recipients: a?.recipients ?? c.recipient_count ?? 0,
-        opened: a?.opened ?? 0,
-        total_opens: a?.opens ?? 0,
-        resume_views: a?.resume ?? 0,
-        replied: a?.replied ?? 0,
-        you_replied: a?.youReplied ?? 0,
-        attachment_count: attachments.length,
-      };
-    });
+    const { error, count } = await context.supabase
+      .from("email_history")
+      .delete({ count: "exact" })
+      .eq("id", data.campaignId)
+      .eq("user_id", context.userId);
+    if (error) throw new Error(error.message);
+    if (!count) throw new Error("Campaign not found");
+    return { ok: true };
   });
 
 /**
@@ -209,7 +292,7 @@ export const listHistoryRecipients = createServerFn({ method: "GET" })
     let q = context.supabase
       .from("email_recipients")
       .select(
-        "id, email_history_id, email, name, company, status, open_count, first_opened_at, last_opened_at, pdf_view_count, last_pdf_view_at, replied_at, user_reply_sent_at, user_reply_count, followup_count, gmail_thread_id, gmail_message_id, rfc_message_id",
+        "id, email_history_id, email, name, company, role, status, open_count, first_opened_at, last_opened_at, pdf_view_count, last_pdf_view_at, replied_at, user_reply_sent_at, user_reply_count, followup_count, gmail_thread_id, gmail_message_id, rfc_message_id",
       )
       .eq("user_id", context.userId)
       .order("created_at", { ascending: false })
@@ -252,6 +335,7 @@ export const listHistoryRecipients = createServerFn({ method: "GET" })
         email: r.email,
         name: r.name,
         company: r.company,
+        role: r.role,
         subject: c?.subject ?? "(deleted campaign)",
         template_name: c?.template_name ?? null,
         sender_email: c?.sender_email ?? null,
@@ -406,7 +490,7 @@ export const getCampaign = createServerFn({ method: "GET" })
 
     const { data: recipients, error: rErr } = await context.supabase
       .from("email_recipients")
-      .select("id, email, name, company, status, open_count, first_opened_at, last_opened_at, click_count")
+      .select("id, email, name, company, role, status, open_count, first_opened_at, last_opened_at, click_count")
       .eq("email_history_id", data.id)
       .order("open_count", { ascending: false })
       .order("email", { ascending: true });
@@ -483,7 +567,7 @@ export const getRecipient = createServerFn({ method: "GET" })
   .handler(async ({ data, context }) => {
     const { data: recipient, error } = await context.supabase
       .from("email_recipients")
-      .select("id, email, name, company, status, open_count, first_opened_at, last_opened_at, click_count, email_history_id")
+      .select("id, email, name, company, role, status, open_count, first_opened_at, last_opened_at, click_count, email_history_id")
       .eq("id", data.id)
       .eq("user_id", context.userId)
       .maybeSingle();

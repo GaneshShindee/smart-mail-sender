@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { listCampaigns, setCampaignFollowupEnabled, type CampaignSummary } from "@/lib/history.functions";
+import { deleteCampaign, listCampaignsPage, setCampaignFollowupEnabled, type CampaignSummary } from "@/lib/history.functions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -9,9 +9,22 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import { StatusBadge, EmptyState } from "./dashboard";
-import { History as HistoryIcon, Search, Eye, FileText, Reply, Users, ChevronRight, Paperclip, BellRing, BellOff, MoreVertical, X } from "lucide-react";
+import { History as HistoryIcon, Search, Eye, FileText, Reply, Users, ChevronRight, Paperclip, BellRing, BellOff, MoreVertical, Trash2, X } from "lucide-react";
 import { useState } from "react";
+
+const PAGE_SIZE = 25;
 
 export const Route = createFileRoute("/_authenticated/history")({
   head: () => ({
@@ -34,11 +47,14 @@ function HistoryPage() {
   const [status, setStatus] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const listFn = useServerFn(listCampaigns);
+  const [page, setPage] = useState(1);
+  const [deleteTarget, setDeleteTarget] = useState<CampaignSummary | null>(null);
+  const listFn = useServerFn(listCampaignsPage);
   const setFollowupEnabledFn = useServerFn(setCampaignFollowupEnabled);
+  const deleteCampaignFn = useServerFn(deleteCampaign);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["campaign-history", search, status, dateFrom, dateTo],
+    queryKey: ["campaign-history", search, status, dateFrom, dateTo, page],
     queryFn: () =>
       listFn({
         data: {
@@ -46,17 +62,37 @@ function HistoryPage() {
           status,
           dateFrom: dateFrom || undefined,
           dateTo: dateTo || undefined,
-          limit: 200,
+          page,
+          pageSize: PAGE_SIZE,
         },
       }),
   });
-  const rows = (data ?? []) as CampaignSummary[];
+  const rows = data?.rows ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const hasDateFilter = !!dateFrom || !!dateTo;
+
+  const setFilter = <T,>(setter: (v: T) => void) => (v: T) => {
+    setter(v);
+    setPage(1);
+  };
+  const onSearchChange = setFilter(setSearch);
+  const onStatusChange = setFilter(setStatus);
+  const onDateFromChange = setFilter(setDateFrom);
+  const onDateToChange = setFilter(setDateTo);
 
   const toggleFollowup = useMutation({
     mutationFn: (vars: { campaignId: string; enabled: boolean }) =>
       setFollowupEnabledFn({ data: vars }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["campaign-history"] }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (campaignId: string) => deleteCampaignFn({ data: { campaignId } }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["campaign-history"] });
+      setDeleteTarget(null);
+    },
   });
 
   return (
@@ -73,12 +109,12 @@ function HistoryPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Search subject, recipient or template…"
             className="pl-9"
           />
         </div>
-        <Select value={status} onValueChange={setStatus}>
+        <Select value={status} onValueChange={onStatusChange}>
           <SelectTrigger className="w-full sm:w-40"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All statuses</SelectItem>
@@ -91,7 +127,7 @@ function HistoryPage() {
           <Input
             type="date"
             value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
+            onChange={(e) => onDateFromChange(e.target.value)}
             max={dateTo || undefined}
             className="w-full sm:w-[150px]"
             aria-label="Sent from"
@@ -100,7 +136,7 @@ function HistoryPage() {
           <Input
             type="date"
             value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
+            onChange={(e) => onDateToChange(e.target.value)}
             min={dateFrom || undefined}
             className="w-full sm:w-[150px]"
             aria-label="Sent to"
@@ -111,7 +147,7 @@ function HistoryPage() {
               variant="ghost"
               size="icon"
               className="h-9 w-9 shrink-0"
-              onClick={() => { setDateFrom(""); setDateTo(""); }}
+              onClick={() => { onDateFromChange(""); onDateToChange(""); }}
               aria-label="Clear date filter"
             >
               <X className="h-4 w-4" />
@@ -158,11 +194,6 @@ function HistoryPage() {
                         <BellRing className="h-3 w-3" />Day {c.followupDueDay} follow-up
                       </Badge>
                     )}
-                    {!c.followupEnabled && (
-                      <Badge variant="outline" className="gap-1 text-muted-foreground">
-                        <BellOff className="h-3 w-3" />No follow-up
-                      </Badge>
-                    )}
                     <Badge variant="outline" className="gap-1">
                       <Users className="h-3 w-3" />{c.recipients}
                     </Badge>
@@ -203,6 +234,12 @@ function HistoryPage() {
                             <><BellRing className="h-4 w-4 mr-2" />Turn on follow-up tracking</>
                           )}
                         </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onClick={() => setDeleteTarget(c)}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />Delete campaign
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                     <ChevronRight className="h-4 w-4 text-muted-foreground hidden sm:block" />
@@ -215,6 +252,59 @@ function HistoryPage() {
           )}
         </CardContent>
       </Card>
+
+      {total > 0 && (
+        <div className="flex flex-col items-center gap-2 sm:flex-row sm:justify-between">
+          <p className="text-xs text-muted-foreground">
+            Page {page} of {totalPages} · {total} campaign{total === 1 ? "" : "s"}
+          </p>
+          <Pagination className="mx-0 w-auto">
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious
+                  href="#"
+                  aria-disabled={page <= 1}
+                  className={page <= 1 ? "pointer-events-none opacity-50" : undefined}
+                  onClick={(e) => { e.preventDefault(); setPage((p) => Math.max(1, p - 1)); }}
+                />
+              </PaginationItem>
+              <PaginationItem>
+                <PaginationNext
+                  href="#"
+                  aria-disabled={page >= totalPages}
+                  className={page >= totalPages ? "pointer-events-none opacity-50" : undefined}
+                  onClick={(e) => { e.preventDefault(); setPage((p) => Math.min(totalPages, p + 1)); }}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        </div>
+      )}
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => { if (!o) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this campaign?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently deletes "{deleteTarget?.subject}" along with all its recipients, opens, replies and
+              follow-up tracking. This can't be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteMutation.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                if (deleteTarget) deleteMutation.mutate(deleteTarget.id);
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
