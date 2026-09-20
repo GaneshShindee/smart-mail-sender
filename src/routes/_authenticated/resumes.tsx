@@ -188,41 +188,61 @@ function ResumesPage() {
       {isLoading ? (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-28 w-full rounded-xl" />)}</div>
       ) : groups.length > 0 ? (
-        <div className="space-y-6">
+        <div className="space-y-4 md:space-y-6">
           {groups.map(([folder, rows]) => (
-            <section key={folder} className="space-y-3">
+            <section key={folder} className="space-y-2 md:space-y-3">
               <div className="flex items-center gap-2">
                 <Folder className="h-4 w-4 text-muted-foreground" />
                 <h2 className="text-sm font-semibold tracking-tight">{folder}</h2>
                 <Badge variant="secondary" className="text-[10px]">{rows.length}</Badge>
               </div>
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div className="grid grid-cols-1 gap-2 md:gap-3 md:grid-cols-2">
                 {rows.map((r) => (
                   <Card key={r.id}>
-                    <CardContent className="py-5 space-y-3">
+                    <CardContent className="py-3 md:py-5 space-y-2 md:space-y-3">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 flex items-start gap-3">
-                          <div className="rounded-lg bg-primary/10 p-2 text-primary"><FileText className="h-5 w-5" /></div>
+                          <div className="rounded-lg bg-primary/10 p-1.5 md:p-2 text-primary"><FileText className="h-4 w-4 md:h-5 md:w-5" /></div>
                           <div className="min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
                               <div className="font-medium truncate">{r.name}</div>
                               {r.is_default && <Badge variant="secondary" className="gap-1"><Star className="h-3 w-3" /> Default</Badge>}
                               <Badge variant="outline" className="text-[10px]">v{r.version}</Badge>
                             </div>
-                            <div className="text-xs text-muted-foreground truncate" title={r.original_filename}>{r.original_filename}</div>
-                            <div className="text-xs text-muted-foreground">
+                            <div className="hidden md:block text-xs text-muted-foreground truncate" title={r.original_filename}>{r.original_filename}</div>
+                            <div className="hidden md:block text-xs text-muted-foreground">
                               {formatBytes(r.size_bytes)} · Uploaded {new Date(r.created_at).toLocaleDateString()} · Updated {new Date(r.updated_at).toLocaleDateString()}
                             </div>
                           </div>
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-1">
-                        <Button size="sm" variant="ghost" onClick={() => open(r.id, false)}><Eye className="h-3.5 w-3.5 mr-1" /> Preview</Button>
-                        <Button size="sm" variant="ghost" onClick={() => open(r.id, true)}><Download className="h-3.5 w-3.5 mr-1" /> Download</Button>
-                        <Button size="sm" variant="ghost" onClick={() => { setRenaming(r); setRenameValue(r.name); }}><Pencil className="h-3.5 w-3.5 mr-1" /> Rename</Button>
-                        <Button size="sm" variant="ghost" onClick={() => { setReplacingId(r.id); replaceRef.current?.click(); }}><RefreshCw className="h-3.5 w-3.5 mr-1" /> Replace</Button>
-                        {!r.is_default && <Button size="sm" variant="ghost" onClick={() => setDefault.mutate(r.id)}><Star className="h-3.5 w-3.5 mr-1" /> Set default</Button>}
-                        <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => { if (confirm(`Delete "${r.name}"?`)) remove.mutate(r.id); }}><Trash2 className="h-3.5 w-3.5 mr-1" /> Delete</Button>
+                        <Button size="sm" className="h-8 px-2 md:h-9 md:px-3" variant="ghost" title="Preview" onClick={() => open(r.id, false)}>
+                          <Eye className="h-3.5 w-3.5 md:mr-1" /> <span className="hidden md:inline">Preview</span>
+                        </Button>
+                        <Button size="sm" className="h-8 px-2 md:h-9 md:px-3" variant="ghost" title="Download" onClick={() => open(r.id, true)}>
+                          <Download className="h-3.5 w-3.5 md:mr-1" /> <span className="hidden md:inline">Download</span>
+                        </Button>
+                        <Button size="sm" className="h-8 px-2 md:h-9 md:px-3" variant="ghost" title="Rename" onClick={() => { setRenaming(r); setRenameValue(r.name); }}>
+                          <Pencil className="h-3.5 w-3.5 md:mr-1" /> <span className="hidden md:inline">Rename</span>
+                        </Button>
+                        <Button size="sm" className="h-8 px-2 md:h-9 md:px-3" variant="ghost" title="Replace" onClick={() => { setReplacingId(r.id); replaceRef.current?.click(); }}>
+                          <RefreshCw className="h-3.5 w-3.5 md:mr-1" /> <span className="hidden md:inline">Replace</span>
+                        </Button>
+                        {!r.is_default && (
+                          <Button size="sm" className="h-8 px-2 md:h-9 md:px-3" variant="ghost" title="Set default" onClick={() => setDefault.mutate(r.id)}>
+                            <Star className="h-3.5 w-3.5 md:mr-1" /> <span className="hidden md:inline">Set default</span>
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          title="Delete"
+                          className="h-8 px-2 md:h-9 md:px-3 text-destructive hover:text-destructive"
+                          onClick={() => { if (confirm(`Delete "${r.name}"?`)) remove.mutate(r.id); }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 md:mr-1" /> <span className="hidden md:inline">Delete</span>
+                        </Button>
                       </div>
                     </CardContent>
                   </Card>
