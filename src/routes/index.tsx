@@ -23,7 +23,17 @@ import {
 } from "lucide-react";
 import logoAsset from "@/assets/logo.png.asset.json";
 
+import { redirect } from "@tanstack/react-router";
+import { supabase } from "@/integrations/supabase/client";
+
 export const Route = createFileRoute("/")({
+  loader: async () => {
+    const { data } = await supabase.auth.getSession();
+    if (data.session) {
+      return redirect({ to: "/dashboard" });
+    }
+    return null;
+  },
   head: () => ({
     meta: [
       { title: "Smart Email Sender — Send Gmail emails from templates" },
