@@ -280,15 +280,16 @@ function JobsPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div className="min-w-0">
           <h1 className="page-title flex items-center gap-2"><Briefcase className="h-4 w-4 shrink-0" /> Community Jobs Board</h1>
-          <p className="text-sm text-muted-foreground">Discover opportunities shared by other users. Generate tailored resumes in one click.</p>
         </div>
-        <div className="flex gap-2 w-full sm:w-auto flex-wrap">
-          <Button variant="outline" className="flex-1 sm:flex-none" onClick={() => setSourcesOpen(true)}>
-            <RefreshCw className="h-4 w-4 mr-1" /> Sync sources
+        <div className="flex gap-1.5 sm:gap-2 w-full sm:w-auto flex-nowrap sm:flex-wrap">
+          <Button variant="outline" className="flex-1 sm:flex-none px-2 sm:px-4" onClick={() => setSourcesOpen(true)}>
+            <RefreshCw className="h-4 w-4 sm:mr-1" /> <span className="hidden sm:inline">Sync sources</span>
           </Button>
           <Dialog open={urlOpen} onOpenChange={setUrlOpen}>
             <DialogTrigger asChild>
-              <Button variant="outline" className="flex-1 sm:flex-none"><Link2 className="h-4 w-4 mr-1" /> Import URL</Button>
+              <Button variant="outline" className="flex-1 sm:flex-none px-2 sm:px-4">
+                <Link2 className="h-4 w-4 sm:mr-1" /> <span className="hidden sm:inline">Import URL</span>
+              </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-lg">
               <DialogHeader><DialogTitle>Import job from URL</DialogTitle></DialogHeader>
@@ -316,7 +317,9 @@ function JobsPage() {
           </Dialog>
           <Dialog open={parseOpen} onOpenChange={setParseOpen}>
             <DialogTrigger asChild>
-              <Button variant="outline" className="flex-1 sm:flex-none"><Sparkles className="h-4 w-4 mr-1" /> AI Parse</Button>
+              <Button variant="outline" className="flex-1 sm:flex-none px-2 sm:px-4">
+                <Sparkles className="h-4 w-4 sm:mr-1" /> <span className="hidden sm:inline">AI Parse</span>
+              </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-2xl">
               <DialogHeader><DialogTitle>Paste job info</DialogTitle></DialogHeader>
@@ -334,8 +337,8 @@ function JobsPage() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
-          <Button className="flex-1 sm:flex-none" onClick={() => { setForm(blankForm()); setEditOpen(true); }}>
-            <Plus className="h-4 w-4 mr-1" /> Publish job
+          <Button className="flex-1 sm:flex-none px-2 sm:px-4" onClick={() => { setForm(blankForm()); setEditOpen(true); }}>
+            <Plus className="h-4 w-4 sm:mr-1" /> <span className="hidden sm:inline">Publish job</span>
           </Button>
         </div>
       </div>
@@ -355,41 +358,43 @@ function JobsPage() {
               ))}
             </div>
           </div>
-          <div className="grid grid-cols-1 sm:flex sm:flex-wrap gap-2">
-            <Select value={dateFilter} onValueChange={(v) => setDateFilter(v as typeof dateFilter)}>
-              <SelectTrigger className="w-full sm:w-[150px] h-9">
-                <CalendarDays className="h-3.5 w-3.5 mr-1.5 shrink-0 opacity-60" />
-                <SelectValue placeholder="Added" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Any date</SelectItem>
-                <SelectItem value="today">Added today</SelectItem>
-                <SelectItem value="week">Last 7 days</SelectItem>
-                <SelectItem value="month">Last 30 days</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={roleFilter} onValueChange={setRoleFilter}>
-              <SelectTrigger className="w-full sm:w-[200px] h-9">
-                <SelectValue placeholder="Role" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All roles</SelectItem>
-                {roleOptions.map((r) => (
-                  <SelectItem key={r} value={r}>{r}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={experienceFilter} onValueChange={setExperienceFilter}>
-              <SelectTrigger className="w-full sm:w-[180px] h-9">
-                <SelectValue placeholder="Experience" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All experience</SelectItem>
-                {experienceOptions.map((e) => (
-                  <SelectItem key={e} value={e}>{e}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="space-y-2">
+            <div className="grid grid-cols-3 gap-1.5 sm:flex sm:flex-wrap sm:gap-2">
+              <Select value={dateFilter} onValueChange={(v) => setDateFilter(v as typeof dateFilter)}>
+                <SelectTrigger className="w-full sm:w-[150px] h-9 px-2 sm:px-3.5">
+                  <CalendarDays className="h-3.5 w-3.5 mr-1 sm:mr-1.5 shrink-0 opacity-60" />
+                  <SelectValue placeholder="Added" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Any date</SelectItem>
+                  <SelectItem value="today">Added today</SelectItem>
+                  <SelectItem value="week">Last 7 days</SelectItem>
+                  <SelectItem value="month">Last 30 days</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={roleFilter} onValueChange={setRoleFilter}>
+                <SelectTrigger className="w-full sm:w-[200px] h-9 px-2 sm:px-3.5">
+                  <SelectValue placeholder="Role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All roles</SelectItem>
+                  {roleOptions.map((r) => (
+                    <SelectItem key={r} value={r}>{r}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={experienceFilter} onValueChange={setExperienceFilter}>
+                <SelectTrigger className="w-full sm:w-[180px] h-9 px-2 sm:px-3.5">
+                  <SelectValue placeholder="Experience" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All experience</SelectItem>
+                  {experienceOptions.map((e) => (
+                    <SelectItem key={e} value={e}>{e}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             {(dateFilter !== "all" || roleFilter !== "all" || experienceFilter !== "all") && (
               <Button
                 size="sm"
