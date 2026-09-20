@@ -391,7 +391,7 @@ function FollowupTracker({
           <Switch checked={enabled} disabled={enabledPending} onCheckedChange={onToggleEnabled} />
         </label>
         {!enabled ? (
-          <p className="text-xs text-muted-foreground px-1 py-1">
+          <p className="text-xs text-muted-foreground">
             Follow-up tracking is off for this campaign — no reminders will show in history.
           </p>
         ) : (

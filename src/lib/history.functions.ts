@@ -178,6 +178,23 @@ async function buildCampaignSummaries(
   });
 }
 
+/**
+ * Builds the `.or()` clause for campaign search: matches the campaign's own fields
+ * (subject/recipient list/template) plus any campaign whose recipients match by
+ * name, company or role — company/role live on email_recipients, not email_history.
+ */
+async function buildCampaignSearchClause(supabase: SupabaseClient<Database>, userId: string, search: string): Promise<string> {
+  const { data } = await supabase
+    .from("email_recipients")
+    .select("email_history_id")
+    .eq("user_id", userId)
+    .or(`name.ilike.%${search}%,company.ilike.%${search}%,role.ilike.%${search}%`)
+    .limit(500);
+  const matchingIds = Array.from(new Set((data ?? []).map((r) => r.email_history_id)));
+  const idClause = matchingIds.length ? `,id.in.(${matchingIds.join(",")})` : "";
+  return `recipient.ilike.%${search}%,subject.ilike.%${search}%,template_name.ilike.%${search}%${idClause}`;
+}
+
 /** Campaign-level history list (one row per send, replies excluded). */
 export const listCampaigns = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -201,7 +218,7 @@ export const listCampaigns = createServerFn({ method: "GET" })
       .order("sent_at", { ascending: false })
       .limit(data.limit);
     if (data.status !== "all") q = q.eq("status", data.status);
-    if (data.search) q = q.or(`recipient.ilike.%${data.search}%,subject.ilike.%${data.search}%,template_name.ilike.%${data.search}%`);
+    if (data.search) q = q.or(await buildCampaignSearchClause(context.supabase, context.userId, data.search));
     if (data.dateFrom) q = q.gte("sent_at", `${data.dateFrom}T00:00:00.000Z`);
     if (data.dateTo) q = q.lte("sent_at", `${data.dateTo}T23:59:59.999Z`);
     const { data: rows, error } = await q;
@@ -237,7 +254,7 @@ export const listCampaignsPage = createServerFn({ method: "GET" })
       .order("sent_at", { ascending: false })
       .range(from, to);
     if (data.status !== "all") q = q.eq("status", data.status);
-    if (data.search) q = q.or(`recipient.ilike.%${data.search}%,subject.ilike.%${data.search}%,template_name.ilike.%${data.search}%`);
+    if (data.search) q = q.or(await buildCampaignSearchClause(context.supabase, context.userId, data.search));
     if (data.dateFrom) q = q.gte("sent_at", `${data.dateFrom}T00:00:00.000Z`);
     if (data.dateTo) q = q.lte("sent_at", `${data.dateTo}T23:59:59.999Z`);
     const { data: rows, count, error } = await q;

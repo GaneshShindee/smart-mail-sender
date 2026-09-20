@@ -20,11 +20,100 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import { StatusBadge, EmptyState } from "./dashboard";
-import { History as HistoryIcon, Search, Eye, FileText, Reply, Users, ChevronRight, Paperclip, BellRing, BellOff, MoreVertical, Trash2, X } from "lucide-react";
+import { History as HistoryIcon, Search, Eye, FileText, Reply, Users, ChevronRight, Paperclip, BellRing, BellOff, MoreVertical, Trash2, CalendarRange, X } from "lucide-react";
 import { useState } from "react";
+import { cn } from "@/lib/utils";
+import type { DateRange } from "react-day-picker";
 
 const PAGE_SIZE = 25;
+
+type CampaignFilters = { search: string; status: string; dateFrom: string; dateTo: string };
+const defaultCampaignFilters: CampaignFilters = { search: "", status: "all", dateFrom: "", dateTo: "" };
+
+/** Parses a "YYYY-MM-DD" filter value as a local date (not UTC, so the picker shows the right day). */
+function parseDateKey(key: string): Date | undefined {
+  if (!key) return undefined;
+  const [y, m, d] = key.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function toDateKey(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function formatDateLabel(key: string): string {
+  return parseDateKey(key)?.toLocaleDateString(undefined, { month: "short", day: "numeric" }) ?? "";
+}
+
+/** A "Sent date" filter button that opens a custom (themed) calendar popover instead of the native date picker. */
+function DateRangeFilter({
+  dateFrom,
+  dateTo,
+  onChange,
+}: {
+  dateFrom: string;
+  dateTo: string;
+  onChange: (patch: Partial<CampaignFilters>) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const hasFilter = !!dateFrom || !!dateTo;
+  const selected: DateRange | undefined = hasFilter
+    ? { from: parseDateKey(dateFrom), to: parseDateKey(dateTo) }
+    : undefined;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          className={cn(
+            "w-full justify-start gap-2 font-normal sm:w-auto",
+            hasFilter ? "border-primary/40 text-foreground" : "text-muted-foreground",
+          )}
+        >
+          <CalendarRange className="h-4 w-4 shrink-0" />
+          {hasFilter ? `${formatDateLabel(dateFrom) || "…"} – ${formatDateLabel(dateTo) || "…"}` : "Sent date"}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="start">
+        <Calendar
+          mode="range"
+          numberOfMonths={1}
+          defaultMonth={selected?.from}
+          selected={selected}
+          onSelect={(range) =>
+            onChange({
+              dateFrom: range?.from ? toDateKey(range.from) : "",
+              dateTo: range?.to ? toDateKey(range.to) : "",
+            })
+          }
+        />
+        {hasFilter && (
+          <div className="flex justify-end border-t border-border p-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                onChange({ dateFrom: "", dateTo: "" });
+                setOpen(false);
+              }}
+            >
+              <X className="h-3.5 w-3.5 mr-1" />Clear
+            </Button>
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 export const Route = createFileRoute("/_authenticated/history")({
   head: () => ({
@@ -43,10 +132,7 @@ export const Route = createFileRoute("/_authenticated/history")({
 function HistoryPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("all");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [filters, setFilters] = useState<CampaignFilters>(defaultCampaignFilters);
   const [page, setPage] = useState(1);
   const [deleteTarget, setDeleteTarget] = useState<CampaignSummary | null>(null);
   const listFn = useServerFn(listCampaignsPage);
@@ -54,14 +140,14 @@ function HistoryPage() {
   const deleteCampaignFn = useServerFn(deleteCampaign);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["campaign-history", search, status, dateFrom, dateTo, page],
+    queryKey: ["campaign-history", filters, page],
     queryFn: () =>
       listFn({
         data: {
-          search,
-          status,
-          dateFrom: dateFrom || undefined,
-          dateTo: dateTo || undefined,
+          search: filters.search,
+          status: filters.status,
+          dateFrom: filters.dateFrom || undefined,
+          dateTo: filters.dateTo || undefined,
           page,
           pageSize: PAGE_SIZE,
         },
@@ -70,16 +156,12 @@ function HistoryPage() {
   const rows = data?.rows ?? [];
   const total = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const hasDateFilter = !!dateFrom || !!dateTo;
 
-  const setFilter = <T,>(setter: (v: T) => void) => (v: T) => {
-    setter(v);
+  // Any filter change jumps back to page 1, since the current page may no longer exist.
+  const updateFilter = (patch: Partial<CampaignFilters>) => {
+    setFilters((f) => ({ ...f, ...patch }));
     setPage(1);
   };
-  const onSearchChange = setFilter(setSearch);
-  const onStatusChange = setFilter(setStatus);
-  const onDateFromChange = setFilter(setDateFrom);
-  const onDateToChange = setFilter(setDateTo);
 
   const toggleFollowup = useMutation({
     mutationFn: (vars: { campaignId: string; enabled: boolean }) =>
@@ -108,13 +190,13 @@ function HistoryPage() {
         <div className="relative w-full sm:flex-1 sm:min-w-[220px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            value={search}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Search subject, recipient or template…"
+            value={filters.search}
+            onChange={(e) => updateFilter({ search: e.target.value })}
+            placeholder="Search subject, recipient, role or company…"
             className="pl-9"
           />
         </div>
-        <Select value={status} onValueChange={onStatusChange}>
+        <Select value={filters.status} onValueChange={(status) => updateFilter({ status })}>
           <SelectTrigger className="w-full sm:w-40"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All statuses</SelectItem>
@@ -123,37 +205,7 @@ function HistoryPage() {
             <SelectItem value="failed">Failed</SelectItem>
           </SelectContent>
         </Select>
-        <div className="flex items-center gap-1.5">
-          <Input
-            type="date"
-            value={dateFrom}
-            onChange={(e) => onDateFromChange(e.target.value)}
-            max={dateTo || undefined}
-            className="w-full sm:w-[150px]"
-            aria-label="Sent from"
-          />
-          <span className="text-xs text-muted-foreground shrink-0">to</span>
-          <Input
-            type="date"
-            value={dateTo}
-            onChange={(e) => onDateToChange(e.target.value)}
-            min={dateFrom || undefined}
-            className="w-full sm:w-[150px]"
-            aria-label="Sent to"
-          />
-          {hasDateFilter && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9 shrink-0"
-              onClick={() => { onDateFromChange(""); onDateToChange(""); }}
-              aria-label="Clear date filter"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          )}
-        </div>
+        <DateRangeFilter dateFrom={filters.dateFrom} dateTo={filters.dateTo} onChange={updateFilter} />
       </div>
 
       <Card>
