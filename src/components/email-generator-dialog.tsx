@@ -96,7 +96,6 @@ export function EmailGeneratorDialog({ open, onOpenChange, onUse, companyFromEma
     providers: Array<{ provider: string; status: string; message?: string; webUrl: string; count: number }>;
   } | null>(null);
 
-  // Restore last template / auto-select first
   useEffect(() => {
     if (!open || !templates.data) return;
     if (templates.data.length === 0) {
@@ -279,9 +278,9 @@ export function EmailGeneratorDialog({ open, onOpenChange, onUse, companyFromEma
             </DialogTitle>
           </DialogHeader>
 
-          <div className="flex-1 min-h-0 grid md:grid-cols-2 gap-0 overflow-hidden">
+          <div className="flex-1 min-h-0 flex flex-col md:grid md:grid-cols-2 gap-0 overflow-y-auto md:overflow-hidden">
             {/* Left: template + data */}
-            <div className="flex flex-col gap-4 p-4 border-r min-h-0 overflow-y-auto">
+            <div className="flex flex-col gap-4 p-4 md:border-r min-h-0 md:overflow-y-auto">
               {/* Template selector */}
               <div className="space-y-2">
                 <Label className="text-xs uppercase tracking-wide text-muted-foreground">Instruction Template</Label>
@@ -583,8 +582,8 @@ export function EmailGeneratorDialog({ open, onOpenChange, onUse, companyFromEma
             </div>
 
             {/* Right: results */}
-            <div className="flex flex-col min-h-0 overflow-hidden">
-              <div className="grid grid-cols-4 gap-2 p-3 border-b text-center text-xs">
+            <div className="flex flex-col min-h-0 md:overflow-hidden border-t md:border-t-0">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 border-b text-center text-xs">
                 <Stat label="Lines" value={totalLines} />
                 <Stat label="Generated" value={emails.length} />
                 <Stat label="Skipped" value={skipped.length} />
@@ -734,8 +733,8 @@ function TemplateEditorDialog({
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="col-span-1 sm:col-span-2">
               <Label>Name</Label>
               <Input value={t.name} onChange={(e) => setT({ ...t, name: e.target.value })} />
             </div>
@@ -774,7 +773,7 @@ function TemplateEditorDialog({
               <Input placeholder="milliman.com" value={t.company_domain} onChange={(e) => setT({ ...t, company_domain: e.target.value })} />
             </div>
             {t.email_pattern === "custom" && (
-              <div className="col-span-2">
+              <div className="col-span-1 sm:col-span-2">
                 <Label>Custom Pattern</Label>
                 <Input className="font-mono" placeholder="{first}.{last}" value={t.custom_pattern} onChange={(e) => setT({ ...t, custom_pattern: e.target.value })} />
                 <p className="text-xs text-muted-foreground mt-1">Tokens: {"{first}"} {"{last}"} {"{f}"} {"{l}"}</p>
@@ -839,17 +838,18 @@ function TemplateEditorDialog({
             <div className="mt-2 space-y-1.5">
               {t.custom_rules.map((r, i) => (
                 <div key={i} className="flex gap-2 items-center">
-                  <Input value={r} onChange={(e) => {
+                  <Input className="min-w-0 flex-1" value={r} onChange={(e) => {
                     const next = [...t.custom_rules]; next[i] = e.target.value;
                     setT({ ...t, custom_rules: next });
                   }} />
-                  <Button size="icon" variant="ghost" onClick={() => setT({ ...t, custom_rules: t.custom_rules.filter((_, idx) => idx !== i) })}>
+                  <Button size="icon" variant="ghost" className="shrink-0" onClick={() => setT({ ...t, custom_rules: t.custom_rules.filter((_, idx) => idx !== i) })}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
               ))}
               <div className="flex gap-2">
                 <Input
+                  className="min-w-0 flex-1"
                   placeholder='e.g. Skip names ending with " Jr"'
                   value={newRule}
                   onChange={(e) => setNewRule(e.target.value)}
@@ -861,7 +861,7 @@ function TemplateEditorDialog({
                     }
                   }}
                 />
-                <Button variant="outline" type="button" onClick={() => { if (newRule.trim()) { setT({ ...t, custom_rules: [...t.custom_rules, newRule.trim()] }); setNewRule(""); } }}>
+                <Button variant="outline" type="button" className="shrink-0" onClick={() => { if (newRule.trim()) { setT({ ...t, custom_rules: [...t.custom_rules, newRule.trim()] }); setNewRule(""); } }}>
                   <Plus className="h-4 w-4 mr-1" /> Add Rule
                 </Button>
               </div>

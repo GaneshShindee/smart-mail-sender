@@ -159,16 +159,16 @@ function SettingsPage() {
                   )}
                   <div className="min-w-0 flex-1">
                     {renamingId === acc.id ? (
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <Input
                           value={renameValue}
                           onChange={(e) => setRenameValue(e.target.value)}
                           placeholder="Label (e.g. Recruiter)"
-                          className="h-8 max-w-xs"
+                          className="h-8 min-w-0 flex-1 max-w-xs"
                           autoFocus
                         />
-                        <Button size="sm" onClick={() => rename.mutate({ id: acc.id, label: renameValue })}>Save</Button>
-                        <Button size="sm" variant="ghost" onClick={() => setRenamingId(null)}>Cancel</Button>
+                        <Button size="sm" className="shrink-0" onClick={() => rename.mutate({ id: acc.id, label: renameValue })}>Save</Button>
+                        <Button size="sm" variant="ghost" className="shrink-0" onClick={() => setRenamingId(null)}>Cancel</Button>
                       </div>
                     ) : (
                       <>

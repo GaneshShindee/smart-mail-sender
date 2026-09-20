@@ -79,10 +79,10 @@ const activity = [
 ];
 
 function Index() {
-  const [openFaq, setOpenFaq] = useState<number | null>(0);
+const [openFaq, setOpenFaq] = useState<number | null>(0);
 
   return (
-    <div className="min-h-screen orbit-mesh text-foreground overflow-x-hidden">
+    <div className="md:min-h-screen orbit-mesh text-foreground overflow-x-hidden">
       <header className="border-b border-border/50 glass-header sticky top-0 z-20">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3.5 gap-4">
           <div className="flex items-center gap-2.5 text-[15px] font-semibold tracking-tight shrink-0">
