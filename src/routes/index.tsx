@@ -175,7 +175,7 @@ const [openFaq, setOpenFaq] = useState<number | null>(0);
             </p>
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-12 items-stretch">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 items-stretch">
             <div className="lg:col-span-5 rounded-2xl border border-border/80 bg-card p-5 shadow-[var(--shadow-soft)] landing-rise landing-rise-delay-1">
               <div className="flex items-center gap-2 text-sm font-semibold mb-4">
                 <div className="grid size-8 place-items-center rounded-lg bg-primary/10 text-primary">
@@ -324,7 +324,7 @@ const [openFaq, setOpenFaq] = useState<number | null>(0);
             />
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {[
               { n: "01", icon: Link2, title: "Connect Gmail", desc: "Grant send access once. Tokens refresh in the background." },
               { n: "02", icon: LayoutTemplate, title: "Build a template", desc: "Write once with {{placeholders}} for names, roles, and companies." },
@@ -347,7 +347,7 @@ const [openFaq, setOpenFaq] = useState<number | null>(0);
 
         {/* Dashboard mock + tracking */}
         <section className="mx-auto max-w-6xl px-6 pb-16 md:pb-24">
-          <div className="grid gap-6 lg:grid-cols-2 items-center">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 items-center">
             <div className="order-2 lg:order-1">
               <div className="relative overflow-hidden rounded-2xl border border-border/70 shadow-[var(--shadow-lift)] bg-card">
                 <img
@@ -398,7 +398,7 @@ const [openFaq, setOpenFaq] = useState<number | null>(0);
                 From templates to analytics — without juggling five tools.
               </p>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {[
                 { icon: LayoutTemplate, title: "Reusable templates", desc: "Save subjects and bodies once. Use {{placeholders}} that get filled at send time." },
                 { icon: Send, title: "Sends from your inbox", desc: "Emails go through your Gmail account, so replies land where they should." },

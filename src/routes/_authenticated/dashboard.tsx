@@ -87,7 +87,7 @@ function Dashboard() {
         </Card>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-5">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-5">
         <StatCard icon={Mail} label="Gmail" value={gmail.data?.connected ? "Connected" : "Not connected"} sub={gmail.data?.email ?? "—"} loading={gmail.isLoading} />
         <StatCard icon={Send} label="Total sent" value={stats.data?.sent ?? 0} loading={stats.isLoading} />
         <StatCard

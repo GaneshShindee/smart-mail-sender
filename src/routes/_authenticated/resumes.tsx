@@ -186,7 +186,7 @@ function ResumesPage() {
       />
 
       {isLoading ? (
-        <div className="grid gap-3 md:grid-cols-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-28 w-full rounded-xl" />)}</div>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-28 w-full rounded-xl" />)}</div>
       ) : groups.length > 0 ? (
         <div className="space-y-6">
           {groups.map(([folder, rows]) => (
@@ -196,7 +196,7 @@ function ResumesPage() {
                 <h2 className="text-sm font-semibold tracking-tight">{folder}</h2>
                 <Badge variant="secondary" className="text-[10px]">{rows.length}</Badge>
               </div>
-              <div className="grid gap-3 md:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 {rows.map((r) => (
                   <Card key={r.id}>
                     <CardContent className="py-5 space-y-3">

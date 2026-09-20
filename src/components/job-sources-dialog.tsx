@@ -118,7 +118,7 @@ export function JobSourcesDialog({ open, onOpenChange }: { open: boolean; onOpen
         </p>
 
         <div className="rounded-lg border p-3 space-y-3 bg-muted/20">
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div>
               <Label className="text-xs">Type</Label>
               <Select value={kind} onValueChange={(v) => setKind(v as JobSourceKind)}>

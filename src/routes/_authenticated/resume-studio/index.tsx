@@ -200,9 +200,9 @@ function ResumeStudioPage() {
       <section className="space-y-2">
         <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Master resumes</h2>
         {projects.isLoading ? (
-          <div className="grid gap-3 md:grid-cols-2">{Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-24 w-full" />)}</div>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">{Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-24 w-full" />)}</div>
         ) : projects.data?.length ? (
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {projects.data.map((p) => (
               <Card key={p.id}>
                 <CardContent className="py-4 flex items-start justify-between gap-3">

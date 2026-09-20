@@ -141,14 +141,14 @@ function CampaignDetailsPage() {
         <StatusBadge status={campaign.status} />
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
         <Stat label="Recipients" value={String(recipients.length)} icon={Users} />
         <Stat label="Opened" value={`${opened.length} / ${recipients.length}`} icon={Eye} />
         <Stat label="Open rate" value={`${Math.round(openRate * 100)}%`} icon={Flame} />
         <Stat label="Total opens" value={String(campaign.open_count ?? 0)} icon={Mail} />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             <div className="relative w-full sm:flex-1 sm:min-w-[200px]">

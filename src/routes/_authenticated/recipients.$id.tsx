@@ -163,7 +163,7 @@ function RecipientDetailsPage() {
         </Card>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="Total opens" value={String(total)} />
         <Stat label="First open" value={first ? new Date(first).toLocaleString() : "—"} />
         <Stat label="Last open" value={last ? new Date(last).toLocaleString() : "—"} />
@@ -197,7 +197,7 @@ function RecipientDetailsPage() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between space-y-0">
             <CardTitle className="text-base">Complete open history ({total})</CardTitle>

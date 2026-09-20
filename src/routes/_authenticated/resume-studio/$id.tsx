@@ -217,7 +217,7 @@ function WorkspacePage() {
     return (
       <div className="mx-auto max-w-7xl space-y-4">
         <Skeleton className="h-8 w-64" />
-        <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_1fr]">
           <Skeleton className="h-[600px]" />
           <Skeleton className="h-[600px]" />
         </div>
@@ -307,7 +307,7 @@ function WorkspacePage() {
 
       <InsightsBar version={v} />
 
-      <div className="grid gap-3 lg:grid-cols-2 flex-1 min-h-0">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 flex-1 min-h-0">
         <Card className="overflow-hidden flex flex-col min-h-0">
           <div className="border-b border-border px-3 py-2 text-xs text-muted-foreground flex items-center justify-between">
             <span>LaTeX source · {q.data.project?.main_tex_filename ?? "resume.tex"}</span>

@@ -409,13 +409,13 @@ function JobsPage() {
       </Card>
 
       {jobsQ.isLoading ? (
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-40" />)}
         </div>
       ) : shown.length === 0 ? (
         <Card><CardContent className="py-16 text-center text-sm text-muted-foreground">No jobs yet. Publish one or use AI Parse.</CardContent></Card>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {shown.map((j) => {
             const bookmarked = (j as Job & { bookmarked: boolean }).bookmarked;
             const isMine = (j as Job & { isMine: boolean }).isMine;
@@ -471,7 +471,7 @@ function JobsPage() {
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{form.id ? "Edit job" : "Publish new job"}</DialogTitle></DialogHeader>
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <Field label="Title"><Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
             <Field label="Company"><Input value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} /></Field>
             <Field label="Location"><Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} /></Field>

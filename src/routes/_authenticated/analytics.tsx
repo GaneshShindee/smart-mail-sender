@@ -45,7 +45,7 @@ function AnalyticsPage() {
         </Select>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-5">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
         <Stat icon={Send} label="Sent" value={totals?.sent ?? 0} loading={isLoading} />
         <Stat icon={Users} label="Recipients" value={totals?.recipients ?? 0} loading={isLoading} />
         <Stat icon={Eye} label="Total opens" value={totals?.opens ?? 0} loading={isLoading} />
