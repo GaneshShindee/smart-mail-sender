@@ -364,7 +364,11 @@ export const notificationsFeed = createServerFn({ method: "GET" })
         time: o.opened_at,
         title: "Email opened",
         sub: `${o.browser ?? "Unknown"} · ${o.device_type ?? ""}`,
-        link: o.email_history_id ? `/campaigns/${o.email_history_id}` : undefined,
+        link: o.email_recipient_id
+          ? `/recipients/${o.email_recipient_id}`
+          : o.email_history_id
+            ? `/campaigns/${o.email_history_id}`
+            : undefined,
       });
     }
     for (const r of replies ?? []) {
@@ -384,7 +388,11 @@ export const notificationsFeed = createServerFn({ method: "GET" })
         time: p.created_at,
         title: `Resume viewed`,
         sub: `${p.filename ?? "PDF"} · ${p.device_type ?? ""}`,
-        link: p.email_history_id ? `/campaigns/${p.email_history_id}` : undefined,
+        link: p.email_recipient_id
+          ? `/recipients/${p.email_recipient_id}`
+          : p.email_history_id
+            ? `/campaigns/${p.email_history_id}`
+            : undefined,
       });
     }
     return items.sort((a, b) => (a.time < b.time ? 1 : -1)).slice(0, 60);
