@@ -1273,50 +1273,58 @@ export type Database = {
       resumes: {
         Row: {
           created_at: string
+          folder: string | null
           id: string
           is_default: boolean
           mime_type: string
           name: string
           original_filename: string
           size_bytes: number
-          storage_path: string
-          folder: string | null
           source_resume_version_id: string | null
+          storage_path: string
           updated_at: string
           user_id: string
           version: number
         }
         Insert: {
           created_at?: string
+          folder?: string | null
           id?: string
           is_default?: boolean
           mime_type: string
           name: string
           original_filename: string
           size_bytes: number
-          storage_path: string
-          folder?: string | null
           source_resume_version_id?: string | null
+          storage_path: string
           updated_at?: string
           user_id: string
           version?: number
         }
         Update: {
           created_at?: string
+          folder?: string | null
           id?: string
           is_default?: boolean
           mime_type?: string
           name?: string
           original_filename?: string
           size_bytes?: number
-          storage_path?: string
-          folder?: string | null
           source_resume_version_id?: string | null
+          storage_path?: string
           updated_at?: string
           user_id?: string
           version?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "resumes_source_resume_version_id_fkey"
+            columns: ["source_resume_version_id"]
+            isOneToOne: false
+            referencedRelation: "resume_versions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       send_jobs: {
         Row: {
