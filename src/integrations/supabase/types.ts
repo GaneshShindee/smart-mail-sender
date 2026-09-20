@@ -174,6 +174,7 @@ export type Database = {
           body_html: string | null
           error: string | null
           first_opened_at: string | null
+          followup_enabled: boolean
           gmail_account_id: string | null
           gmail_message_id: string | null
           gmail_thread_id: string | null
@@ -206,6 +207,7 @@ export type Database = {
           body_html?: string | null
           error?: string | null
           first_opened_at?: string | null
+          followup_enabled?: boolean
           gmail_account_id?: string | null
           gmail_message_id?: string | null
           gmail_thread_id?: string | null
@@ -238,6 +240,7 @@ export type Database = {
           body_html?: string | null
           error?: string | null
           first_opened_at?: string | null
+          followup_enabled?: boolean
           gmail_account_id?: string | null
           gmail_message_id?: string | null
           gmail_thread_id?: string | null
