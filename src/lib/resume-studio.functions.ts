@@ -168,6 +168,50 @@ export const getResumeProjectMainTex = createServerFn({ method: "GET" })
     return { tex: await blob.text(), name: proj.name, mainTexFilename: proj.main_tex_filename };
   });
 
+/**
+ * Duplicate a master resume's .tex as a new editable version — no AI call.
+ * Lets the user start from an exact copy, then edit manually or with "Ask AI" in the workspace.
+ */
+export const duplicateResumeProjectAsVersion = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ projectId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { data: proj, error } = await context.supabase
+      .from("resume_projects")
+      .select("storage_prefix, main_tex_filename, name")
+      .eq("id", data.projectId)
+      .eq("user_id", context.userId)
+      .single();
+    if (error || !proj) throw new Error("Project not found");
+
+    const { data: blob, error: dErr } = await context.supabase.storage
+      .from("resume-latex")
+      .download(`${proj.storage_prefix}${proj.main_tex_filename}`);
+    if (dErr || !blob) throw new Error(dErr?.message ?? "Could not read main.tex");
+    const tex = await blob.text();
+
+    const { data: row, error: iErr } = await context.supabase
+      .from("resume_versions")
+      .insert({
+        user_id: context.userId,
+        project_id: data.projectId,
+        job_title: `Copy of ${proj.name}`,
+        company: null,
+        job_description: "",
+        custom_instructions: null,
+        tex_content: tex,
+        ats_score: null,
+        matched_keywords: [],
+        missing_keywords: [],
+        strengths: [],
+        suggestions: [],
+      })
+      .select()
+      .single();
+    if (iErr) throw new Error(iErr.message);
+    return row as ResumeVersion;
+  });
+
 export const listResumeVersions = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ projectId: z.string().uuid().optional() }).parse(d ?? {}))
@@ -562,6 +606,103 @@ export const deleteResumeVersion = createServerFn({ method: "POST" })
       await context.supabase.storage.from("resume-latex").remove([v.pdf_storage_path]);
     }
     return { ok: true };
+  });
+
+/** Copy an existing tailored version into a brand-new version — same project, fresh id, no PDF/AI re-run. */
+export const duplicateResumeVersion = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { data: v, error } = await context.supabase
+      .from("resume_versions")
+      .select("project_id, job_title, company, job_description, custom_instructions, tex_content, ats_score, matched_keywords, missing_keywords, strengths, suggestions")
+      .eq("id", data.id)
+      .eq("user_id", context.userId)
+      .single();
+    if (error || !v) throw new Error(error?.message ?? "Version not found");
+
+    const { data: row, error: iErr } = await context.supabase
+      .from("resume_versions")
+      .insert({
+        user_id: context.userId,
+        project_id: v.project_id,
+        job_title: v.job_title ? `Copy of ${v.job_title}` : "Copy",
+        company: v.company,
+        job_description: v.job_description,
+        custom_instructions: v.custom_instructions,
+        tex_content: v.tex_content,
+        ats_score: v.ats_score,
+        matched_keywords: v.matched_keywords,
+        missing_keywords: v.missing_keywords,
+        strengths: v.strengths,
+        suggestions: v.suggestions,
+      })
+      .select()
+      .single();
+    if (iErr) throw new Error(iErr.message);
+    return row as ResumeVersion;
+  });
+
+/** Promote a tailored version's .tex into a brand-new Master resume, copying over any project assets (.cls/.sty/images) so it still compiles. */
+export const saveResumeVersionAsMaster = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ id: z.string().uuid(), name: z.string().max(120).optional() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: v, error } = await supabase
+      .from("resume_versions")
+      .select("project_id, job_title, company, tex_content")
+      .eq("id", data.id)
+      .eq("user_id", userId)
+      .single();
+    if (error || !v) throw new Error(error?.message ?? "Version not found");
+
+    const { data: srcProj } = await supabase
+      .from("resume_projects")
+      .select("storage_prefix, main_tex_filename")
+      .eq("id", v.project_id)
+      .maybeSingle();
+
+    const mainFilename = srcProj?.main_tex_filename || "resume.tex";
+    const projectId = crypto.randomUUID();
+    const prefix = `${userId}/${projectId}/`;
+    const projectName =
+      data.name?.trim() || (v.job_title ? `${v.job_title}${v.company ? ` · ${v.company}` : ""}` : "Master resume");
+
+    const mainUp = await supabase.storage
+      .from("resume-latex")
+      .upload(`${prefix}${mainFilename}`, new Blob([v.tex_content], { type: "application/x-tex" }), {
+        contentType: "application/x-tex",
+        upsert: true,
+      });
+    if (mainUp.error) throw new Error(mainUp.error.message);
+
+    // Copy any extra project assets (.cls/.sty/images) from the source master so the new one still compiles.
+    if (srcProj?.storage_prefix) {
+      const { data: files } = await supabase.storage.from("resume-latex").list(srcProj.storage_prefix, { limit: 1000 });
+      for (const f of files ?? []) {
+        if (f.name === mainFilename) continue;
+        const { data: blob } = await supabase.storage.from("resume-latex").download(`${srcProj.storage_prefix}${f.name}`);
+        if (!blob) continue;
+        await supabase.storage.from("resume-latex").upload(`${prefix}${f.name}`, blob, { upsert: true });
+      }
+    }
+
+    const { data: row, error: iErr } = await supabase
+      .from("resume_projects")
+      .insert({
+        id: projectId,
+        user_id: userId,
+        name: projectName,
+        description: null,
+        storage_prefix: prefix,
+        main_tex_filename: mainFilename,
+        is_default: false,
+      })
+      .select()
+      .single();
+    if (iErr) throw new Error(iErr.message);
+    return row as ResumeProject;
   });
 
 const emailFromResumeSchema = z.object({

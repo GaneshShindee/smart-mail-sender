@@ -474,9 +474,9 @@ function JobsPage() {
       )}
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>{form.id ? "Edit job" : "Publish new job"}</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col p-0">
+          <DialogHeader className="px-6 py-4 border-b"><DialogTitle>{form.id ? "Edit job" : "Publish new job"}</DialogTitle></DialogHeader>
+          <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 grid grid-cols-1 gap-3 md:grid-cols-2">
             <Field label="Title"><Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
             <Field label="Company"><Input value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} /></Field>
             <Field label="Location"><Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} /></Field>
@@ -498,7 +498,7 @@ function JobsPage() {
               Share publicly with the community
             </label>
           </div>
-          <DialogFooter>
+          <DialogFooter className="px-6 py-3 border-t">
             <Button variant="ghost" onClick={() => setEditOpen(false)}>Cancel</Button>
             <Button onClick={() => save.mutate(form)} disabled={save.isPending}>
               {save.isPending ? "Saving…" : form.id ? "Save changes" : "Publish"}

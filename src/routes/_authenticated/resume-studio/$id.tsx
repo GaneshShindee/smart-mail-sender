@@ -6,6 +6,7 @@ import {
   updateResumeVersionTex,
   uploadResumeVersionPdf,
   saveResumeVersionToLibrary,
+  saveResumeVersionAsMaster,
   deleteResumeVersion,
   improveResumeSection,
   generateApplicationEmail,
@@ -19,7 +20,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { LatexEditor, type EditorSelection, type LatexEditorApi } from "@/components/latex-editor";
 import { LatexPreview } from "@/components/latex-preview";
 import { UpdateResumeDialog, InlineAskAi } from "@/components/resume-ai-dialogs";
-import { ArrowLeft, Save, Wand2, Sparkles, Trash2, Send, CheckCircle2, AlertCircle, FolderPlus, Paperclip } from "lucide-react";
+import { ArrowLeft, Save, Wand2, Sparkles, Trash2, Send, CheckCircle2, AlertCircle, FolderPlus, Paperclip, Copy } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AI_JD_RESUME_FOLDER } from "@/lib/linkedin";
@@ -54,6 +55,7 @@ function WorkspacePage() {
   const saveFn = useServerFn(updateResumeVersionTex);
   const uploadPdfFn = useServerFn(uploadResumeVersionPdf);
   const saveLibraryFn = useServerFn(saveResumeVersionToLibrary);
+  const saveAsMasterFn = useServerFn(saveResumeVersionAsMaster);
   const delFn = useServerFn(deleteResumeVersion);
   const improveFn = useServerFn(improveResumeSection);
   const emailFn = useServerFn(generateApplicationEmail);
@@ -118,6 +120,17 @@ function WorkspacePage() {
       });
     },
     onError: (e) => toast.error("Could not save to Resumes", { description: (e as Error).message }),
+  });
+
+  const saveAsMaster = useMutation({
+    mutationFn: () => saveAsMasterFn({ data: { id } }),
+    onSuccess: (proj) => {
+      qc.invalidateQueries({ queryKey: ["resume-projects"] });
+      toast.success(`Saved as Master resume "${proj.name}"`, {
+        action: { label: "Open Resume Studio", onClick: () => nav({ to: "/resume-studio" }) },
+      });
+    },
+    onError: (e) => toast.error("Could not save as Master", { description: (e as Error).message }),
   });
 
   const del = useMutation({
@@ -264,6 +277,16 @@ function WorkspacePage() {
           >
             <FolderPlus className="h-3.5 w-3.5 mr-1" />
             {saveToLibrary.isPending ? "Saving…" : "Save to Resumes"}
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => saveAsMaster.mutate()}
+            disabled={saveAsMaster.isPending}
+            title="Save this .tex as a new Master resume, so you can Tailor/Duplicate from it later"
+          >
+            <Copy className="h-3.5 w-3.5 mr-1" />
+            {saveAsMaster.isPending ? "Saving…" : "Save as Master"}
           </Button>
           <Button
             size="sm"

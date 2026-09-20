@@ -7,6 +7,9 @@ import {
   deleteResumeProject,
   listResumeVersions,
   generateResumeVersion,
+  duplicateResumeProjectAsVersion,
+  duplicateResumeVersion,
+  deleteResumeVersion,
 } from "@/lib/resume-studio.functions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,7 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "../dashboard";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Trash2, Wand2, FileText, Sparkles, ArrowRight, Upload } from "lucide-react";
+import { Plus, Trash2, Wand2, FileText, Sparkles, Pencil, Upload, Copy } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { fileToBase64 } from "@/lib/resumes";
@@ -49,6 +52,9 @@ function ResumeStudioPage() {
   const delFn = useServerFn(deleteResumeProject);
   const listVersionsFn = useServerFn(listResumeVersions);
   const genFn = useServerFn(generateResumeVersion);
+  const duplicateFn = useServerFn(duplicateResumeProjectAsVersion);
+  const duplicateVersionFn = useServerFn(duplicateResumeVersion);
+  const deleteVersionFn = useServerFn(deleteResumeVersion);
   const getJobFn = useServerFn(getJob);
 
   const projects = useQuery({ queryKey: ["resume-projects"], queryFn: () => listFn() });
@@ -178,6 +184,32 @@ function ResumeStudioPage() {
     onError: (e) => toast.error("AI failed", { description: (e as Error).message }),
   });
 
+  const duplicate = useMutation({
+    mutationFn: (projectId: string) => duplicateFn({ data: { projectId } }),
+    onSuccess: (v) => {
+      qc.invalidateQueries({ queryKey: ["resume-versions"] });
+      toast.success("Duplicated — edit it below, or use Ask AI");
+      nav({ to: "/resume-studio/$id", params: { id: v.id } });
+    },
+    onError: (e) => toast.error("Duplicate failed", { description: (e as Error).message }),
+  });
+
+  const duplicateVersion = useMutation({
+    mutationFn: (id: string) => duplicateVersionFn({ data: { id } }),
+    onSuccess: (v) => {
+      qc.invalidateQueries({ queryKey: ["resume-versions"] });
+      toast.success("Copied — edit it below, or use Ask AI");
+      nav({ to: "/resume-studio/$id", params: { id: v.id } });
+    },
+    onError: (e) => toast.error("Copy failed", { description: (e as Error).message }),
+  });
+
+  const deleteVersion = useMutation({
+    mutationFn: (id: string) => deleteVersionFn({ data: { id } }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["resume-versions"] }); toast.success("Deleted"); },
+    onError: (e) => toast.error("Delete failed", { description: (e as Error).message }),
+  });
+
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -218,6 +250,15 @@ function ResumeStudioPage() {
                     <Button size="sm" variant="outline" onClick={() => { setGenProjectId(p.id); setGenOpen(true); }}>
                       <Sparkles className="h-3.5 w-3.5 mr-1" /> Tailor
                     </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      title="Duplicate — copy this .tex, then edit it manually or with Ask AI"
+                      disabled={duplicate.isPending}
+                      onClick={() => duplicate.mutate(p.id)}
+                    >
+                      <Copy className="h-3.5 w-3.5 mr-1" /> {duplicate.isPending && duplicate.variables === p.id ? "Duplicating…" : "Duplicate"}
+                    </Button>
                     <Button size="sm" variant="ghost" onClick={() => { if (confirm("Delete this master resume and all versions?")) del.mutate(p.id); }}>
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
@@ -245,16 +286,35 @@ function ResumeStudioPage() {
                       <div className="font-medium truncate">{v.job_title || "Untitled role"}{v.company ? ` · ${v.company}` : ""}</div>
                       <div className="text-xs text-muted-foreground">{relativeTime(v.created_at)}</div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1 shrink-0">
                       {typeof v.ats_score === "number" && (
-                        <Badge variant={v.ats_score >= 75 ? "default" : v.ats_score >= 50 ? "secondary" : "outline"}>
+                        <Badge variant={v.ats_score >= 75 ? "default" : v.ats_score >= 50 ? "secondary" : "outline"} className="mr-1">
                           ATS {v.ats_score}
                         </Badge>
                       )}
-                      <Button asChild size="sm" variant="ghost">
+                      <Button asChild size="sm" variant="ghost" title="Edit">
                         <Link to="/resume-studio/$id" params={{ id: v.id }}>
-                          Open <ArrowRight className="h-3.5 w-3.5 ml-1" />
+                          <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
                         </Link>
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        title="Copy — duplicate this version"
+                        disabled={duplicateVersion.isPending}
+                        onClick={() => duplicateVersion.mutate(v.id)}
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        title="Delete"
+                        className="text-destructive hover:text-destructive"
+                        disabled={deleteVersion.isPending}
+                        onClick={() => { if (confirm("Delete this tailored version?")) deleteVersion.mutate(v.id); }}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                   </li>
