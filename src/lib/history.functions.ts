@@ -1,6 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { Database } from "@/integrations/supabase/types";
 
 export const listHistory = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -39,7 +41,56 @@ export type CampaignSummary = {
   replied: number;
   you_replied: number;
   attachment_count: number;
+  followupEnabled: boolean;
+  followupDays: FollowupDay[];
+  followupPending: boolean;
+  followupDueDay: number | null;
 };
+
+export const FOLLOWUP_TRACKED_DAYS = 7;
+
+export type FollowupDay = {
+  day: number;
+  dueAt: string;
+  done: boolean;
+  overdue: boolean;
+};
+
+/**
+ * Builds the 7-day manual follow-up checklist for a campaign: day N is "due"
+ * 24*N hours after it was sent, and stays "overdue" (the red-mark trigger)
+ * until the user checks it off — independent of whether the recipient replied.
+ */
+function computeFollowupDays(sentAt: string, doneDays: Set<number>, now = Date.now()): FollowupDay[] {
+  const sentMs = new Date(sentAt).getTime();
+  const days: FollowupDay[] = [];
+  for (let day = 1; day <= FOLLOWUP_TRACKED_DAYS; day++) {
+    const dueAtMs = sentMs + day * 24 * 60 * 60 * 1000;
+    const done = doneDays.has(day);
+    days.push({ day, dueAt: new Date(dueAtMs).toISOString(), done, overdue: !done && dueAtMs <= now });
+  }
+  return days;
+}
+
+async function fetchFollowupDoneDays(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+  campaignIds: string[],
+): Promise<Map<string, Set<number>>> {
+  const map = new Map<string, Set<number>>();
+  if (campaignIds.length === 0) return map;
+  const { data: rows } = await supabase
+    .from("campaign_followup_days")
+    .select("email_history_id, day_number")
+    .eq("user_id", userId)
+    .in("email_history_id", campaignIds);
+  for (const r of rows ?? []) {
+    const set = map.get(r.email_history_id) ?? new Set<number>();
+    set.add(r.day_number);
+    map.set(r.email_history_id, set);
+  }
+  return map;
+}
 
 /** Campaign-level history list (one row per send, replies excluded). */
 export const listCampaigns = createServerFn({ method: "GET" })
@@ -49,6 +100,8 @@ export const listCampaigns = createServerFn({ method: "GET" })
       .object({
         search: z.string().default(""),
         status: z.string().default("all"),
+        dateFrom: z.string().optional(),
+        dateTo: z.string().optional(),
         limit: z.number().int().min(1).max(500).default(200),
       })
       .parse(d ?? {}),
@@ -56,13 +109,15 @@ export const listCampaigns = createServerFn({ method: "GET" })
   .handler(async ({ data, context }): Promise<CampaignSummary[]> => {
     let q = context.supabase
       .from("email_history")
-      .select("id, subject, template_name, sender_email, status, sent_at, error, recipient_count, attachments, kind")
+      .select("id, subject, template_name, sender_email, status, sent_at, error, recipient_count, attachments, kind, followup_enabled")
       .eq("user_id", context.userId)
       .neq("kind", "reply")
       .order("sent_at", { ascending: false })
       .limit(data.limit);
     if (data.status !== "all") q = q.eq("status", data.status);
     if (data.search) q = q.or(`recipient.ilike.%${data.search}%,subject.ilike.%${data.search}%,template_name.ilike.%${data.search}%`);
+    if (data.dateFrom) q = q.gte("sent_at", `${data.dateFrom}T00:00:00.000Z`);
+    if (data.dateTo) q = q.lte("sent_at", `${data.dateTo}T23:59:59.999Z`);
     const { data: rows, error } = await q;
     if (error) throw new Error(error.message);
     const campaigns = rows ?? [];
@@ -92,6 +147,8 @@ export const listCampaigns = createServerFn({ method: "GET" })
       agg.set(r.email_history_id, a);
     }
 
+    const doneDaysByCampaign = await fetchFollowupDoneDays(context.supabase, context.userId, ids);
+
     return campaigns.map((c) => {
       const a = agg.get(c.id);
       const attachments = Array.isArray(c.attachments) ? (c.attachments as unknown[]) : [];
@@ -99,11 +156,18 @@ export const listCampaigns = createServerFn({ method: "GET" })
       const company = companies.length === 1 ? companies[0] : companies.length > 1 ? `${companies.length} companies` : null;
       const roles = a?.roles ? Array.from(a.roles) : [];
       const role = roles.length === 1 ? roles[0] : roles.length > 1 ? `${roles.length} roles` : null;
+      const followupEnabled = c.followup_enabled ?? true;
+      const followupDays = followupEnabled ? computeFollowupDays(c.sent_at, doneDaysByCampaign.get(c.id) ?? new Set()) : [];
+      const firstOverdue = followupDays.find((f) => f.overdue) ?? null;
       return {
         id: c.id,
         subject: c.subject,
         company,
         role,
+        followupEnabled,
+        followupDays,
+        followupPending: !!firstOverdue,
+        followupDueDay: firstOverdue?.day ?? null,
         template_name: c.template_name,
         sender_email: c.sender_email,
         status: c.status,
@@ -333,7 +397,7 @@ export const getCampaign = createServerFn({ method: "GET" })
   .handler(async ({ data, context }) => {
     const { data: campaign, error } = await context.supabase
       .from("email_history")
-      .select("id, subject, body, template_name, template_id, status, sent_at, error, sender_email, gmail_account_id, bcc, attachments, recipient_count, open_count, first_opened_at, last_opened_at, tracking_enabled")
+      .select("id, subject, body, template_name, template_id, status, sent_at, error, sender_email, gmail_account_id, bcc, attachments, recipient_count, open_count, first_opened_at, last_opened_at, tracking_enabled, followup_enabled")
       .eq("id", data.id)
       .eq("user_id", context.userId)
       .maybeSingle();
@@ -348,7 +412,69 @@ export const getCampaign = createServerFn({ method: "GET" })
       .order("email", { ascending: true });
     if (rErr) throw new Error(rErr.message);
 
-    return { campaign, recipients: recipients ?? [] };
+    const doneDaysByCampaign = await fetchFollowupDoneDays(context.supabase, context.userId, [campaign.id]);
+    const followupDays = campaign.followup_enabled
+      ? computeFollowupDays(campaign.sent_at, doneDaysByCampaign.get(campaign.id) ?? new Set())
+      : [];
+
+    return { campaign, recipients: recipients ?? [], followupDays };
+  });
+
+/** Turns the 7-day follow-up tracker on/off for a campaign (e.g. cold outreach that doesn't need chasing). */
+export const setCampaignFollowupEnabled = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ campaignId: z.string().uuid(), enabled: z.boolean() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase
+      .from("email_history")
+      .update({ followup_enabled: data.enabled })
+      .eq("id", data.campaignId)
+      .eq("user_id", context.userId);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+/** Marks (or un-marks) one of the 7 follow-up-tracker days for a campaign as done. */
+export const setCampaignFollowupDay = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        campaignId: z.string().uuid(),
+        day: z.number().int().min(1).max(FOLLOWUP_TRACKED_DAYS),
+        done: z.boolean(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { data: campaign } = await context.supabase
+      .from("email_history")
+      .select("id")
+      .eq("id", data.campaignId)
+      .eq("user_id", context.userId)
+      .maybeSingle();
+    if (!campaign) throw new Error("Campaign not found");
+
+    if (data.done) {
+      const { error } = await context.supabase
+        .from("campaign_followup_days")
+        .upsert(
+          { email_history_id: data.campaignId, user_id: context.userId, day_number: data.day, done_at: new Date().toISOString() },
+          { onConflict: "email_history_id,day_number" },
+        );
+      if (error) throw new Error(error.message);
+    } else {
+      const { error } = await context.supabase
+        .from("campaign_followup_days")
+        .delete()
+        .eq("email_history_id", data.campaignId)
+        .eq("user_id", context.userId)
+        .eq("day_number", data.day);
+      if (error) throw new Error(error.message);
+    }
+    return { ok: true };
   });
 
 export const getRecipient = createServerFn({ method: "GET" })

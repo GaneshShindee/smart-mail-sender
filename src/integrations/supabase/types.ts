@@ -14,6 +14,38 @@ export type Database = {
   }
   public: {
     Tables: {
+      campaign_followup_days: {
+        Row: {
+          day_number: number
+          done_at: string
+          email_history_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          day_number: number
+          done_at?: string
+          email_history_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          day_number?: number
+          done_at?: string
+          email_history_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_followup_days_email_history_id_fkey"
+            columns: ["email_history_id"]
+            isOneToOne: false
+            referencedRelation: "email_history"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_bounces: {
         Row: {
           bounce_type: string
@@ -142,6 +174,7 @@ export type Database = {
           body_html: string | null
           error: string | null
           first_opened_at: string | null
+          followup_enabled: boolean
           gmail_account_id: string | null
           gmail_message_id: string | null
           gmail_thread_id: string | null
@@ -174,6 +207,7 @@ export type Database = {
           body_html?: string | null
           error?: string | null
           first_opened_at?: string | null
+          followup_enabled?: boolean
           gmail_account_id?: string | null
           gmail_message_id?: string | null
           gmail_thread_id?: string | null
@@ -206,6 +240,7 @@ export type Database = {
           body_html?: string | null
           error?: string | null
           first_opened_at?: string | null
+          followup_enabled?: boolean
           gmail_account_id?: string | null
           gmail_message_id?: string | null
           gmail_thread_id?: string | null
