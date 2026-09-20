@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 import {
   Mail,
   Send,
@@ -87,7 +88,7 @@ function Dashboard() {
         </Card>
       )}
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-5">
+      <div className="grid grid-cols-5 gap-1.5 sm:gap-3">
         <StatCard icon={Mail} label="Gmail" value={gmail.data?.connected ? "Connected" : "Not connected"} sub={gmail.data?.email ?? "—"} loading={gmail.isLoading} />
         <StatCard icon={Send} label="Total sent" value={stats.data?.sent ?? 0} loading={stats.isLoading} />
         <StatCard
@@ -144,8 +145,9 @@ function Dashboard() {
                   onClick={() => navigate({ to: "/campaigns/$id", params: { id: c.id } })}
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium truncate">{c.subject}</div>
+                    <div className="text-sm font-medium truncate">{c.company || c.subject}</div>
                     <div className="text-xs text-muted-foreground truncate mt-0.5">
+                      {c.company ? `${c.subject} · ` : ""}
                       {new Date(c.sent_at).toLocaleString()}
                       {c.sender_email ? ` · from ${c.sender_email}` : ""}
                       {c.template_name ? ` · ${c.template_name}` : ""}
@@ -200,18 +202,32 @@ function Dashboard() {
   );
 }
 
-function StatCard({ icon: Icon, label, value, sub, loading }: { icon: any; label: string; value: any; sub?: string; loading?: boolean }) {
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  sub,
+  loading,
+  className,
+}: {
+  icon: any;
+  label: string;
+  value: any;
+  sub?: string;
+  loading?: boolean;
+  className?: string;
+}) {
   return (
-    <Card className="transition-orbit hover:border-primary/25 hover:shadow-[var(--shadow-lift)]">
+    <Card className={cn("transition-orbit hover:border-primary/25 hover:shadow-[var(--shadow-lift)]", className)}>
       <div className="stat-tile">
         <div className="grid size-8 place-items-center rounded-lg bg-primary/10 text-primary">
           <Icon className="h-3.5 w-3.5" strokeWidth={1.85} />
         </div>
-        <div className="text-xs font-medium uppercase tracking-[0.06em] text-muted-foreground">{label}</div>
+        <div className="hidden md:block text-xs font-medium uppercase tracking-[0.06em] text-muted-foreground">{label}</div>
         {loading ? <Skeleton className="h-7 w-16" /> : (
           <>
-            <div className="text-2xl font-semibold tracking-tight leading-none">{value}</div>
-            {sub && <div className="text-xs text-muted-foreground truncate max-w-full px-2">{sub}</div>}
+            <div className="text-sm md:text-2xl font-semibold tracking-tight leading-none truncate max-w-full px-1">{value}</div>
+            {sub && <div className="hidden md:block text-xs text-muted-foreground truncate max-w-full px-2">{sub}</div>}
           </>
         )}
       </div>

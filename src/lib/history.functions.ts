@@ -24,6 +24,7 @@ export const listHistory = createServerFn({ method: "GET" })
 export type CampaignSummary = {
   id: string;
   subject: string;
+  company: string | null;
   template_name: string | null;
   sender_email: string | null;
   status: string;
@@ -69,28 +70,35 @@ export const listCampaigns = createServerFn({ method: "GET" })
     const ids = campaigns.map((c) => c.id);
     const { data: recipients } = await context.supabase
       .from("email_recipients")
-      .select("email_history_id, open_count, pdf_view_count, replied_at, user_reply_sent_at")
+      .select("email_history_id, company, open_count, pdf_view_count, replied_at, user_reply_sent_at")
       .eq("user_id", context.userId)
       .in("email_history_id", ids);
 
-    const agg = new Map<string, { recipients: number; opened: number; opens: number; resume: number; replied: number; youReplied: number }>();
+    const agg = new Map<
+      string,
+      { recipients: number; opened: number; opens: number; resume: number; replied: number; youReplied: number; companies: Set<string> }
+    >();
     for (const r of recipients ?? []) {
-      const a = agg.get(r.email_history_id) ?? { recipients: 0, opened: 0, opens: 0, resume: 0, replied: 0, youReplied: 0 };
+      const a = agg.get(r.email_history_id) ?? { recipients: 0, opened: 0, opens: 0, resume: 0, replied: 0, youReplied: 0, companies: new Set<string>() };
       a.recipients += 1;
       a.opens += r.open_count ?? 0;
       if ((r.open_count ?? 0) > 0) a.opened += 1;
       if ((r.pdf_view_count ?? 0) > 0) a.resume += 1;
       if (r.replied_at) a.replied += 1;
       if (r.user_reply_sent_at) a.youReplied += 1;
+      if (r.company?.trim()) a.companies.add(r.company.trim());
       agg.set(r.email_history_id, a);
     }
 
     return campaigns.map((c) => {
       const a = agg.get(c.id);
       const attachments = Array.isArray(c.attachments) ? (c.attachments as unknown[]) : [];
+      const companies = a?.companies ? Array.from(a.companies) : [];
+      const company = companies.length === 1 ? companies[0] : companies.length > 1 ? `${companies.length} companies` : null;
       return {
         id: c.id,
         subject: c.subject,
+        company,
         template_name: c.template_name,
         sender_email: c.sender_email,
         status: c.status,

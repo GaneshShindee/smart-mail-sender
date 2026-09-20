@@ -1,11 +1,16 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Briefcase, History, Send } from "lucide-react";
+import { Briefcase, FileText, History, LayoutDashboard, Send } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
-const tabs = [
+const leftTabs = [
+  { url: "/dashboard", icon: LayoutDashboard },
   { url: "/jobs", icon: Briefcase },
+] as const;
+
+const rightTabs = [
   { url: "/history", icon: History },
+  { url: "/resumes", icon: FileText },
 ] as const;
 
 export function MobileBottomNav() {
@@ -42,8 +47,10 @@ export function MobileBottomNav() {
         hidden ? "translate-y-full" : "translate-y-0",
       )}
     >
-      <div className="mx-auto flex max-w-md items-center justify-around gap-1 px-3 py-2.5">
-        <TabLink {...tabs[0]} active={isActive(tabs[0].url)} />
+      <div className="mx-auto flex max-w-md items-center justify-around gap-1 px-2 py-2.5">
+        {leftTabs.map((t) => (
+          <TabLink key={t.url} {...t} active={isActive(t.url)} />
+        ))}
 
         <Link to="/send" aria-label="Send Mail" className="flex items-center justify-center">
           <span
@@ -57,7 +64,9 @@ export function MobileBottomNav() {
           </span>
         </Link>
 
-        <TabLink {...tabs[1]} active={isActive(tabs[1].url)} />
+        {rightTabs.map((t) => (
+          <TabLink key={t.url} {...t} active={isActive(t.url)} />
+        ))}
       </div>
     </nav>
   );
@@ -76,7 +85,7 @@ function TabLink({
     <Link
       to={url}
       aria-label={url.slice(1)}
-      className="flex items-center justify-center px-5 py-2 rounded-lg"
+      className="flex items-center justify-center px-2 py-2 rounded-lg"
     >
       <Icon
         className={cn("h-5 w-5", active ? "text-primary" : "text-muted-foreground")}

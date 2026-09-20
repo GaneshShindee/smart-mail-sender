@@ -141,7 +141,7 @@ function CampaignDetailsPage() {
         <StatusBadge status={campaign.status} />
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-4 gap-1.5 sm:gap-3">
         <Stat label="Recipients" value={String(recipients.length)} icon={Users} />
         <Stat label="Opened" value={`${opened.length} / ${recipients.length}`} icon={Eye} />
         <Stat label="Open rate" value={`${Math.round(openRate * 100)}%`} icon={Flame} />
@@ -335,8 +335,8 @@ function Stat({ label, value, icon: Icon }: { label: string; value: string; icon
         <div className="grid size-8 place-items-center rounded-lg bg-primary/10 text-primary">
           <Icon className="h-3.5 w-3.5" />
         </div>
-        <div className="text-xs font-medium uppercase tracking-[0.06em] text-muted-foreground">{label}</div>
-        <div className="text-xl font-semibold tracking-tight leading-none">{value}</div>
+        <div className="hidden md:block text-xs font-medium uppercase tracking-[0.06em] text-muted-foreground">{label}</div>
+        <div className="text-sm md:text-xl font-semibold tracking-tight leading-none truncate max-w-full px-1">{value}</div>
       </div>
     </Card>
   );

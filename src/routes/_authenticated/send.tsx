@@ -424,13 +424,14 @@ function SendPage() {
           size: f.size,
         })),
       );
+      const company = jobMeta.company.trim() || vars.company?.trim() || undefined;
       return sendFn({
         data: {
           templateId: tplId || null,
           gmailAccountId: senderId || null,
           // Send everything the user typed — the server re-validates and skips.
           recipients: parsed.valid.length ? parsed.valid : [],
-          recipientMeta: parsed.meta,
+          recipientMeta: company ? parsed.meta.map((m) => ({ ...m, company })) : parsed.meta,
           subject,
           body,
           variables: vars,
