@@ -1085,6 +1085,7 @@ export type Database = {
           email: string | null
           follow_up_template_id: string | null
           full_name: string | null
+          gemini_api_key: string | null
           id: string
           tracking_open_enabled: boolean
           updated_at: string
@@ -1098,6 +1099,7 @@ export type Database = {
           email?: string | null
           follow_up_template_id?: string | null
           full_name?: string | null
+          gemini_api_key?: string | null
           id: string
           tracking_open_enabled?: boolean
           updated_at?: string
@@ -1111,6 +1113,7 @@ export type Database = {
           email?: string | null
           follow_up_template_id?: string | null
           full_name?: string | null
+          gemini_api_key?: string | null
           id?: string
           tracking_open_enabled?: boolean
           updated_at?: string

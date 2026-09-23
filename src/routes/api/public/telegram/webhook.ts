@@ -88,7 +88,7 @@ export const Route = createFileRoute("/api/public/telegram/webhook")({
 
         try {
           const { aiExtractJobFields } = await import("@/lib/job-ai");
-          const fields = await aiExtractJobFields(text);
+          const fields = await aiExtractJobFields(text, { supabase: supabaseAdmin, userId: source.user_id });
           const sourceUrl = `telegram://${source.id}/${msg?.message_id ?? "msg"}`;
           const { error: iErr } = await supabaseAdmin.from("jobs").insert({
             user_id: source.user_id,

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { applyTemplate } from "@/lib/templating";
 import { deriveNames, greetingFor, bodyHasGreeting } from "@/lib/recipients";
+import { aiChatJson } from "@/lib/ai-gateway";
 import { parseAiJson } from "@/lib/parse-ai-json";
 
 
@@ -266,8 +267,6 @@ export const generateBulkReplyDraft = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
-    const key = process.env.LOVABLE_API_KEY;
-    if (!key) throw new Error("AI is not configured");
     const { supabase, userId } = context;
 
     const { data: recipients } = await supabase
@@ -313,30 +312,13 @@ export const generateBulkReplyDraft = createServerFn({ method: "POST" })
     const lengthGuide =
       length === "short" ? "Under 80 words." : length === "detailed" ? "200-300 words." : "Around 120-180 words.";
 
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          {
-            role: "system",
-            content:
-              `You draft ONE reply body that will be sent individually to several recipients of the same campaign. Tone: ${tone}. ${lengthGuide} Use the placeholder {{first_name}} for the recipient's name — never a real name. Do not invent facts, dates, or offers. Return STRICT JSON: {"body":"..."} with no markdown.`,
-          },
-          {
-            role: "user",
-            content: `Original outreach subject: ${campaign?.subject ?? ""}\nOriginal body:\n${(campaign?.body ?? "").slice(0, 2500)}${conversation}${templateBody ? `\n\nBase this closely on this reply template:\n${templateBody.slice(0, 2500)}` : ""}${data.instruction ? `\n\nUser instructions: ${data.instruction}` : ""}`,
-          },
-        ],
-        response_format: { type: "json_object" },
-      }),
+    const content = await aiChatJson({
+      supabase,
+      userId,
+      system:
+        `You draft ONE reply body that will be sent individually to several recipients of the same campaign. Tone: ${tone}. ${lengthGuide} Use the placeholder {{first_name}} for the recipient's name — never a real name. Do not invent facts, dates, or offers. Return STRICT JSON: {"body":"..."} with no markdown.`,
+      user: `Original outreach subject: ${campaign?.subject ?? ""}\nOriginal body:\n${(campaign?.body ?? "").slice(0, 2500)}${conversation}${templateBody ? `\n\nBase this closely on this reply template:\n${templateBody.slice(0, 2500)}` : ""}${data.instruction ? `\n\nUser instructions: ${data.instruction}` : ""}`,
     });
-    if (res.status === 429) throw new Error("AI rate limit reached. Try again shortly.");
-    if (res.status === 402) throw new Error("AI credits exhausted.");
-    if (!res.ok) throw new Error(`AI error ${res.status}`);
-    const j = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-    const content = j.choices?.[0]?.message?.content ?? "";
     const parsed = parseAiJson<{ body?: string }>(content);
     const body = (parsed.body ?? "").trim();
     if (!body) throw new Error("AI returned an empty draft");

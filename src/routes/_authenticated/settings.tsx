@@ -17,11 +17,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Mail, CheckCircle2, Star, Plus, Pencil, Trash2, Zap, Eye } from "lucide-react";
+import { Mail, CheckCircle2, Star, Plus, Pencil, Trash2, Zap, Eye, KeyRound, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { getUserPreferences, setUserPreferences } from "@/lib/profile.functions";
+import { getAiKeyStatus, setGeminiApiKey, clearGeminiApiKey, testGeminiApiKey } from "@/lib/ai-settings.functions";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({ meta: [{ title: "Settings — Smart Email Sender" }] }),
@@ -50,6 +51,43 @@ function SettingsPage() {
   const [profile, setProfile] = useState<{ email?: string; name?: string; avatar?: string }>({});
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
+
+  const aiKeyStatusFn = useServerFn(getAiKeyStatus);
+  const setAiKeyFn = useServerFn(setGeminiApiKey);
+  const clearAiKeyFn = useServerFn(clearGeminiApiKey);
+  const testAiKeyFn = useServerFn(testGeminiApiKey);
+  const aiKeyStatus = useQuery({ queryKey: ["ai-key-status"], queryFn: () => aiKeyStatusFn() });
+  const [geminiKeyInput, setGeminiKeyInput] = useState("");
+  const [testResult, setTestResult] = useState<{ ok: boolean; error?: string } | null>(null);
+
+  const testGeminiKey = useMutation({
+    mutationFn: (apiKey: string) => testAiKeyFn({ data: { apiKey } }),
+    onSuccess: (r) => {
+      setTestResult(r);
+      if (r.ok) toast.success("Key works — connected to Gemini successfully.");
+      else toast.error("Key test failed", { description: r.error });
+    },
+    onError: (e) => toast.error("Couldn't test key", { description: (e as Error).message }),
+  });
+  const saveGeminiKey = useMutation({
+    mutationFn: (apiKey: string) => setAiKeyFn({ data: { apiKey } }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["ai-key-status"] });
+      setGeminiKeyInput("");
+      setTestResult(null);
+      toast.success("Gemini API key saved. AI features now use your own key.");
+    },
+    onError: (e) => toast.error("Couldn't save key", { description: (e as Error).message }),
+  });
+  const removeGeminiKey = useMutation({
+    mutationFn: () => clearAiKeyFn(),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["ai-key-status"] });
+      setTestResult(null);
+      toast.success("Gemini API key removed. AI features will use the shared gateway.");
+    },
+    onError: (e) => toast.error("Couldn't remove key", { description: (e as Error).message }),
+  });
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -125,6 +163,76 @@ function SettingsPage() {
             disabled={prefs.isLoading || updatePref.isPending}
             onCheckedChange={(v) => updatePref.mutate(!!v)}
           />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle className="text-base flex items-center gap-2"><KeyRound className="h-4 w-4" /> AI (Gemini API key)</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            AI features (drafting, resume tailoring, job parsing, etc.) use a shared pool by default, which can
+            hit rate limits or run out of credits. Connect your own free Gemini API key to use your own quota instead —
+            if none is saved here, AI features automatically fall back to the shared pool.
+          </p>
+
+          {aiKeyStatus.isLoading ? (
+            <Skeleton className="h-10 w-full" />
+          ) : aiKeyStatus.data?.hasKey ? (
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3 flex-wrap">
+              <div className="flex items-center gap-2 min-w-0">
+                <Badge variant="outline" className="gap-1 shrink-0"><ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />Connected</Badge>
+                <span className="text-sm text-muted-foreground truncate">{aiKeyStatus.data.maskedKey}</span>
+              </div>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-destructive hover:text-destructive"
+                onClick={() => { if (confirm("Remove your Gemini API key? AI features will fall back to the shared pool.")) removeGeminiKey.mutate(); }}
+                disabled={removeGeminiKey.isPending}
+              >
+                <Trash2 className="h-3.5 w-3.5 mr-1" />Remove
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Input
+                  type="password"
+                  value={geminiKeyInput}
+                  onChange={(e) => { setGeminiKeyInput(e.target.value); setTestResult(null); }}
+                  placeholder="AIza..."
+                  className="h-9 min-w-0 flex-1 max-w-sm font-mono"
+                  autoComplete="off"
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0"
+                  onClick={() => testGeminiKey.mutate(geminiKeyInput)}
+                  disabled={!geminiKeyInput.trim() || testGeminiKey.isPending}
+                >
+                  {testGeminiKey.isPending ? "Testing…" : "Test"}
+                </Button>
+                <Button
+                  size="sm"
+                  className="shrink-0"
+                  onClick={() => saveGeminiKey.mutate(geminiKeyInput)}
+                  disabled={!geminiKeyInput.trim() || saveGeminiKey.isPending}
+                >
+                  {saveGeminiKey.isPending ? "Saving…" : "Save"}
+                </Button>
+              </div>
+              {testResult && !testResult.ok && (
+                <p className="text-xs text-destructive">{testResult.error}</p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Get a free key at{" "}
+                <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" className="underline">
+                  aistudio.google.com/apikey
+                </a>. Your key is stored on your account and only used for your own AI requests.
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 

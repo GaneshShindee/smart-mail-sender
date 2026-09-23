@@ -256,7 +256,9 @@ export const parseJobText = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) =>
     z.object({ text: z.string().max(50_000) }).parse(d),
   )
-  .handler(async ({ data }) => aiExtractJobFields(data.text));
+  .handler(async ({ data, context }) =>
+    aiExtractJobFields(data.text, { supabase: context.supabase, userId: context.userId }),
+  );
 
 /** Fetch a careers / LinkedIn / ATS page and extract job fields for review. */
 export const parseJobFromUrl = createServerFn({ method: "POST" })
@@ -264,11 +266,11 @@ export const parseJobFromUrl = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) =>
     z.object({ url: z.string().min(4).max(2_000) }).parse(d),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const { fetchUrlAsJobText } = await import("./job-import");
     const url = normalizeHttpUrl(data.url);
     const { text, finalUrl } = await fetchUrlAsJobText(url);
-    const fields = await aiExtractJobFields(text);
+    const fields = await aiExtractJobFields(text, { supabase: context.supabase, userId: context.userId });
     return {
       ...fields,
       source_url: finalUrl,

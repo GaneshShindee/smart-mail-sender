@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { aiChatJson } from "@/lib/ai-gateway";
 import { parseAiJson } from "@/lib/parse-ai-json";
 
 /** Pull recent inbox messages for every connection that granted read scope and
@@ -215,8 +216,6 @@ export const generateReplyDraft = createServerFn({ method: "POST" })
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    const key = process.env.LOVABLE_API_KEY;
-    if (!key) throw new Error("AI gateway not configured");
     const { data: reply, error } = await context.supabase
       .from("email_replies")
       .select("subject, body, snippet, from_email, from_name, email_history_id")
@@ -240,30 +239,13 @@ export const generateReplyDraft = createServerFn({ method: "POST" })
       length === "detailed" ? "Aim for 200-300 words with clear structure." :
       "Keep the reply around 120-180 words.";
 
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          {
-            role: "system",
-            content:
-              `You are an email reply assistant. Draft a context-aware reply that references the ORIGINAL outreach and the recipient's latest message. Tone: ${tone}. ${lengthGuide} Do NOT invent facts, credentials, dates, or offers. If the user provides custom instructions, follow them naturally. Return STRICT JSON: {"subject":"...","body":"..."}. No markdown.`,
-          },
-          {
-            role: "user",
-            content: `Draft a reply to this message.${data.instruction ? `\n\nUser instructions: ${data.instruction}` : ""}\n\nFrom: ${reply.from_name ?? ""} <${reply.from_email}>\nSubject: ${reply.subject ?? ""}\nTheir message:\n${(reply.body ?? reply.snippet ?? "").slice(0, 6000)}${campaignContext}`,
-          },
-        ],
-        response_format: { type: "json_object" },
-      }),
+    const content = await aiChatJson({
+      supabase: context.supabase,
+      userId: context.userId,
+      system:
+        `You are an email reply assistant. Draft a context-aware reply that references the ORIGINAL outreach and the recipient's latest message. Tone: ${tone}. ${lengthGuide} Do NOT invent facts, credentials, dates, or offers. If the user provides custom instructions, follow them naturally. Return STRICT JSON: {"subject":"...","body":"..."}. No markdown.`,
+      user: `Draft a reply to this message.${data.instruction ? `\n\nUser instructions: ${data.instruction}` : ""}\n\nFrom: ${reply.from_name ?? ""} <${reply.from_email}>\nSubject: ${reply.subject ?? ""}\nTheir message:\n${(reply.body ?? reply.snippet ?? "").slice(0, 6000)}${campaignContext}`,
     });
-    if (res.status === 429) throw new Error("AI rate limit reached. Try again shortly.");
-    if (res.status === 402) throw new Error("AI credits exhausted.");
-    if (!res.ok) throw new Error(`AI error ${res.status}`);
-    const j = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-    const content = j.choices?.[0]?.message?.content ?? "";
     const parsed = parseAiJson<{ subject?: string; body?: string }>(content);
     return {
       subject: (parsed.subject ?? "").trim() || `Re: ${reply.subject ?? ""}`,

@@ -1,28 +1,21 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/integrations/supabase/types";
+import { aiChatJson } from "@/lib/ai-gateway";
 import { parseAiJson } from "@/lib/parse-ai-json";
 /** AI job field extraction (shared by paste, URL, RSS, ATS, Telegram). */
 
-export async function aiExtractJobFields(text: string) {
-  const key = process.env.LOVABLE_API_KEY;
-  if (!key) throw new Error("AI gateway not configured");
+export async function aiExtractJobFields(
+  text: string,
+  ai: { supabase: SupabaseClient<Database>; userId: string },
+) {
   const sys =
     "You extract job information from arbitrary text (LinkedIn, Greenhouse, Lever, careers pages, emails, PDFs, Telegram posts). Return STRICT JSON with keys: title, company, location, work_mode (remote|hybrid|onsite|''), employment_type (full-time|intern|contract|part-time|''), experience, salary, description, responsibilities (string[]), skills (string[]), technologies (string[]), tags (string[]), recruiter_email, apply_url, company_website. If a field is unknown, use an empty string or empty array. Do not invent facts. No markdown, no prose.";
-  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-    body: JSON.stringify({
-      model: "google/gemini-3-flash-preview",
-      messages: [
-        { role: "system", content: sys },
-        { role: "user", content: text.slice(0, 45_000) },
-      ],
-      response_format: { type: "json_object" },
-    }),
+  const content = await aiChatJson({
+    supabase: ai.supabase,
+    userId: ai.userId,
+    system: sys,
+    user: text.slice(0, 45_000),
   });
-  if (res.status === 429) throw new Error("AI rate limit reached. Try again shortly.");
-  if (res.status === 402) throw new Error("AI credits exhausted.");
-  if (!res.ok) throw new Error(`AI error ${res.status}`);
-  const j = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-  const content = j.choices?.[0]?.message?.content ?? "";
   const parsed = parseAiJson<Record<string, unknown>>(content);
   const asStr = (k: string) => (typeof parsed[k] === "string" ? (parsed[k] as string) : "");
   const asArr = (k: string) =>

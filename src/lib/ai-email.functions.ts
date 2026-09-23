@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { aiChatJson } from "@/lib/ai-gateway";
 import { parseAiJson } from "@/lib/parse-ai-json";
 
 /**
@@ -27,9 +28,6 @@ export const generateAiEmail = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => schema.parse(d))
   .handler(async ({ data, context }): Promise<AiEmailResult> => {
-    const key = process.env.LOVABLE_API_KEY;
-    if (!key) throw new Error("AI gateway not configured");
-
     let templateSubject = "";
     let templateBody = "";
     let templateName = "";
@@ -90,23 +88,12 @@ export const generateAiEmail = createServerFn({ method: "POST" })
     if (resumeTex) parts.push(`RESUME (LaTeX source, factual reference only — do not quote LaTeX):\n${resumeTex.slice(0, 8000)}`);
     if (data.instructions) parts.push(`USER'S ADDITIONAL INSTRUCTIONS (highest priority, still respect the 90/10 rule):\n${data.instructions}`);
 
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: sys },
-          { role: "user", content: parts.join("\n\n") },
-        ],
-        response_format: { type: "json_object" },
-      }),
+    const content = await aiChatJson({
+      supabase: context.supabase,
+      userId: context.userId,
+      system: sys,
+      user: parts.join("\n\n"),
     });
-    if (res.status === 429) throw new Error("AI rate limit reached. Try again shortly.");
-    if (res.status === 402) throw new Error("AI credits exhausted.");
-    if (!res.ok) throw new Error(`AI error ${res.status}: ${(await res.text()).slice(0, 300)}`);
-    const j = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-    const content = j.choices?.[0]?.message?.content ?? "";
     const parsed = parseAiJson<{ subject?: string; body?: string }>(content);
     const subject = (parsed.subject ?? templateSubject ?? "").trim();
     const body = (parsed.body ?? templateBody ?? "").trim();

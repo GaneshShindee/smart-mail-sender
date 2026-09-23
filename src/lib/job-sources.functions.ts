@@ -264,7 +264,7 @@ export const syncJobSource = createServerFn({ method: "POST" })
           const text = [`Title: ${item.title}`, item.link ? `URL: ${item.link}` : "", item.description]
             .filter(Boolean)
             .join("\n");
-          const fields = await aiExtractJobFields(text);
+          const fields = await aiExtractJobFields(text, { supabase: context.supabase, userId: context.userId });
           const r = await insertParsedJob(context.supabase as never, context.userId, fields, {
             sourceUrl,
             companyFallback: cfg.company,
@@ -284,7 +284,7 @@ export const syncJobSource = createServerFn({ method: "POST" })
             skipped += 1;
             continue;
           }
-          const fields = await aiExtractJobFields(greenhouseToParseText(job));
+          const fields = await aiExtractJobFields(greenhouseToParseText(job), { supabase: context.supabase, userId: context.userId });
           const r = await insertParsedJob(context.supabase as never, context.userId, fields, {
             sourceUrl,
             externalId,
@@ -305,7 +305,7 @@ export const syncJobSource = createServerFn({ method: "POST" })
             skipped += 1;
             continue;
           }
-          const fields = await aiExtractJobFields(leverToParseText(job));
+          const fields = await aiExtractJobFields(leverToParseText(job), { supabase: context.supabase, userId: context.userId });
           const r = await insertParsedJob(context.supabase as never, context.userId, fields, {
             sourceUrl,
             externalId,

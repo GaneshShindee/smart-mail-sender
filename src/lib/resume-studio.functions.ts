@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { aiChatJson } from "@/lib/ai-gateway";
 import { parseAiJson } from "@/lib/parse-ai-json";
 
 export type ResumeProject = {
@@ -271,8 +272,6 @@ export const generateResumeVersion = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => generateSchema.parse(d))
   .handler(async ({ data, context }) => {
-    const key = process.env.LOVABLE_API_KEY;
-    if (!key) throw new Error("AI gateway not configured");
     const { data: proj, error } = await context.supabase
       .from("resume_projects")
       .select("storage_prefix, main_tex_filename")
@@ -326,23 +325,7 @@ export const generateResumeVersion = createServerFn({ method: "POST" })
       `\n\nORIGINAL resume.tex (do NOT change formatting, only content):\n\n${originalTex}`,
     ].join("");
 
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: sys },
-          { role: "user", content: user },
-        ],
-        response_format: { type: "json_object" },
-      }),
-    });
-    if (res.status === 429) throw new Error("AI rate limit reached. Try again shortly.");
-    if (res.status === 402) throw new Error("AI credits exhausted.");
-    if (!res.ok) throw new Error(`AI error ${res.status}: ${(await res.text()).slice(0, 300)}`);
-    const j = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-    const content = j.choices?.[0]?.message?.content ?? "";
+    const content = await aiChatJson({ supabase: context.supabase, userId: context.userId, system: sys, user });
     const parsed = parseAiJson<{
       tex?: string;
       ats_score?: number;
@@ -734,8 +717,6 @@ export const generateApplicationEmail = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => emailFromResumeSchema.parse(d))
   .handler(async ({ data, context }) => {
-    const key = process.env.LOVABLE_API_KEY;
-    if (!key) throw new Error("AI gateway not configured");
     const { data: v, error } = await context.supabase
       .from("resume_versions")
       .select("job_title, company, job_description, tex_content")
@@ -778,18 +759,7 @@ export const generateApplicationEmail = createServerFn({ method: "POST" })
       data.extraInstructions ? `USER'S ADDITIONAL INSTRUCTIONS (highest priority, still respect the 90/10 rule):\n${data.extraInstructions}` : "",
       `RESUME (LaTeX, factual reference only — do not quote LaTeX):\n${v.tex_content.slice(0, 6000)}`,
     ].filter(Boolean).join("\n\n");
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [{ role: "system", content: sys }, { role: "user", content: user }],
-        response_format: { type: "json_object" },
-      }),
-    });
-    if (!res.ok) throw new Error(`AI error ${res.status}`);
-    const j = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-    const c = j.choices?.[0]?.message?.content ?? "";
+    const c = await aiChatJson({ supabase: context.supabase, userId: context.userId, system: sys, user });
     const parsed = parseAiJson<{ subject?: string; body?: string }>(c);
     return {
       subject: (parsed.subject ?? templateSubject ?? `Application: ${v.job_title ?? "Role"}${v.company ? ` at ${v.company}` : ""}`).trim(),
@@ -808,8 +778,6 @@ export const improveResumeSection = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => sectionSchema.parse(d))
   .handler(async ({ data, context }) => {
-    const key = process.env.LOVABLE_API_KEY;
-    if (!key) throw new Error("AI gateway not configured");
     const { data: v } = await context.supabase
       .from("resume_versions")
       .select("tex_content, job_description, job_title, company, custom_instructions")
@@ -841,18 +809,7 @@ export const improveResumeSection = createServerFn({ method: "POST" })
       data.instructions ? `USER'S ADDITIONAL INSTRUCTIONS (highest priority, still respect truthfulness):\n${data.instructions}` : "",
       `FULL CURRENT LaTeX (return the FULL file back):\n${v.tex_content}`,
     ].filter(Boolean).join("\n\n");
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [{ role: "system", content: sys }, { role: "user", content: user }],
-        response_format: { type: "json_object" },
-      }),
-    });
-    if (!res.ok) throw new Error(`AI error ${res.status}`);
-    const j = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-    const c = j.choices?.[0]?.message?.content ?? "";
+    const c = await aiChatJson({ supabase: context.supabase, userId: context.userId, system: sys, user });
     const parsed = parseAiJson<{ tex?: string }>(c);
     const tex = (parsed.tex ?? "").trim();
     if (!tex.includes("\\")) throw new Error("AI did not return valid LaTeX");
@@ -871,8 +828,6 @@ export const updateResumeWithInstructions = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => updateWithInstructionsSchema.parse(d))
   .handler(async ({ data, context }) => {
-    const key = process.env.LOVABLE_API_KEY;
-    if (!key) throw new Error("AI gateway not configured");
     const { data: v } = await context.supabase
       .from("resume_versions")
       .select("tex_content, job_description, job_title, company")
@@ -905,20 +860,7 @@ export const updateResumeWithInstructions = createServerFn({ method: "POST" })
       `CURRENT LaTeX (return the FULL file back):\n${v.tex_content}`,
     ].filter(Boolean).join("\n\n");
 
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [{ role: "system", content: sys }, { role: "user", content: user }],
-        response_format: { type: "json_object" },
-      }),
-    });
-    if (res.status === 429) throw new Error("AI rate limit reached. Try again shortly.");
-    if (res.status === 402) throw new Error("AI credits exhausted.");
-    if (!res.ok) throw new Error(`AI error ${res.status}`);
-    const j = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-    const c = j.choices?.[0]?.message?.content ?? "";
+    const c = await aiChatJson({ supabase: context.supabase, userId: context.userId, system: sys, user });
     const parsed = parseAiJson<{ tex?: string; notes?: string }>(c);
     const tex = (parsed.tex ?? "").trim();
     if (!tex.includes("\\")) throw new Error("AI did not return valid LaTeX");
@@ -939,9 +881,6 @@ export const rewriteResumeSelection = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => rewriteSelectionSchema.parse(d))
   .handler(async ({ data, context }) => {
-    const key = process.env.LOVABLE_API_KEY;
-    if (!key) throw new Error("AI gateway not configured");
-
     let jd = data.jobDescription ?? "";
     if (data.id) {
       const { data: v } = await context.supabase
@@ -972,20 +911,7 @@ export const rewriteResumeSelection = createServerFn({ method: "POST" })
       `SELECTED FRAGMENT (rewrite exactly this):\n${data.selection}`,
     ].filter(Boolean).join("\n\n");
 
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [{ role: "system", content: sys }, { role: "user", content: user }],
-        response_format: { type: "json_object" },
-      }),
-    });
-    if (res.status === 429) throw new Error("AI rate limit reached. Try again shortly.");
-    if (res.status === 402) throw new Error("AI credits exhausted.");
-    if (!res.ok) throw new Error(`AI error ${res.status}`);
-    const j = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-    const c = j.choices?.[0]?.message?.content ?? "";
+    const c = await aiChatJson({ supabase: context.supabase, userId: context.userId, system: sys, user });
     const parsed = parseAiJson<{ replacement?: string }>(c);
     const replacement = (parsed.replacement ?? "").replace(/^```[a-z]*\n?|```$/g, "").trim();
     if (!replacement) throw new Error("AI returned an empty replacement");
