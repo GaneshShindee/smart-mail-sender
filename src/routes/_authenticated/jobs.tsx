@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
   listJobs,
+  listJobFilterOptions,
   upsertJob,
   deleteJob,
   toggleJobBookmark,
@@ -17,11 +18,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger,
 } from "@/components/ui/dialog";
 import { Bookmark, BookmarkCheck, Briefcase, Building2, MapPin, Plus, Search, Send, Share2, Sparkles, Trash2, Wand2, ExternalLink, Pencil, CalendarDays, Link2, RefreshCw } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { relativeTime } from "@/lib/user-agent";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -65,10 +67,13 @@ function toArr(s: string): string[] {
   return s.split(/[\n,]+/).map((x) => x.trim()).filter(Boolean);
 }
 
+const JOBS_PAGE_SIZE = 30;
+
 function JobsPage() {
   const qc = useQueryClient();
   const nav = useNavigate();
   const listFn = useServerFn(listJobs);
+  const filterOptionsFn = useServerFn(listJobFilterOptions);
   const upsertFn = useServerFn(upsertJob);
   const delFn = useServerFn(deleteJob);
   const bookmarkFn = useServerFn(toggleJobBookmark);
@@ -80,6 +85,7 @@ function JobsPage() {
   const [dateFilter, setDateFilter] = useState<"all" | "today" | "week" | "month">("all");
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [experienceFilter, setExperienceFilter] = useState<string>("all");
+  const [page, setPage] = useState(1);
   const [editOpen, setEditOpen] = useState(false);
   const [parseOpen, setParseOpen] = useState(false);
   const [urlOpen, setUrlOpen] = useState(false);
@@ -88,16 +94,45 @@ function JobsPage() {
   const [importUrl, setImportUrl] = useState("");
   const [form, setForm] = useState<EditForm>(blankForm());
 
+  // Every filter/search setter resets back to page 1, since the current page may no longer exist.
+  const setSearchAndReset = (v: string) => { setSearch(v); setPage(1); };
+  const setFilterAndReset = (v: typeof filter) => { setFilter(v); setPage(1); };
+  const setDateFilterAndReset = (v: typeof dateFilter) => { setDateFilter(v); setPage(1); };
+  const setRoleFilterAndReset = (v: string) => { setRoleFilter(v); setPage(1); };
+  const setExperienceFilterAndReset = (v: string) => { setExperienceFilter(v); setPage(1); };
+  const clearAdvancedFilters = () => {
+    setDateFilter("all");
+    setRoleFilter("all");
+    setExperienceFilter("all");
+    setPage(1);
+  };
+
+  const onlyMine = filter === "mine" || undefined;
+  const bookmarkedOnly = filter === "bookmarked" || undefined;
+  const workMode = (filter === "remote" || filter === "hybrid" || filter === "onsite") ? filter : undefined;
+
   const jobsQ = useQuery({
-    queryKey: ["jobs", filter, search],
+    queryKey: ["jobs", filter, search, dateFilter, roleFilter, experienceFilter, page],
     queryFn: () => listFn({
       data: {
         search: search || undefined,
-        onlyMine: filter === "mine" || undefined,
-        bookmarkedOnly: filter === "bookmarked" || undefined,
-        workMode: (filter === "remote" || filter === "hybrid" || filter === "onsite") ? filter : undefined,
+        onlyMine,
+        bookmarkedOnly,
+        workMode,
+        dateFilter,
+        role: roleFilter !== "all" ? roleFilter : undefined,
+        experience: experienceFilter !== "all" ? experienceFilter : undefined,
+        page,
+        pageSize: JOBS_PAGE_SIZE,
       },
     }),
+  });
+
+  // Role/experience dropdown options: contextual to search/mine/bookmarked/date, but independent
+  // of pagination (and of role/experience themselves) so a 30-row page doesn't starve the list.
+  const filterOptionsQ = useQuery({
+    queryKey: ["job-filter-options", filter, search, dateFilter],
+    queryFn: () => filterOptionsFn({ data: { search: search || undefined, onlyMine, bookmarkedOnly, workMode, dateFilter } }),
   });
 
   const save = useMutation({
@@ -115,7 +150,12 @@ function JobsPage() {
         is_public: f.is_public,
       },
     }),
-    onSuccess: () => { toast.success("Job saved"); setEditOpen(false); qc.invalidateQueries({ queryKey: ["jobs"] }); },
+    onSuccess: () => {
+      toast.success("Job saved");
+      setEditOpen(false);
+      qc.invalidateQueries({ queryKey: ["jobs"] });
+      qc.invalidateQueries({ queryKey: ["job-filter-options"] });
+    },
     onError: (e) => toast.error("Save failed", { description: (e as Error).message }),
   });
 
@@ -169,13 +209,20 @@ function JobsPage() {
 
   const del = useMutation({
     mutationFn: (id: string) => delFn({ data: { id } }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["jobs"] }); toast.success("Job removed"); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["jobs"] });
+      qc.invalidateQueries({ queryKey: ["job-filter-options"] });
+      toast.success("Job removed");
+    },
   });
 
   const bookmark = useMutation({
     mutationFn: ({ jobId, bookmark }: { jobId: string; bookmark: boolean }) =>
       bookmarkFn({ data: { jobId, bookmark } }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["jobs"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["jobs"] });
+      qc.invalidateQueries({ queryKey: ["job-filter-options"] });
+    },
   });
 
   const share = async (job: Job) => {
@@ -238,42 +285,11 @@ function JobsPage() {
     { key: "remote", label: "Remote" }, { key: "hybrid", label: "Hybrid" }, { key: "onsite", label: "On-site" },
   ];
 
-  const jobs = jobsQ.data ?? [];
-
-  const roleOptions = useMemo(() => {
-    const set = new Set<string>();
-    for (const j of jobs) {
-      const t = j.title.trim();
-      if (t) set.add(t);
-    }
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [jobs]);
-
-  const experienceOptions = useMemo(() => {
-    const set = new Set<string>();
-    for (const j of jobs) {
-      const e = j.experience.trim();
-      if (e) set.add(e);
-    }
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [jobs]);
-
-  const shown = useMemo(() => {
-    const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    const weekAgo = startOfToday - 6 * 24 * 60 * 60 * 1000;
-    const monthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate()).getTime();
-
-    return jobs.filter((j) => {
-      const created = new Date(j.created_at).getTime();
-      if (dateFilter === "today" && created < startOfToday) return false;
-      if (dateFilter === "week" && created < weekAgo) return false;
-      if (dateFilter === "month" && created < monthAgo) return false;
-      if (roleFilter !== "all" && j.title.trim() !== roleFilter) return false;
-      if (experienceFilter !== "all" && j.experience.trim() !== experienceFilter) return false;
-      return true;
-    });
-  }, [jobs, dateFilter, roleFilter, experienceFilter]);
+  const shown = jobsQ.data?.rows ?? [];
+  const total = jobsQ.data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / JOBS_PAGE_SIZE));
+  const roleOptions = filterOptionsQ.data?.roles ?? [];
+  const experienceOptions = filterOptionsQ.data?.experiences ?? [];
 
   return (
     <div className="mx-auto max-w-6xl space-y-4">
@@ -348,11 +364,11 @@ function JobsPage() {
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
             <div className="relative w-full sm:flex-1 sm:min-w-[220px]">
               <Search className="h-4 w-4 absolute left-2 top-2.5 text-muted-foreground" />
-              <Input className="pl-8" placeholder="Search by title, company, location…" value={search} onChange={(e) => setSearch(e.target.value)} />
+              <Input className="pl-8" placeholder="Search by title, company, location…" value={search} onChange={(e) => setSearchAndReset(e.target.value)} />
             </div>
             <div className="flex flex-wrap gap-1">
               {filters.map((f) => (
-                <Button key={f.key} size="sm" variant={filter === f.key ? "default" : "outline"} onClick={() => setFilter(f.key)}>
+                <Button key={f.key} size="sm" variant={filter === f.key ? "default" : "outline"} onClick={() => setFilterAndReset(f.key)}>
                   {f.label}
                 </Button>
               ))}
@@ -360,7 +376,7 @@ function JobsPage() {
           </div>
           <div className="space-y-2">
             <div className="grid grid-cols-3 gap-1.5 sm:flex sm:flex-wrap sm:gap-2">
-              <Select value={dateFilter} onValueChange={(v) => setDateFilter(v as typeof dateFilter)}>
+              <Select value={dateFilter} onValueChange={(v) => setDateFilterAndReset(v as typeof dateFilter)}>
                 <SelectTrigger className="w-full sm:w-[150px] h-9 px-2 sm:px-3.5">
                   <CalendarDays className="h-3.5 w-3.5 mr-1 sm:mr-1.5 shrink-0 opacity-60" />
                   <SelectValue placeholder="Added" />
@@ -372,7 +388,7 @@ function JobsPage() {
                   <SelectItem value="month">Last 30 days</SelectItem>
                 </SelectContent>
               </Select>
-              <Select value={roleFilter} onValueChange={setRoleFilter}>
+              <Select value={roleFilter} onValueChange={setRoleFilterAndReset}>
                 <SelectTrigger className="w-full sm:w-[200px] h-9 px-2 sm:px-3.5">
                   <SelectValue placeholder="Role" />
                 </SelectTrigger>
@@ -383,7 +399,7 @@ function JobsPage() {
                   ))}
                 </SelectContent>
               </Select>
-              <Select value={experienceFilter} onValueChange={setExperienceFilter}>
+              <Select value={experienceFilter} onValueChange={setExperienceFilterAndReset}>
                 <SelectTrigger className="w-full sm:w-[180px] h-9 px-2 sm:px-3.5">
                   <SelectValue placeholder="Experience" />
                 </SelectTrigger>
@@ -400,11 +416,7 @@ function JobsPage() {
                 size="sm"
                 variant="ghost"
                 className="w-full sm:w-auto"
-                onClick={() => {
-                  setDateFilter("all");
-                  setRoleFilter("all");
-                  setExperienceFilter("all");
-                }}
+                onClick={clearAdvancedFilters}
               >
                 Clear filters
               </Button>
@@ -470,6 +482,34 @@ function JobsPage() {
               </Card>
             );
           })}
+        </div>
+      )}
+
+      {total > 0 && (
+        <div className="flex flex-col items-center gap-2 sm:flex-row sm:justify-between">
+          <p className="text-xs text-muted-foreground">
+            Page {page} of {totalPages} · {total} job{total === 1 ? "" : "s"}
+          </p>
+          <Pagination className="mx-0 w-auto">
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious
+                  href="#"
+                  aria-disabled={page <= 1}
+                  className={page <= 1 ? "pointer-events-none opacity-50" : undefined}
+                  onClick={(e) => { e.preventDefault(); setPage((p) => Math.max(1, p - 1)); }}
+                />
+              </PaginationItem>
+              <PaginationItem>
+                <PaginationNext
+                  href="#"
+                  aria-disabled={page >= totalPages}
+                  className={page >= totalPages ? "pointer-events-none opacity-50" : undefined}
+                  onClick={(e) => { e.preventDefault(); setPage((p) => Math.min(totalPages, p + 1)); }}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
         </div>
       )}
 

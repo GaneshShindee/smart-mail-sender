@@ -226,9 +226,6 @@ export function AiBodyDialog({
             <div className="text-sm font-medium flex items-center gap-1.5">
               <FileText className="h-4 w-4" /> Tailor resume for this JD
             </div>
-            <p className="text-xs text-muted-foreground">
-              Uses the full job posting above. Your email body is kept — after compile, use Attach to email (no new email is generated).
-            </p>
             {(projects.data?.length ?? 0) === 0 ? (
               <p className="text-xs text-muted-foreground">
                 No master resume yet.{" "}

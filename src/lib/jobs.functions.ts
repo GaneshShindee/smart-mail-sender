@@ -48,42 +48,130 @@ const jobShape = z.object({
   is_public: z.boolean().default(true),
 });
 
+const jobDateFilter = z.enum(["all", "today", "week", "month"]).default("all");
+
+/** ISO cutoff for a "added today/this week/this month" filter, or null for "all". */
+function dateFilterCutoffIso(filter: z.infer<typeof jobDateFilter>): string | null {
+  if (filter === "all") return null;
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (filter === "today") return startOfToday.toISOString();
+  if (filter === "week") return new Date(startOfToday.getTime() - 6 * 24 * 60 * 60 * 1000).toISOString();
+  return new Date(startOfToday.getFullYear(), startOfToday.getMonth() - 1, startOfToday.getDate()).toISOString();
+}
+
+/** `.or()` clause matching title/company/description/location by free-text search. */
+function jobSearchClause(search: string): string {
+  const s = `%${search}%`;
+  return `title.ilike.${s},company.ilike.${s},description.ilike.${s},location.ilike.${s}`;
+}
+
+const jobListFilters = z.object({
+  search: z.string().max(200).optional(),
+  onlyMine: z.boolean().optional(),
+  bookmarkedOnly: z.boolean().optional(),
+  workMode: z.string().max(40).optional(),
+  dateFilter: jobDateFilter,
+  role: z.string().max(200).optional(),
+  experience: z.string().max(60).optional(),
+});
+
+export type JobsPage = {
+  rows: Array<Job & { bookmarked: boolean; isMine: boolean }>;
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
 export const listJobs = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
-    z
-      .object({
-        search: z.string().max(200).optional(),
-        onlyMine: z.boolean().optional(),
-        bookmarkedOnly: z.boolean().optional(),
-        workMode: z.string().max(40).optional(),
+    jobListFilters
+      .extend({
+        page: z.number().int().min(1).default(1),
+        pageSize: z.number().int().min(1).max(100).default(30),
       })
       .parse(d ?? {}),
   )
-  .handler(async ({ data, context }) => {
-    let q = context.supabase
-      .from("jobs")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(200);
-    if (data.onlyMine) q = q.eq("user_id", context.userId);
-    if (data.workMode) q = q.eq("work_mode", data.workMode);
-    if (data.search) {
-      const s = `%${data.search}%`;
-      q = q.or(`title.ilike.${s},company.ilike.${s},description.ilike.${s},location.ilike.${s}`);
-    }
-    const { data: rows, error } = await q;
-    if (error) throw new Error(error.message);
-
+  .handler(async ({ data, context }): Promise<JobsPage> => {
     const { data: bookmarks } = await context.supabase
       .from("job_bookmarks")
       .select("job_id")
       .eq("user_id", context.userId);
     const bset = new Set((bookmarks ?? []).map((b) => b.job_id));
 
-    let list = (rows ?? []) as Job[];
-    if (data.bookmarkedOnly) list = list.filter((j) => bset.has(j.id));
-    return list.map((j) => ({ ...j, bookmarked: bset.has(j.id), isMine: j.user_id === context.userId }));
+    if (data.bookmarkedOnly && bset.size === 0) {
+      return { rows: [], total: 0, page: data.page, pageSize: data.pageSize };
+    }
+
+    const from = (data.page - 1) * data.pageSize;
+    const to = from + data.pageSize - 1;
+    let q = context.supabase
+      .from("jobs")
+      .select("*", { count: "exact" })
+      .order("created_at", { ascending: false })
+      .range(from, to);
+    if (data.onlyMine) q = q.eq("user_id", context.userId);
+    if (data.workMode) q = q.eq("work_mode", data.workMode);
+    if (data.role) q = q.eq("title", data.role);
+    if (data.experience) q = q.eq("experience", data.experience);
+    if (data.bookmarkedOnly) q = q.in("id", Array.from(bset));
+    if (data.search) q = q.or(jobSearchClause(data.search));
+    const cutoff = dateFilterCutoffIso(data.dateFilter);
+    if (cutoff) q = q.gte("created_at", cutoff);
+
+    const { data: rows, count, error } = await q;
+    if (error) throw new Error(error.message);
+
+    const list = (rows ?? []) as Job[];
+    return {
+      rows: list.map((j) => ({ ...j, bookmarked: bset.has(j.id), isMine: j.user_id === context.userId })),
+      total: count ?? 0,
+      page: data.page,
+      pageSize: data.pageSize,
+    };
+  });
+
+/**
+ * Distinct role/experience values for the filter dropdowns — scoped by the same
+ * search/mine/bookmarked/date filters as the list (so options stay contextual)
+ * but independent of pagination, since a 30-row page would otherwise starve them.
+ */
+export const listJobFilterOptions = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => jobListFilters.omit({ role: true, experience: true }).parse(d ?? {}))
+  .handler(async ({ data, context }) => {
+    let bset: Set<string> | null = null;
+    if (data.bookmarkedOnly) {
+      const { data: bookmarks } = await context.supabase
+        .from("job_bookmarks")
+        .select("job_id")
+        .eq("user_id", context.userId);
+      bset = new Set((bookmarks ?? []).map((b) => b.job_id));
+      if (bset.size === 0) return { roles: [], experiences: [] };
+    }
+
+    let q = context.supabase.from("jobs").select("title, experience").limit(2000);
+    if (data.onlyMine) q = q.eq("user_id", context.userId);
+    if (data.workMode) q = q.eq("work_mode", data.workMode);
+    if (bset) q = q.in("id", Array.from(bset));
+    if (data.search) q = q.or(jobSearchClause(data.search));
+    const cutoff = dateFilterCutoffIso(data.dateFilter);
+    if (cutoff) q = q.gte("created_at", cutoff);
+
+    const { data: rows, error } = await q;
+    if (error) throw new Error(error.message);
+
+    const roles = new Set<string>();
+    const experiences = new Set<string>();
+    for (const r of rows ?? []) {
+      if (r.title?.trim()) roles.add(r.title.trim());
+      if (r.experience?.trim()) experiences.add(r.experience.trim());
+    }
+    return {
+      roles: Array.from(roles).sort((a, b) => a.localeCompare(b)),
+      experiences: Array.from(experiences).sort((a, b) => a.localeCompare(b)),
+    };
   });
 
 export const getJob = createServerFn({ method: "GET" })
