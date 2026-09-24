@@ -63,6 +63,15 @@ export async function getUserAiConfig(
   };
 }
 
+/** Most providers () return 401/403 for a bad key, but xAI's Grok API
+ *  returns plain 400 with {"code":"invalid-argument","error":"Incorrect API
+ *  key..."} — detect that shape too so it still reads as a rejected key. */
+function looksLikeInvalidKeyError(status: number, bodyText: string): boolean {
+  if (status !== 400) return false;
+  const lower = bodyText.toLowerCase();
+  return lower.includes("invalid-argument") && lower.includes("api key");
+}
+
 async function callOpenAiCompatible(
   url: string,
   apiKey: string,
@@ -76,7 +85,13 @@ async function callOpenAiCompatible(
     throw new Error(`Your ${label} API key was rejected. Check it in Settings → AI.`);
   }
   if (res.status === 503) throw new Error(`${label} is temporarily overloaded with high demand. Try again in a moment.`);
-  if (!res.ok) throw new Error(`${label} API error ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  if (!res.ok) {
+    const text = await res.text();
+    if (looksLikeInvalidKeyError(res.status, text)) {
+      throw new Error(`Your ${label} API key was rejected. Check it in Settings → AI.`);
+    }
+    throw new Error(`${label} API error ${res.status}: ${text.slice(0, 300)}`);
+  }
   const j = (await res.json()) as ChatCompletion;
   return j.choices?.[0]?.message?.content ?? "";
 }
@@ -158,7 +173,11 @@ async function verifyApiKey(
     });
     if (res.status === 401 || res.status === 403) return { ok: false, error: "Invalid API key." };
     if (res.status === 429) return { ok: false, error: "Key is valid, but is currently rate-limited." };
-    if (!res.ok) return { ok: false, error: `${label} API error ${res.status}: ${(await res.text()).slice(0, 200)}` };
+    if (!res.ok) {
+      const text = await res.text();
+      if (looksLikeInvalidKeyError(res.status, text)) return { ok: false, error: "Invalid API key." };
+      return { ok: false, error: `${label} API error ${res.status}: ${text.slice(0, 200)}` };
+    }
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : `Could not reach ${label} API.` };
