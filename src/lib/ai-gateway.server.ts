@@ -117,13 +117,18 @@ async function callLovableGateway(messages: ChatMessage[]): Promise<string> {
   });
 
   try {
+    const instructions = messages
+      .filter((message) => message.role === "system")
+      .map((message) => message.content)
+      .join("\n\n");
+    const promptMessages = messages
+      .filter((message) => message.role !== "system")
+      .map((message) => ({ role: "user" as const, content: message.content }));
     const result = streamText({
       model: lovable.responses(LOVABLE_MODEL),
       maxRetries: 0,
-      messages: messages.map((message) => ({
-        role: message.role === "system" ? "system" : "user",
-        content: message.content,
-      })),
+      instructions,
+      messages: promptMessages,
       providerOptions: {
         openai: {
           forceReasoning: true,
