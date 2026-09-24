@@ -21,6 +21,21 @@ const GROK_DIRECT_MODEL = "grok-4-fast";
 type ChatCompletion = { choices?: { message?: { content?: string } }[] };
 type ChatMessage = { role: string; content: string };
 
+function gatewayErrorMessage(error: unknown): string {
+  const status =
+    error && typeof error === "object" && "statusCode" in error && typeof error.statusCode === "number"
+      ? error.statusCode
+      : undefined;
+  const raw = error instanceof Error ? error.message : String(error);
+  if (status === 402 || raw.toLowerCase().includes("payment required")) {
+    return "Not enough Lovable AI credits. Add workspace credits, then try again.";
+  }
+  if (status === 401) return "Lovable AI could not authenticate the managed project key.";
+  if (status === 403) return raw || "Lovable AI access is currently blocked for this workspace.";
+  if (status === 429) return "Lovable AI is rate-limited. Please wait a moment and try again.";
+  return raw || "Lovable AI request failed";
+}
+
 /** Providers occasionally return 503 "model overloaded" for a moment —
  *  retry a couple of times with backoff before surfacing an error. */
 const OVERLOAD_RETRY_DELAYS_MS = [400, 1200];
@@ -143,16 +158,13 @@ async function callLovableGateway(messages: ChatMessage[]): Promise<string> {
     for await (const part of result.fullStream) {
       if (part.type === "text-delta") text += part.text;
       if (part.type === "error") {
-        const cause = part.error;
-        const message = cause instanceof Error ? cause.message : String(cause);
-        throw new Error(message);
+        throw new Error(gatewayErrorMessage(part.error));
       }
     }
     if (!text.trim()) throw new Error("Lovable AI completed without returning text. Please try again.");
     return text;
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Lovable AI request failed";
-    throw new Error(message);
+    throw new Error(gatewayErrorMessage(error));
   }
 }
 
