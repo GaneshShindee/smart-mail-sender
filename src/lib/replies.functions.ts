@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { aiChatJson } from "@/lib/ai-gateway";
+import { aiChatJson } from "@/lib/ai-gateway.server";
 import { parseAiJson } from "@/lib/parse-ai-json";
 
 /** Pull recent inbox messages for every connection that granted read scope and

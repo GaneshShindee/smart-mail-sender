@@ -1,7 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { AI_PROVIDERS, verifyGeminiApiKey, verifyGrokApiKey, type AiProvider } from "@/lib/ai-gateway";
+import { verifyGeminiApiKey, verifyGrokApiKey } from "@/lib/ai-gateway.server";
+import { AI_PROVIDERS, type AiProvider } from "@/lib/ai-provider";
 
 function maskKey(key: string): string {
   const tail = key.slice(-4);

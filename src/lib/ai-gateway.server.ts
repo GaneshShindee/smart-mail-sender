@@ -1,5 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { createOpenAI } from "@ai-sdk/openai";
+import { streamText } from "ai";
 import type { Database } from "@/integrations/supabase/types";
+import { AI_PROVIDERS, type AiProvider } from "@/lib/ai-provider";
 
 /** Shared chat-completion caller. A user can save a Gemini and/or Grok API key
  *  and pick one as their active provider in Settings → AI. Whichever provider
@@ -7,11 +10,7 @@ import type { Database } from "@/integrations/supabase/types";
  *  used when nothing is selected (or the selected provider has no key saved),
  *  never as a silent runtime fallback if the selected provider's call fails. */
 
-export type AiProvider = "lovable" | "gemini" | "grok";
-export const AI_PROVIDERS: AiProvider[] = ["lovable", "gemini", "grok"];
-
-const LOVABLE_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
-const LOVABLE_MODEL = "google/gemini-3-flash-preview";
+const LOVABLE_MODEL = "openai/gpt-6-astra";
 
 const GEMINI_DIRECT_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
 const GEMINI_DIRECT_MODEL = "gemini-flash-latest";
@@ -21,6 +20,21 @@ const GROK_DIRECT_MODEL = "grok-4-fast";
 
 type ChatCompletion = { choices?: { message?: { content?: string } }[] };
 type ChatMessage = { role: string; content: string };
+
+function gatewayErrorMessage(error: unknown): string {
+  const status =
+    error && typeof error === "object" && "statusCode" in error && typeof error.statusCode === "number"
+      ? error.statusCode
+      : undefined;
+  const raw = error instanceof Error ? error.message : String(error);
+  if (status === 402 || raw.toLowerCase().includes("payment required")) {
+    return "Not enough Lovable AI credits. Add workspace credits, then try again.";
+  }
+  if (status === 401) return "Lovable AI could not authenticate the managed project key.";
+  if (status === 403) return raw || "Lovable AI access is currently blocked for this workspace.";
+  if (status === 429) return "Lovable AI is rate-limited. Please wait a moment and try again.";
+  return raw || "Lovable AI request failed";
+}
 
 /** Providers occasionally return 503 "model overloaded" for a moment —
  *  retry a couple of times with backoff before surfacing an error. */
@@ -103,21 +117,55 @@ const callDirectGrok = (apiKey: string, messages: ChatMessage[]) =>
   callOpenAiCompatible(GROK_DIRECT_URL, apiKey, GROK_DIRECT_MODEL, messages, "Grok");
 
 async function callLovableGateway(messages: ChatMessage[]): Promise<string> {
-  const key = process.env.LOVABLE_API_KEY;
-  if (!key) throw new Error("AI gateway not configured");
-  const res = await postChatCompletion(LOVABLE_GATEWAY_URL, key, LOVABLE_MODEL, messages);
-  if (res.status === 429) {
-    throw new Error("AI rate limit reached. Try again shortly, or select your own API key in Settings → AI.");
+  const key = process.env['LOVABLE_API_KEY'];
+  if (!key?.trim()) {
+    throw new Error("Lovable AI is temporarily unavailable because its managed key was not loaded. Please refresh and try again.");
   }
-  if (res.status === 402) {
-    throw new Error("AI credits exhausted. Select your own API key in Settings → AI to keep using AI features.");
+
+  const lovable = createOpenAI({
+    baseURL: "https://ai.gateway.lovable.dev/v1",
+    apiKey: key,
+    headers: {
+      "Lovable-API-Key": key,
+      "X-Lovable-AIG-SDK": "vercel-ai-sdk",
+    },
+  });
+
+  try {
+    const instructions = messages
+      .filter((message) => message.role === "system")
+      .map((message) => message.content)
+      .join("\n\n");
+    const promptMessages = messages
+      .filter((message) => message.role !== "system")
+      .map((message) => ({ role: "user" as const, content: message.content }));
+    const result = streamText({
+      model: lovable.responses(LOVABLE_MODEL),
+      maxRetries: 0,
+      instructions,
+      messages: promptMessages,
+      providerOptions: {
+        openai: {
+          forceReasoning: true,
+          reasoningEffort: "low",
+          reasoningSummary: "auto",
+          store: false,
+          include: ["reasoning.encrypted_content"],
+        },
+      },
+    });
+    let text = "";
+    for await (const part of result.fullStream) {
+      if (part.type === "text-delta") text += part.text;
+      if (part.type === "error") {
+        throw new Error(gatewayErrorMessage(part.error));
+      }
+    }
+    if (!text.trim()) throw new Error("Lovable AI completed without returning text. Please try again.");
+    return text;
+  } catch (error) {
+    throw new Error(gatewayErrorMessage(error));
   }
-  if (res.status === 503) {
-    throw new Error("AI is temporarily overloaded with high demand. Please try again in a moment.");
-  }
-  if (!res.ok) throw new Error(`AI error ${res.status}: ${(await res.text()).slice(0, 300)}`);
-  const j = (await res.json()) as ChatCompletion;
-  return j.choices?.[0]?.message?.content ?? "";
 }
 
 /** POST a chat-completion request (system + user message, JSON response) and

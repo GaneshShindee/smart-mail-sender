@@ -33,7 +33,7 @@ import {
   clearGrokApiKey,
   testGrokApiKey,
 } from "@/lib/ai-settings.functions";
-import type { AiProvider } from "@/lib/ai-gateway";
+import type { AiProvider } from "@/lib/ai-provider";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({ meta: [{ title: "Settings — Smart Email Sender" }] }),

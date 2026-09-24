@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
-import { aiChatJson } from "@/lib/ai-gateway";
+import { aiChatJson } from "@/lib/ai-gateway.server";
 import { parseAiJson } from "@/lib/parse-ai-json";
 /** AI job field extraction (shared by paste, URL, RSS, ATS, Telegram). */
 

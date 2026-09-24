@@ -4,7 +4,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { applyTemplate } from "@/lib/templating";
 import { deriveNames, greetingFor, bodyHasGreeting } from "@/lib/recipients";
-import { aiChatJson } from "@/lib/ai-gateway";
+import { aiChatJson } from "@/lib/ai-gateway.server";
 import { parseAiJson } from "@/lib/parse-ai-json";
 
 
