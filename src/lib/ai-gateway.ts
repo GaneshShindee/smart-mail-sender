@@ -2,9 +2,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 
 /** Shared chat-completion caller. A user can save a Gemini and/or Grok API key
- *  and pick one as their active provider in Settings → AI. If they haven't
- *  picked one (or the picked provider has no key saved, or that key's request
- *  fails for any reason), AI features fall back to the shared Lovable gateway. */
+ *  and pick one as their active provider in Settings → AI. Whichever provider
+ *  is selected there is used strictly — the shared Lovable gateway is only
+ *  used when nothing is selected (or the selected provider has no key saved),
+ *  never as a silent runtime fallback if the selected provider's call fails. */
 
 export type AiProvider = "lovable" | "gemini" | "grok";
 export const AI_PROVIDERS: AiProvider[] = ["lovable", "gemini", "grok"];
@@ -70,9 +71,11 @@ async function callOpenAiCompatible(
   label: string,
 ): Promise<string> {
   const res = await postChatCompletion(url, apiKey, model, messages);
-  if (res.status === 429) throw new Error(`Your ${label} API key hit its rate limit.`);
-  if (res.status === 401 || res.status === 403) throw new Error(`Your ${label} API key was rejected.`);
-  if (res.status === 503) throw new Error(`${label} is temporarily overloaded with high demand.`);
+  if (res.status === 429) throw new Error(`Your ${label} API key hit its rate limit. Try again shortly.`);
+  if (res.status === 401 || res.status === 403) {
+    throw new Error(`Your ${label} API key was rejected. Check it in Settings → AI.`);
+  }
+  if (res.status === 503) throw new Error(`${label} is temporarily overloaded with high demand. Try again in a moment.`);
   if (!res.ok) throw new Error(`${label} API error ${res.status}: ${(await res.text()).slice(0, 300)}`);
   const j = (await res.json()) as ChatCompletion;
   return j.choices?.[0]?.message?.content ?? "";
@@ -103,10 +106,11 @@ async function callLovableGateway(messages: ChatMessage[]): Promise<string> {
 }
 
 /** POST a chat-completion request (system + user message, JSON response) and
- *  return the raw content string. Uses the user's selected provider/key when
- *  one is set; if that fails for any reason (invalid key, rate limit,
- *  overloaded, or no key saved for the selected provider), falls back to the
- *  shared Lovable gateway as a last resort so AI features never hard-fail. */
+ *  return the raw content string. Uses whichever provider is selected in
+ *  Settings → AI: "lovable" (or a selected provider with no key saved) goes
+ *  to the shared Lovable gateway; "gemini"/"grok" with a saved key goes
+ *  straight to that provider and its errors propagate as-is — no silent
+ *  fallback to Lovable if the selected provider's own call fails. */
 export async function aiChatJson(params: {
   supabase: SupabaseClient<Database>;
   userId: string;
@@ -120,23 +124,8 @@ export async function aiChatJson(params: {
   ];
 
   const cfg = await getUserAiConfig(supabase, userId);
-  const attempt =
-    cfg.provider === "gemini" && cfg.geminiKey
-      ? () => callDirectGemini(cfg.geminiKey!, messages)
-      : cfg.provider === "grok" && cfg.grokKey
-        ? () => callDirectGrok(cfg.grokKey!, messages)
-        : null;
-
-  if (attempt) {
-    try {
-      return await attempt();
-    } catch (e) {
-      console.error(
-        `[ai-gateway] User ${cfg.provider} key failed, falling back to shared gateway:`,
-        e instanceof Error ? e.message : e,
-      );
-    }
-  }
+  if (cfg.provider === "gemini" && cfg.geminiKey) return callDirectGemini(cfg.geminiKey, messages);
+  if (cfg.provider === "grok" && cfg.grokKey) return callDirectGrok(cfg.grokKey, messages);
 
   return callLovableGateway(messages);
 }
