@@ -134,7 +134,17 @@ async function callLovableGateway(messages: ChatMessage[]): Promise<string> {
         },
       },
     });
-    return await result.text;
+    let text = "";
+    for await (const part of result.fullStream) {
+      if (part.type === "text-delta") text += part.text;
+      if (part.type === "error") {
+        const cause = part.error;
+        const message = cause instanceof Error ? cause.message : String(cause);
+        throw new Error(message);
+      }
+    }
+    if (!text.trim()) throw new Error("Lovable AI completed without returning text. Please try again.");
+    return text;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Lovable AI request failed";
     throw new Error(message);
