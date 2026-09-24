@@ -177,6 +177,16 @@ function SendPage() {
       }
       initedRef.current = true;
       skipAutosaveUntilRef.current = Date.now() + 2000;
+      // Reuse the user's single existing autosave row (if any) so composing from a job
+      // posting overwrites that in-progress draft instead of leaving an orphaned extra one behind.
+      getAutosaveFn()
+        .then((r) => {
+          if (r.draft && !autosaveIdRef.current) {
+            setAutosaveId(r.draft.id);
+            autosaveIdRef.current = r.draft.id;
+          }
+        })
+        .catch(() => {});
       return;
     }
 
