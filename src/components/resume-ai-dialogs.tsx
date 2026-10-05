@@ -6,19 +6,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Sparkles, Wand2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Sparkles, Wand2, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import type { EditorSelection } from "@/components/latex-editor";
-
-const PRESETS = [
-  "Tailor the whole resume to the target job description",
-  "Make every bullet start with a strong action verb and add measurable impact where the facts allow",
-  "make certifications and achievements in one main bullet",
-  "Increase ATS keyword coverage for the target role without inventing anything",
-  "Rewrite the summary so it targets this specific role",
-  "remove second education keep only btech's details",
-  "flow of the resume skills-->experience-->projects-->education-->certifications-->achievements",
-];
+import { DEFAULT_RESUME_AI_PRESETS } from "@/lib/resume-ai-presets";
 
 /** Full-document AI update driven by free-form instructions. */
 export function UpdateResumeDialog({
@@ -26,15 +18,36 @@ export function UpdateResumeDialog({
   onOpenChange,
   versionId,
   onApplied,
+  presets,
+  onPresetsChange,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   versionId: string;
   onApplied: (tex: string, notes: string) => void;
+  /** User's saved preset instructions; falls back to the built-in defaults while unset. */
+  presets?: string[];
+  /** Persists the updated preset list (add/remove). */
+  onPresetsChange?: (presets: string[]) => void;
 }) {
   const [instructions, setInstructions] = useState("");
   const [jd, setJd] = useState("");
+  const [addingPreset, setAddingPreset] = useState(false);
+  const [newPreset, setNewPreset] = useState("");
   const fn = useServerFn(updateResumeWithInstructions);
+  const presetList = presets ?? DEFAULT_RESUME_AI_PRESETS;
+
+  const addPreset = () => {
+    const text = newPreset.trim();
+    if (!text || presetList.includes(text)) { setAddingPreset(false); setNewPreset(""); return; }
+    onPresetsChange?.([...presetList, text]);
+    setNewPreset("");
+    setAddingPreset(false);
+  };
+
+  const removePreset = (p: string) => {
+    onPresetsChange?.(presetList.filter((x) => x !== p));
+  };
 
   const run = useMutation({
     mutationFn: () =>
@@ -67,33 +80,73 @@ export function UpdateResumeDialog({
               placeholder="e.g. Emphasise backend and cloud work, drop the older internships…"
             />
             <div className="mt-2 flex flex-wrap gap-1.5">
-              {PRESETS.map((p) => {
+              {presetList.map((p) => {
                 const already = instructions
                   .split(/\n/)
                   .map((l) => l.trim())
                   .includes(p);
                 return (
-                  <button
+                  <span
                     key={p}
-                    type="button"
-                    disabled={already}
-                    onClick={() =>
-                      setInstructions((cur) => {
-                        const lines = cur
-                          .split(/\n/)
-                          .map((l) => l.trim())
-                          .filter(Boolean);
-                        if (lines.includes(p)) return cur;
-                        return lines.length ? `${lines.join("\n")}\n${p}` : p;
-                      })
-                    }
-                    className="text-[11px] rounded-full border border-border bg-background px-2.5 py-1 hover:bg-accent transition-colors text-left disabled:opacity-40 disabled:pointer-events-none"
+                    className="group inline-flex items-center gap-1 rounded-full border border-border bg-background pl-2.5 pr-1 py-1 hover:bg-accent transition-colors"
                   >
-                    + {p}
-                  </button>
+                    <button
+                      type="button"
+                      disabled={already}
+                      onClick={() =>
+                        setInstructions((cur) => {
+                          const lines = cur
+                            .split(/\n/)
+                            .map((l) => l.trim())
+                            .filter(Boolean);
+                          if (lines.includes(p)) return cur;
+                          return lines.length ? `${lines.join("\n")}\n${p}` : p;
+                        })
+                      }
+                      className="text-[11px] text-left disabled:opacity-40 disabled:pointer-events-none"
+                    >
+                      + {p}
+                    </button>
+                    {onPresetsChange && (
+                      <button
+                        type="button"
+                        onClick={() => removePreset(p)}
+                        className="opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity"
+                        aria-label={`Remove preset: ${p}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </span>
                 );
               })}
+              {onPresetsChange && !addingPreset && (
+                <button
+                  type="button"
+                  onClick={() => setAddingPreset(true)}
+                  className="text-[11px] inline-flex items-center gap-0.5 rounded-full border border-dashed border-border bg-background px-2.5 py-1 hover:bg-accent transition-colors"
+                >
+                  <Plus className="h-3 w-3" /> Add preset
+                </button>
+              )}
             </div>
+            {onPresetsChange && addingPreset && (
+              <div className="mt-1.5 flex items-center gap-1.5">
+                <Input
+                  autoFocus
+                  value={newPreset}
+                  onChange={(e) => setNewPreset(e.target.value)}
+                  placeholder="New preset instruction…"
+                  className="h-7 text-[11px]"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") { e.preventDefault(); addPreset(); }
+                    if (e.key === "Escape") { setAddingPreset(false); setNewPreset(""); }
+                  }}
+                />
+                <Button size="sm" className="h-7" onClick={addPreset} disabled={!newPreset.trim()}>Save</Button>
+                <Button size="sm" variant="outline" className="h-7" onClick={() => { setAddingPreset(false); setNewPreset(""); }}>Cancel</Button>
+              </div>
+            )}
           </div>
           <div>
             <Label className="text-xs">Job description (optional — the saved one is used when empty)</Label>

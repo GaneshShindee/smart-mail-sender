@@ -1090,6 +1090,7 @@ export type Database = {
           gemini_api_key_enabled: boolean
           grok_api_key: string | null
           id: string
+          resume_ai_presets: Json
           tracking_open_enabled: boolean
           updated_at: string
         }
@@ -1107,6 +1108,7 @@ export type Database = {
           gemini_api_key_enabled?: boolean
           grok_api_key?: string | null
           id: string
+          resume_ai_presets?: Json
           tracking_open_enabled?: boolean
           updated_at?: string
         }
@@ -1124,6 +1126,7 @@ export type Database = {
           gemini_api_key_enabled?: boolean
           grok_api_key?: string | null
           id?: string
+          resume_ai_presets?: Json
           tracking_open_enabled?: boolean
           updated_at?: string
         }

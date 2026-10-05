@@ -20,7 +20,7 @@ export function LatexPreview({
   onCompiled,
   onErrors,
   autoCompile = true,
-  debounceMs = 900,
+  debounceMs = 10_000,
 }: {
   tex: string;
   filename?: string;

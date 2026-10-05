@@ -11,7 +11,7 @@ import {
   improveResumeSection,
   generateApplicationEmail,
 } from "@/lib/resume-studio.functions";
-import { getUserPreferences } from "@/lib/profile.functions";
+import { getUserPreferences, setUserPreferences } from "@/lib/profile.functions";
 import { resumeFileBaseName } from "@/lib/naming";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,7 +20,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { LatexEditor, type EditorSelection, type LatexEditorApi } from "@/components/latex-editor";
 import { LatexPreview } from "@/components/latex-preview";
 import { UpdateResumeDialog, InlineAskAi } from "@/components/resume-ai-dialogs";
-import { ArrowLeft, Save, Wand2, Sparkles, Trash2, Send, CheckCircle2, AlertCircle, FolderPlus, Paperclip, Copy } from "lucide-react";
+import { ArrowLeft, Save, Wand2, Sparkles, Trash2, Send, CheckCircle2, AlertCircle, FolderPlus, Paperclip, Copy, ChevronDown, ChevronUp } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AI_JD_RESUME_FOLDER } from "@/lib/linkedin";
@@ -60,15 +60,22 @@ function WorkspacePage() {
   const improveFn = useServerFn(improveResumeSection);
   const emailFn = useServerFn(generateApplicationEmail);
   const prefsFn = useServerFn(getUserPreferences);
+  const setPrefsFn = useServerFn(setUserPreferences);
 
   const q = useQuery({ queryKey: ["resume-version", id], queryFn: () => getFn({ data: { id } }) });
   const prefs = useQuery({ queryKey: ["user-prefs"], queryFn: () => prefsFn() });
+  const savePresets = useMutation({
+    mutationFn: (resumeAiPresets: string[]) => setPrefsFn({ data: { resumeAiPresets } }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["user-prefs"] }),
+    onError: (e) => toast.error("Couldn't save preset", { description: (e as Error).message }),
+  });
   const [tex, setTex] = useState("");
   const [dirty, setDirty] = useState(false);
   const [errorLines, setErrorLines] = useState<number[]>([]);
   const [compiledTex, setCompiledTex] = useState<string | null>(null);
   const [hasPdf, setHasPdf] = useState(false);
   const [updateOpen, setUpdateOpen] = useState(false);
+  const [showInsights, setShowInsights] = useState(false);
   const [selection, setSelection] = useState<EditorSelection | null>(null);
   const editorApi = useRef<LatexEditorApi | null>(null);
   const [attachOnlyHandoff, setAttachOnlyHandoff] = useState(
@@ -240,6 +247,9 @@ function WorkspacePage() {
 
   const v = q.data.version;
   const score = v.ats_score ?? null;
+  const hasInsights = Boolean(
+    v.matched_keywords.length || v.missing_keywords.length || v.strengths.length || v.suggestions.length,
+  );
 
   return (
     <div className="mx-auto max-w-7xl space-y-4 h-[calc(100vh-100px)] flex flex-col">
@@ -326,9 +336,15 @@ function WorkspacePage() {
         <span className="text-xs text-muted-foreground self-center">
           Tip: select any LaTeX in the editor to get an inline “Ask AI” rewrite.
         </span>
+        {hasInsights && (
+          <Button size="sm" variant="ghost" className="ml-auto" onClick={() => setShowInsights((s) => !s)}>
+            {showInsights ? <ChevronUp className="h-3.5 w-3.5 mr-1" /> : <ChevronDown className="h-3.5 w-3.5 mr-1" />}
+            {showInsights ? "Hide" : "Show"} ATS insights
+          </Button>
+        )}
       </div>
 
-      <InsightsBar version={v} />
+      {hasInsights && showInsights && <InsightsBar version={v} />}
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 flex-1 min-h-0">
         <Card className="overflow-hidden flex flex-col min-h-0">
@@ -373,6 +389,8 @@ function WorkspacePage() {
         onOpenChange={setUpdateOpen}
         versionId={id}
         onApplied={(newTex) => { setTex(newTex); setDirty(false); qc.invalidateQueries({ queryKey: ["resume-version", id] }); }}
+        presets={prefs.data?.resumeAiPresets}
+        onPresetsChange={(p) => savePresets.mutate(p)}
       />
     </div>
   );
