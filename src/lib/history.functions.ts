@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
+import { ilikeAnyClause } from "@/lib/postgrest";
 
 export const listHistory = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -17,7 +18,7 @@ export const listHistory = createServerFn({ method: "GET" })
       .order("sent_at", { ascending: false })
       .limit(data.limit);
     if (data.status && data.status !== "all") q = q.eq("status", data.status);
-    if (data.search) q = q.or(`recipient.ilike.%${data.search}%,subject.ilike.%${data.search}%`);
+    if (data.search) q = q.or(ilikeAnyClause(["recipient", "subject"], data.search));
     const { data: rows, error } = await q;
     if (error) throw new Error(error.message);
     return rows ?? [];
@@ -188,11 +189,11 @@ async function buildCampaignSearchClause(supabase: SupabaseClient<Database>, use
     .from("email_recipients")
     .select("email_history_id")
     .eq("user_id", userId)
-    .or(`name.ilike.%${search}%,company.ilike.%${search}%,role.ilike.%${search}%`)
+    .or(ilikeAnyClause(["name", "company", "role"], search))
     .limit(500);
   const matchingIds = Array.from(new Set((data ?? []).map((r) => r.email_history_id)));
   const idClause = matchingIds.length ? `,id.in.(${matchingIds.join(",")})` : "";
-  return `recipient.ilike.%${search}%,subject.ilike.%${search}%,template_name.ilike.%${search}%${idClause}`;
+  return `${ilikeAnyClause(["recipient", "subject", "template_name"], search)}${idClause}`;
 }
 
 /** Campaign-level history list (one row per send, replies excluded). */

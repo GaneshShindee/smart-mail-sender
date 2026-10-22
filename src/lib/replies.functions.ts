@@ -296,7 +296,7 @@ export const sendReply = createServerFn({ method: "POST" })
 
     const displayName = (conn.display_name ?? conn.full_name ?? "").trim() || null;
     const from = formatFromHeader(conn.gmail_email, displayName);
-    const to = reply.from_name ? formatFromHeader(reply.from_email, reply.from_name) : reply.from_email;
+    const to = formatFromHeader(reply.from_email, reply.from_name);
     const raw = buildRawEmail({ from, to, subject: data.subject, body: data.body });
 
     // Post to Gmail with threading headers so it shows in the same conversation.
