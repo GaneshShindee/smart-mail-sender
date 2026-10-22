@@ -18,6 +18,10 @@ const GEMINI_DIRECT_MODEL = "gemini-flash-latest";
 const GROK_DIRECT_URL = "https://api.x.ai/v1/chat/completions";
 const GROK_DIRECT_MODEL = "grok-4-fast";
 
+const ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages";
+const ANTHROPIC_MODEL = "claude-sonnet-5";
+const ANTHROPIC_API_VERSION = "2023-06-01";
+
 type ChatCompletion = { choices?: { message?: { content?: string } }[] };
 type ChatMessage = { role: string; content: string };
 
@@ -61,19 +65,21 @@ async function postChatCompletion(
 export async function getUserAiConfig(
   supabase: SupabaseClient<Database>,
   userId: string,
-): Promise<{ provider: AiProvider; geminiKey: string | null; grokKey: string | null }> {
+): Promise<{ provider: AiProvider; geminiKey: string | null; grokKey: string | null; claudeKey: string | null }> {
   const { data } = await supabase
     .from("profiles")
-    .select("gemini_api_key, grok_api_key, active_ai_provider")
+    .select("gemini_api_key, grok_api_key, claude_api_key, active_ai_provider")
     .eq("id", userId)
     .maybeSingle();
   const provider = (data?.active_ai_provider as AiProvider | undefined) ?? "lovable";
   const gemini = data?.gemini_api_key;
   const grok = data?.grok_api_key;
+  const claude = data?.claude_api_key;
   return {
     provider: AI_PROVIDERS.includes(provider) ? provider : "lovable",
     geminiKey: gemini && gemini.trim() ? gemini.trim() : null,
     grokKey: grok && grok.trim() ? grok.trim() : null,
+    claudeKey: claude && claude.trim() ? claude.trim() : null,
   };
 }
 
@@ -115,6 +121,56 @@ const callDirectGemini = (apiKey: string, messages: ChatMessage[]) =>
 
 const callDirectGrok = (apiKey: string, messages: ChatMessage[]) =>
   callOpenAiCompatible(GROK_DIRECT_URL, apiKey, GROK_DIRECT_MODEL, messages, "Grok");
+
+type AnthropicMessagesResponse = { content?: { type: string; text?: string }[] };
+
+/** Claude (Anthropic) speaks its native Messages API, not OpenAI chat-completions:
+ *  system text goes to the top-level `system` field and the prompt to `messages`. */
+async function callDirectClaude(apiKey: string, messages: ChatMessage[]): Promise<string> {
+  const system = messages
+    .filter((m) => m.role === "system")
+    .map((m) => m.content)
+    .join("\n\n");
+  const prompt = messages
+    .filter((m) => m.role !== "system")
+    .map((m) => m.content)
+    .join("\n\n");
+
+  const res = await fetch(ANTHROPIC_MESSAGES_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": ANTHROPIC_API_VERSION,
+    },
+    body: JSON.stringify({
+      model: ANTHROPIC_MODEL,
+      max_tokens: 16000,
+      ...(system ? { system } : {}),
+      messages: [{ role: "user", content: prompt }],
+    }),
+  });
+
+  if (res.status === 401 || res.status === 403)
+    throw new Error("Your Claude API key was rejected. Check it in Settings → AI.");
+  if (res.status === 429) throw new Error("Your Claude API key hit its rate limit. Try again shortly.");
+  if (res.status === 529) throw new Error("Claude is temporarily overloaded with high demand. Try again in a moment.");
+  if (!res.ok) {
+    const text = await res.text();
+    if (res.status === 400 && text.toLowerCase().includes("credit balance")) {
+      throw new Error("Your Anthropic account is out of credits. Top up at console.anthropic.com.");
+    }
+    throw new Error(`Claude API error ${res.status}: ${text.slice(0, 300)}`);
+  }
+
+  const j = (await res.json()) as AnthropicMessagesResponse;
+  const text = (j.content ?? [])
+    .filter((b) => b.type === "text" && typeof b.text === "string")
+    .map((b) => b.text as string)
+    .join("");
+  if (!text.trim()) throw new Error("Claude completed without returning text. Please try again.");
+  return text;
+}
 
 async function callLovableGateway(messages: ChatMessage[]): Promise<string> {
   const key = process.env['LOVABLE_API_KEY'];
@@ -189,6 +245,7 @@ export async function aiChatJson(params: {
   const cfg = await getUserAiConfig(supabase, userId);
   if (cfg.provider === "gemini" && cfg.geminiKey) return callDirectGemini(cfg.geminiKey, messages);
   if (cfg.provider === "grok" && cfg.grokKey) return callDirectGrok(cfg.grokKey, messages);
+  if (cfg.provider === "claude" && cfg.claudeKey) return callDirectClaude(cfg.claudeKey, messages);
 
   return callLovableGateway(messages);
 }
@@ -201,6 +258,35 @@ export async function verifyGeminiApiKey(apiKey: string): Promise<{ ok: true } |
 /** Validates a Grok (xAI) API key by making a minimal live request against it. */
 export async function verifyGrokApiKey(apiKey: string): Promise<{ ok: true } | { ok: false; error: string }> {
   return verifyApiKey(GROK_DIRECT_URL, GROK_DIRECT_MODEL, apiKey, "Grok");
+}
+
+/** Validates a Claude (Anthropic) API key by making a minimal live request against it. */
+export async function verifyClaudeApiKey(apiKey: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const res = await fetch(ANTHROPIC_MESSAGES_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": ANTHROPIC_API_VERSION,
+      },
+      body: JSON.stringify({
+        model: ANTHROPIC_MODEL,
+        max_tokens: 5,
+        messages: [{ role: "user", content: "Reply with the single word: ok" }],
+      }),
+    });
+    if (res.status === 401 || res.status === 403) return { ok: false, error: "Invalid API key." };
+    if (res.status === 429) return { ok: false, error: "Key is valid, but is currently rate-limited." };
+    if (res.status === 529) return { ok: false, error: "Key is valid, but Claude is currently overloaded." };
+    if (!res.ok) {
+      const text = await res.text();
+      return { ok: false, error: `Claude API error ${res.status}: ${text.slice(0, 200)}` };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Could not reach Claude API." };
+  }
 }
 
 async function verifyApiKey(

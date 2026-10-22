@@ -32,6 +32,9 @@ import {
   setGrokApiKey,
   clearGrokApiKey,
   testGrokApiKey,
+  setClaudeApiKey,
+  clearClaudeApiKey,
+  testClaudeApiKey,
 } from "@/lib/ai-settings.functions";
 import type { AiProvider } from "@/lib/ai-provider";
 
@@ -41,7 +44,7 @@ export const Route = createFileRoute("/_authenticated/settings")({
 });
 
 function providerLabel(p: AiProvider): string {
-  return p === "gemini" ? "Gemini" : p === "grok" ? "Grok" : "Lovable (shared)";
+  return p === "gemini" ? "Gemini" : p === "grok" ? "Grok" : p === "claude" ? "Claude" : "Lovable (shared)";
 }
 
 type ProviderKeyStatus = { hasKey: boolean; maskedKey: string | null };
@@ -220,6 +223,13 @@ function SettingsPage() {
     label: "Grok",
     onChanged: () => qc.invalidateQueries({ queryKey: ["ai-key-status"] }),
   });
+  const claudeKey = useApiKeyField({
+    setFn: useServerFn(setClaudeApiKey),
+    clearFn: useServerFn(clearClaudeApiKey),
+    testFn: useServerFn(testClaudeApiKey),
+    label: "Claude",
+    onChanged: () => qc.invalidateQueries({ queryKey: ["ai-key-status"] }),
+  });
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -303,9 +313,9 @@ function SettingsPage() {
         <CardContent className="space-y-5">
           <p className="text-sm text-muted-foreground">
             AI features (drafting, resume tailoring, job parsing, etc.) use the shared Lovable pool by default, which
-            can hit rate limits or run out of credits. Save your own Gemini and/or Grok API key below, then pick which
-            one to use. If you don't pick a provider — or the one you pick has no key saved, or its request fails —
-            AI features automatically fall back to the shared Lovable pool.
+            can hit rate limits or run out of credits. Save your own Gemini, Grok and/or Claude API key below, then
+            pick which one to use. If you don't pick a provider — or the one you pick has no key saved, or its request
+            fails — AI features automatically fall back to the shared Lovable pool.
           </p>
 
           <div className="space-y-1.5">
@@ -320,6 +330,7 @@ function SettingsPage() {
                 <SelectItem value="lovable">Lovable (shared, default)</SelectItem>
                 <SelectItem value="gemini">Gemini{aiKeyStatus.data?.gemini.hasKey ? "" : " (no key saved)"}</SelectItem>
                 <SelectItem value="grok">Grok{aiKeyStatus.data?.grok.hasKey ? "" : " (no key saved)"}</SelectItem>
+                <SelectItem value="claude">Claude{aiKeyStatus.data?.claude.hasKey ? "" : " (no key saved)"}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -347,6 +358,19 @@ function SettingsPage() {
               status={aiKeyStatus.data?.grok}
               loading={aiKeyStatus.isLoading}
               field={grokKey}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-sm">Claude (Anthropic) API key</Label>
+            <ProviderKeyPanel
+              label="Claude"
+              placeholder="sk-ant-..."
+              docsUrl="https://console.anthropic.com/settings/keys"
+              docsLabel="console.anthropic.com"
+              status={aiKeyStatus.data?.claude}
+              loading={aiKeyStatus.isLoading}
+              field={claudeKey}
             />
           </div>
         </CardContent>

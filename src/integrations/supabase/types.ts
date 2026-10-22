@@ -1079,6 +1079,7 @@ export type Database = {
         Row: {
           active_ai_provider: string
           avatar_url: string | null
+          claude_api_key: string | null
           compose_prefs: Json
           created_at: string
           default_gmail_connection_id: string | null
@@ -1097,6 +1098,7 @@ export type Database = {
         Insert: {
           active_ai_provider?: string
           avatar_url?: string | null
+          claude_api_key?: string | null
           compose_prefs?: Json
           created_at?: string
           default_gmail_connection_id?: string | null
@@ -1115,6 +1117,7 @@ export type Database = {
         Update: {
           active_ai_provider?: string
           avatar_url?: string | null
+          claude_api_key?: string | null
           compose_prefs?: Json
           created_at?: string
           default_gmail_connection_id?: string | null
