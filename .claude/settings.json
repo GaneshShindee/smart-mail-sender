@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm i *)",
+      "Bash(node -p \"require\\('./node_modules/@tanstack/router-core/package.json'\\).version + ' / start ' + require\\('./node_modules/@tanstack/react-start/package.json'\\).version\")",
+      "mcp__claude-in-chrome__tabs_context_mcp",
+      "ClaudeInChromeDomain(localhost:5180)",
+      "Bash(git log *)",
+      "Bash(pkill -f \"vite dev --port 5180\")",
+      "Bash(rm -rf node_modules/.vite)",
+      "Bash(node -e 'let s=\"\";process.stdin.on\\(\"data\",d=>s+=d\\).on\\(\"end\",\\(\\)=>{const r=JSON.parse\\(s\\);let n=0;const c={};for\\(const f of r\\)for\\(const m of f.messages\\){if\\(m.ruleId===\"prettier/prettier\"\\)continue;n++;c[m.ruleId]=\\(c[m.ruleId]||0\\)+1}console.log\\(\"non-format problems:\",n,c\\)}\\)')",
+      "Bash(git checkout *)",
+      "Bash(python3 -)",
+      "Bash(cd \"/Users/ganesh.shinde/Desktop/Ganesh Data/Ztech/smart-mail-sender\" && wc -l src/styles.css src/components/app/* src/routes/_authenticated/resumes.tsx src/routes/_authenticated/resume-studio/index.tsx 'src/routes/_authenticated/resume-studio/$id.tsx' src/components/generate-resume-dialog.tsx src/components/resume-ai-dialogs.tsx src/components/latex-editor.tsx src/components/latex-preview.tsx src/components/pdf-viewer.tsx)",
+      "Read(//Users/ganesh.shinde/Desktop/Ganesh Data/Ztech/smart-mail-sender/src/src/routes/_authenticated/resume-studio/**)",
+      "Bash(git status *)",
+      "Bash(sed -i '' '/^  FileText,$/d' routes/_authenticated/send.tsx)",
+      "Bash(sed -i '' 's/<Skeleton className=\"\\\\\\(h-[0-9]*\\\\\\) rounded-xl\" \\\\/>/<Skeleton className=\"\\\\1\" \\\\/>/' routes/_authenticated/send.tsx)",
+      "Bash(sed -n 72,293p src/routes/_authenticated/jobs.tsx)",
+      "Bash(sed -n 33,71p src/routes/_authenticated/jobs.tsx)",
+      "Bash(cd \"/Users/ganesh.shinde/Desktop/Ganesh Data/Ztech/smart-mail-sender/src/routes/_authenticated/resume-studio\" && grep -n 'WORKSPACE_HEIGHT\\\\|className=\"flex\\\\|border-b-2\\\\|Show ATS\\\\|Update with AI\\\\|SOURCE\\\\|Source ·\\\\|eyebrow\\\\|<LatexEditor\\\\|<LatexPreview\\\\|mobilePane\\\\|SegmentedControl' '$id.tsx' | head -40)",
+      "Read(//Users/ganesh.shinde/Desktop/Ganesh Data/Ztech/smart-mail-sender/src/components/**)",
+      "Bash(cd \"/Users/ganesh.shinde/Desktop/Ganesh *)",
+      "Read(//Users/ganesh.shinde/Desktop/Ganesh Data/Ztech/smart-mail-sender/src/routes/_authenticated/resume-studio/**)"
+    ]
+  }
+}

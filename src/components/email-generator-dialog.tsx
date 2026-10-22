@@ -27,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { TemplateCombobox } from "@/components/template-combobox";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
@@ -35,8 +36,17 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { Sparkles, Copy, Loader2, Plus, Pencil, Files, Trash2, ChevronDown, Settings2, X } from "lucide-react";
+import { Sparkles, Copy, Loader2, Plus, Pencil, Files, Trash2, ChevronDown, Settings2, X, ExternalLink, Search, Check, Inbox } from "lucide-react";
 import { toast } from "sonner";
+import { companyKeywordFromDomain, linkedInCompanyKeyword, linkedInCompanySearchUrl } from "@/lib/linkedin";
+import { findEmailsByDomain, listEmailFinderStatus } from "@/lib/email-finder.functions";
+import { EMAIL_FIND_PROVIDERS, EMAIL_VERIFY_PROVIDERS, type FoundEmail } from "@/lib/email-finder";
+import { Field } from "@/components/app/field";
+import { IconButton } from "@/components/app/icon-button";
+import { StatCard } from "@/components/app/stat-card";
+import { EmptyState } from "@/components/app/empty-state";
+import { useConfirm } from "@/components/app/confirm-dialog";
+import { cn } from "@/lib/utils";
 
 const LAST_TPL_KEY = "ai-gen:last-template-id";
 
@@ -44,6 +54,8 @@ type Props = {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   onUse: (emails: string[]) => void;
+  /** Company from Send page (job meta / {{company}} variable). */
+  companyFromEmail?: string;
 };
 
 function copyText(t: string) {
@@ -53,17 +65,26 @@ function copyText(t: string) {
   );
 }
 
-export function EmailGeneratorDialog({ open, onOpenChange, onUse }: Props) {
+export function EmailGeneratorDialog({ open, onOpenChange, onUse, companyFromEmail = "" }: Props) {
   const qc = useQueryClient();
+  const confirm = useConfirm();
   const listFn = useServerFn(listInstructionTemplates);
   const upsertFn = useServerFn(upsertInstructionTemplate);
   const deleteFn = useServerFn(deleteInstructionTemplate);
   const dupFn = useServerFn(duplicateInstructionTemplate);
   const genFn = useServerFn(generateEmails);
+  const findFn = useServerFn(findEmailsByDomain);
+  const finderStatusFn = useServerFn(listEmailFinderStatus);
 
   const templates = useQuery({
     queryKey: ["instruction-templates"],
     queryFn: () => listFn(),
+    enabled: open,
+  });
+
+  const finderStatus = useQuery({
+    queryKey: ["email-finder-status"],
+    queryFn: () => finderStatusFn(),
     enabled: open,
   });
 
@@ -74,8 +95,14 @@ export function EmailGeneratorDialog({ open, onOpenChange, onUse }: Props) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [promptOverride, setPromptOverride] = useState<string | null>(null);
   const [result, setResult] = useState<GenerateResult | null>(null);
+  const [foundSamples, setFoundSamples] = useState<FoundEmail[]>([]);
+  const [finderMeta, setFinderMeta] = useState<{
+    domain: string;
+    pattern: string | null;
+    sampleEmail: string | null;
+    providers: Array<{ provider: string; status: string; message?: string; webUrl: string; count: number }>;
+  } | null>(null);
 
-  // Restore last template / auto-select first
   useEffect(() => {
     if (!open || !templates.data) return;
     if (templates.data.length === 0) {
@@ -96,12 +123,24 @@ export function EmailGeneratorDialog({ open, onOpenChange, onUse }: Props) {
     [templates.data, selectedId],
   );
 
-  // Working copy for live domain/rule tweaks without saving
+  // Working copy for live domain/rule tweaks without saving.
+  // Prefer company from the Send email form — do NOT default to the template domain.
   const [working, setWorking] = useState<InstructionTemplate | null>(null);
   useEffect(() => {
-    setWorking(selected ? { ...selected } : null);
+    if (!selected) {
+      setWorking(null);
+      setPromptOverride(null);
+      return;
+    }
+    const fromEmail = companyFromEmail.trim();
+    setWorking({
+      ...selected,
+      company_domain: fromEmail || "",
+    });
     setPromptOverride(null);
-  }, [selected]);
+    setFoundSamples([]);
+    setFinderMeta(null);
+  }, [selected, companyFromEmail, open]);
 
   const generatedPrompt = useMemo(() => (working ? buildPrompt(working) : ""), [working]);
   const effectivePrompt = promptOverride ?? generatedPrompt;
@@ -115,6 +154,68 @@ export function EmailGeneratorDialog({ open, onOpenChange, onUse }: Props) {
     mutationFn: () => genFn({ data: { instructions: effectivePrompt, data } }),
     onSuccess: (r) => setResult(r),
     onError: (e) => toast.error("Generation failed", { description: (e as Error).message }),
+  });
+
+  const findEmails = useMutation({
+    mutationFn: () => {
+      const company = working?.company_domain?.trim();
+      if (!company) throw new Error("Enter a company / domain first");
+      return findFn({ data: { companyOrDomain: company } });
+    },
+    onSuccess: (r) => {
+      setFoundSamples(r.emails);
+      setFinderMeta({
+        domain: r.domain,
+        pattern: r.pattern,
+        sampleEmail: r.sampleEmail,
+        providers: r.providers.map((p) => ({
+          provider: p.provider,
+          status: p.status,
+          message: p.message,
+          webUrl: p.webUrl,
+          count: p.emails.length,
+        })),
+      });
+
+      if (working && r.mappedPattern) {
+        setWorking({
+          ...working,
+          company_domain: r.domain,
+          email_pattern: r.mappedPattern as EmailPattern,
+          custom_pattern:
+            r.mappedPattern === "custom" && r.pattern
+              ? r.pattern
+              : working.custom_pattern,
+        });
+      } else if (working && r.domain) {
+        setWorking({ ...working, company_domain: r.domain });
+      }
+
+      // Merge sample emails into generator results
+      if (r.emails.length) {
+        setResult((cur) => {
+          const existing = new Set((cur?.emails ?? []).map((e) => e.toLowerCase()));
+          const added = r.emails.map((e) => e.email).filter((e) => !existing.has(e));
+          return {
+            emails: [...(cur?.emails ?? []), ...added],
+            skipped: cur?.skipped ?? [],
+          };
+        });
+        toast.success(`Added ${r.emails.length} sample email${r.emails.length === 1 ? "" : "s"}`, {
+          description: r.sampleEmail
+            ? `Sample: ${r.sampleEmail}${r.pattern ? ` · pattern ${r.pattern}` : ""}`
+            : r.domain,
+        });
+      } else {
+        const anyConfigured = r.providers.some((p) => p.status === "ok" || p.status === "error");
+        toast.message(anyConfigured ? "No emails found for that domain" : "No API keys configured", {
+          description: anyConfigured
+            ? "Try opening Hunter / Snov in the browser links below."
+            : "Add HUNTER_API_KEY (or Apollo / Prospeo / Snov) to .env, or open web tools.",
+        });
+      }
+    },
+    onError: (e) => toast.error("Email search failed", { description: (e as Error).message }),
   });
 
   const upsert = useMutation({
@@ -159,6 +260,7 @@ export function EmailGeneratorDialog({ open, onOpenChange, onUse }: Props) {
       setSelectedId(row.id);
       toast.success("Duplicated");
     },
+    onError: (e) => toast.error("Duplicate failed", { description: (e as Error).message }),
   });
 
   const emails = result?.emails ?? [];
@@ -172,155 +274,315 @@ export function EmailGeneratorDialog({ open, onOpenChange, onUse }: Props) {
   }, [emails, batchSize]);
   const commaList = emails.join(", ");
 
+
   const preview = working ? previewEmail("Ganesh Shinde", working) : "";
 
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-6xl w-[95vw] h-[90vh] flex flex-col p-0 gap-0">
-          <DialogHeader className="px-6 py-4 border-b">
-            <DialogTitle className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-primary" /> AI Email Generator
-            </DialogTitle>
+        <DialogContent className="flex h-[92dvh] w-[calc(100%-1.25rem)] max-w-6xl flex-col gap-0 overflow-hidden p-0 sm:w-[95vw] sm:p-0">
+          <DialogHeader className="border-b-2 border-border px-5 py-4 sm:px-6">
+            <p className="eyebrow flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5" aria-hidden /> Address finder</p>
+            <DialogTitle>AI Email Generator</DialogTitle>
           </DialogHeader>
 
-          <div className="flex-1 min-h-0 grid md:grid-cols-2 gap-0 overflow-hidden">
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto md:grid md:grid-cols-2 md:overflow-hidden">
             {/* Left: template + data */}
-            <div className="flex flex-col gap-4 p-4 border-r min-h-0 overflow-y-auto">
+            <div className="flex min-h-0 flex-col gap-3.5 p-4 md:overflow-y-auto md:border-r-2 md:border-border">
               {/* Template selector */}
-              <div className="space-y-2">
-                <Label className="text-xs uppercase tracking-wide text-muted-foreground">Instruction Template</Label>
+              <section aria-labelledby="eg-template-title" className="space-y-2">
+                <h3 id="eg-template-title" className="eyebrow border-b-2 border-border pb-1.5 text-foreground">01 · Instruction template</h3>
+                {templates.isError ? (
+                  <div className="flex flex-wrap items-center gap-3 border-2 border-dashed border-destructive px-3 py-2.5 text-sm" role="alert">
+                    <span>Couldn't load instruction templates.</span>
+                    <Button type="button" size="sm" variant="outline" onClick={() => templates.refetch()}>Try again</Button>
+                  </div>
+                ) : (
                 <div className="flex gap-2">
-                  <Select
+                  <TemplateCombobox
+                    className="min-w-0 flex-1"
+                    templates={(templates.data ?? []).map((t) => ({ id: t.id, name: t.name }))}
                     value={selectedId ?? ""}
-                    onValueChange={(v) => setSelectedId(v)}
-                  >
-                    <SelectTrigger className="flex-1">
-                      <SelectValue placeholder={templates.data?.length ? "Select template" : "No templates yet"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {templates.data?.map((t) => (
-                        <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    onValueChange={(v) => setSelectedId(v || null)}
+                    placeholder={templates.isLoading ? "Loading templates…" : templates.data?.length ? "Select template" : "No templates yet"}
+                    searchPlaceholder="Search instruction templates…"
+                    emptyText="No templates found."
+                    disabled={!templates.data?.length}
+                  />
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="icon" title="Template actions">
-                        <ChevronDown className="h-4 w-4" />
+                      <Button variant="outline" className="shrink-0 px-3" aria-label="Template actions">
+                        <span className="hidden sm:inline">Manage</span>
+                        <ChevronDown aria-hidden />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onClick={() => { setEditing({ id: "", ...newBlankTemplate() } as InstructionTemplate); setEditorOpen(true); }}>
-                        <Plus className="h-4 w-4 mr-2" /> New Template
+                        <Plus aria-hidden /> New Template
                       </DropdownMenuItem>
                       <DropdownMenuItem disabled={!selected} onClick={() => { if (selected) { setEditing({ ...selected }); setEditorOpen(true); } }}>
-                        <Pencil className="h-4 w-4 mr-2" /> Edit Template
+                        <Pencil aria-hidden /> Edit Template
                       </DropdownMenuItem>
                       <DropdownMenuItem disabled={!selected} onClick={() => selected && dup.mutate(selected.id)}>
-                        <Files className="h-4 w-4 mr-2" /> Duplicate
+                        <Files aria-hidden /> Duplicate
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
                         disabled={!selected}
-                        onClick={() => selected && confirm(`Delete "${selected.name}"?`) && del.mutate(selected.id)}
+                        onClick={async () => {
+                          const target = selected;
+                          if (target && (await confirm({ title: `Delete "${target.name}"?`, description: "This instruction template will be removed.", confirmLabel: "Delete template" }))) del.mutate(target.id);
+                        }}
                         className="text-destructive focus:text-destructive"
                       >
-                        <Trash2 className="h-4 w-4 mr-2" /> Delete
+                        <Trash2 aria-hidden /> Delete
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
-                {!templates.data?.length && (
+                )}
+                {templates.data && !templates.data.length && (
                   <Button variant="secondary" size="sm" className="w-full" onClick={() => { setEditing({ id: "", ...newBlankTemplate("My Template") } as InstructionTemplate); setEditorOpen(true); }}>
-                    <Plus className="h-4 w-4 mr-1" /> Create your first template
+                    <Plus aria-hidden /> Create your first template
                   </Button>
                 )}
-              </div>
+              </section>
 
               {/* Quick controls bound to working copy */}
               {working && (
-                <div className="rounded-lg border p-3 space-y-3 bg-muted/30">
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <Label className="text-xs">Email Pattern</Label>
+                <section aria-labelledby="eg-pattern-title" className="space-y-3">
+                  <h3 id="eg-pattern-title" className="eyebrow border-b-2 border-border pb-1.5 text-foreground">02 · Pattern & company</h3>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <Field label="Email pattern" htmlFor="eg-pattern">
                       <Select
                         value={working.email_pattern}
                         onValueChange={(v) => setWorking({ ...working, email_pattern: v as EmailPattern })}
                       >
-                        <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectTrigger id="eg-pattern"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {EMAIL_PATTERN_OPTIONS.map((o) => (
                             <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
-                    </div>
-                    <div>
-                      <Label className="text-xs">Company Domain</Label>
+                    </Field>
+                    <Field
+                      label="Company"
+                      htmlFor="eg-company"
+                      action={
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 px-2 text-xs"
+                          disabled={!linkedInCompanyKeyword(working.company_domain)}
+                          onClick={() => {
+                            const kw = linkedInCompanyKeyword(working.company_domain);
+                            if (!kw) {
+                              toast.message("Enter a company name first");
+                              return;
+                            }
+                            window.open(linkedInCompanySearchUrl(kw), "_blank", "noopener,noreferrer");
+                          }}
+                        >
+                          <ExternalLink aria-hidden /> LinkedIn
+                        </Button>
+                      }
+                    >
                       <Input
-                        className="h-8 text-xs"
-                        placeholder="milliman.com"
+                        id="eg-company"
+                        placeholder="From email form, or type e.g. Nvidia / nvidia.com"
                         value={working.company_domain}
                         onChange={(e) => setWorking({ ...working, company_domain: e.target.value })}
                       />
-                    </div>
+                    </Field>
                   </div>
+
                   {working.email_pattern === "custom" && (
-                    <div>
-                      <Label className="text-xs">Custom Pattern</Label>
+                    <Field label="Custom pattern" htmlFor="eg-custom-pattern">
                       <Input
-                        className="h-8 text-xs font-mono"
+                        id="eg-custom-pattern"
+                        className="font-mono"
                         placeholder="{first}.{last}"
                         value={working.custom_pattern}
                         onChange={(e) => setWorking({ ...working, custom_pattern: e.target.value })}
                       />
-                    </div>
+                    </Field>
                   )}
-                  <div className="text-xs">
-                    <span className="text-muted-foreground">Live preview: </span>
-                    <span className="font-mono">Ganesh Shinde → </span>
-                    <span className="font-mono text-primary">{preview || "—"}</span>
-                  </div>
-                  <div className="flex items-center justify-between pt-1">
-                    <div className="text-[11px] text-muted-foreground">
-                      {Object.values(working.rules).filter(Boolean).length}/{RULE_LIBRARY.length} rules on · {working.custom_rules.length} custom
+
+                  <div className="flex flex-col gap-2 border-2 border-border bg-muted px-3 py-1.5 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="min-w-0 text-sm">
+                      <span className="font-mono text-xs font-semibold uppercase tracking-[0.08em]">Live preview · </span>
+                      <span className="font-mono text-xs">Ganesh Shinde → </span>
+                      <span className="break-all bg-primary px-1 font-mono text-xs font-semibold text-primary-foreground">{preview || "—"}</span>
+                    </p>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {Object.values(working.rules).filter(Boolean).length}/{RULE_LIBRARY.length} rules on · {working.custom_rules.length} custom
+                      </span>
+                      <Button variant="outline" size="sm" className="h-8" onClick={() => { setEditing({ ...working }); setEditorOpen(true); }}>
+                        <Settings2 aria-hidden /> Rules
+                      </Button>
                     </div>
-                    <Button variant="ghost" size="sm" className="h-7" onClick={() => { setEditing({ ...working }); setEditorOpen(true); }}>
-                      <Settings2 className="h-3.5 w-3.5 mr-1" /> Rules
-                    </Button>
                   </div>
-                </div>
+
+                  <div className="space-y-2 border-2 border-dashed border-border px-3 py-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p
+                        className="min-w-0 text-sm font-semibold"
+                        title={`Hunter, Snov, GetProspect, Clearout, Skrapp, Findymail & more — API keys in .env when set${
+                          (finderStatus.data?.filter((p) => p.configured).length ?? 0) > 0
+                            ? ` · ${finderStatus.data!.filter((p) => p.configured).length} API ready`
+                            : " · no API keys yet (web links still work)"
+                        }`}
+                      >
+                        Find sample emails
+                        <span className="ml-2 font-mono text-xs font-normal text-muted-foreground">
+                          {(finderStatus.data?.filter((p) => p.configured).length ?? 0) > 0
+                            ? `${finderStatus.data!.filter((p) => p.configured).length} API ready`
+                            : "web links"}
+                        </span>
+                      </p>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button type="button" size="sm" variant="outline" className="h-8">
+                              <ExternalLink aria-hidden /> Providers <ChevronDown aria-hidden />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="max-h-80 w-60 overflow-y-auto">
+                            <p className="eyebrow px-2 py-1.5">Search · opens in new tab</p>
+                            {EMAIL_FIND_PROVIDERS.map((p) => {
+                              const st = finderStatus.data?.find((x) => x.id === p.id);
+                              const run = finderMeta?.providers.find((x) => x.provider === p.id);
+                              const openProvider = () => {
+                                const domainHint = (finderMeta?.domain || working.company_domain.trim() || "allen.in")
+                                  .toLowerCase()
+                                  .replace(/^https?:\/\//, "")
+                                  .split("/")[0]!;
+                                const domain = domainHint.includes(".")
+                                  ? domainHint
+                                  : `${domainHint.replace(/[^a-z0-9]+/g, "")}.com`;
+                                window.open(run?.webUrl || p.webSearchUrl(domain), "_blank", "noopener,noreferrer");
+                              };
+                              return (
+                                <DropdownMenuItem key={p.id} onSelect={openProvider} title={st?.configured ? `${p.name} API ready` : p.freeNote}>
+                                  {st?.configured ? <Check aria-hidden /> : <ExternalLink className="opacity-50" aria-hidden />}
+                                  <span className="flex-1">{p.name}</span>
+                                  {st?.configured && <span className="sr-only"> (API ready)</span>}
+                                  {run && run.count > 0 && <span className="font-mono text-xs">{run.count}</span>}
+                                </DropdownMenuItem>
+                              );
+                            })}
+                            <DropdownMenuSeparator />
+                            <p className="eyebrow px-2 py-1.5">Verify · opens in new tab</p>
+                            {EMAIL_VERIFY_PROVIDERS.map((p) => {
+                              const openProvider = () => {
+                                const domainHint = (finderMeta?.domain || working.company_domain.trim() || "")
+                                  .toLowerCase()
+                                  .replace(/^https?:\/\//, "")
+                                  .split("/")[0]!;
+                                const domain = domainHint.includes(".")
+                                  ? domainHint
+                                  : domainHint
+                                    ? `${domainHint.replace(/[^a-z0-9]+/g, "")}.com`
+                                    : "";
+                                window.open(p.webSearchUrl(domain), "_blank", "noopener,noreferrer");
+                              };
+                              return (
+                                <DropdownMenuItem key={p.id} onSelect={openProvider} title={p.freeNote}>
+                                  <ExternalLink className="opacity-50" aria-hidden />
+                                  <span className="flex-1">{p.name}</span>
+                                </DropdownMenuItem>
+                              );
+                            })}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          className="h-8"
+                          disabled={findEmails.isPending || !working.company_domain.trim()}
+                          onClick={() => findEmails.mutate()}
+                        >
+                          {findEmails.isPending ? (
+                            <><Loader2 className="animate-spin" aria-hidden /> Searching…</>
+                          ) : (
+                            <><Search aria-hidden /> Search databases</>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+
+                    {finderMeta?.sampleEmail && (
+                      <div className="flex flex-wrap items-center gap-2 border-t border-border/20 pt-2 text-xs">
+                        <span className="text-muted-foreground">Sample:</span>
+                        <span className="break-all bg-primary px-1 font-mono font-semibold text-primary-foreground">{finderMeta.sampleEmail}</span>
+                        {finderMeta.pattern && (
+                          <Badge variant="secondary">pattern {finderMeta.pattern}</Badge>
+                        )}
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 px-2 text-xs"
+                          onClick={() => copyText(finderMeta.sampleEmail!)}
+                        >
+                          <Copy aria-hidden /> Copy<span className="sr-only"> sample email</span>
+                        </Button>
+                      </div>
+                    )}
+
+                    {foundSamples.length > 0 && (
+                      <ul className="max-h-28 divide-y divide-border/20 overflow-auto border-t border-border/20 pt-1 font-mono text-xs" aria-label="Sample emails found">
+                        {foundSamples.slice(0, 12).map((e) => (
+                          <li key={e.email} className="flex items-center justify-between gap-2 py-1">
+                            <span className="truncate">{e.email}</span>
+                            <span className="shrink-0 text-muted-foreground">{e.provider}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </section>
               )}
 
-              <div className="flex-1 min-h-[180px] flex flex-col">
-                <Label className="text-xs uppercase tracking-wide text-muted-foreground">Data</Label>
+              <section aria-labelledby="eg-data-title" className="flex min-h-36 flex-1 flex-col gap-2">
+                <div className="flex items-baseline justify-between gap-2 border-b-2 border-border pb-1.5">
+                  <h3 id="eg-data-title" className="eyebrow text-foreground"><label htmlFor="eg-data">03 · Data</label></h3>
+                  <span className="font-mono text-xs text-muted-foreground tabular-nums">{totalLines} non-empty lines</span>
+                </div>
                 <Textarea
+                  id="eg-data"
                   value={data}
                   onChange={(e) => setData(e.target.value)}
                   placeholder="Paste LinkedIn search results, employee list, Excel data, CSV, or any text…"
-                  className="font-mono text-xs mt-1 flex-1 min-h-[180px]"
+                  className="min-h-28 flex-1 resize-none font-mono text-xs"
                 />
-                <div className="text-xs text-muted-foreground mt-1">{totalLines} non-empty lines</div>
-              </div>
+              </section>
 
               {/* Advanced */}
-              <div className="rounded-lg border">
+              <div className="shrink-0 border-2 border-border">
                 <button
                   type="button"
+                  aria-expanded={advancedOpen}
+                  aria-controls="eg-advanced"
                   onClick={() => setAdvancedOpen((v) => !v)}
-                  className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium"
+                  className="flex h-9 w-full cursor-pointer items-center justify-between gap-2 px-3 font-mono text-xs font-semibold uppercase tracking-[0.08em] hover:bg-accent"
                 >
                   <span>Advanced · generated prompt</span>
-                  <ChevronDown className={`h-3.5 w-3.5 transition-transform ${advancedOpen ? "rotate-180" : ""}`} />
+                  <ChevronDown className={cn("h-4 w-4 shrink-0 transition-transform", advancedOpen && "rotate-180")} aria-hidden />
                 </button>
                 {advancedOpen && (
-                  <div className="border-t p-3 space-y-2">
+                  <div id="eg-advanced" className="space-y-2 border-t-2 border-border p-3">
+                    <label htmlFor="eg-prompt" className="sr-only">Generated prompt</label>
                     <Textarea
+                      id="eg-prompt"
                       value={effectivePrompt}
                       onChange={(e) => setPromptOverride(e.target.value)}
                       rows={8}
-                      className="font-mono text-[11px]"
+                      className="font-mono text-xs"
                     />
                     {promptOverride !== null && (
                       <Button variant="ghost" size="sm" onClick={() => setPromptOverride(null)}>
@@ -335,92 +597,100 @@ export function EmailGeneratorDialog({ open, onOpenChange, onUse }: Props) {
                 onClick={() => generate.mutate()}
                 disabled={generate.isPending || !data.trim() || !working}
                 className="w-full"
+                size="lg"
               >
                 {generate.isPending ? (
-                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Generating…</>
+                  <><Loader2 className="animate-spin" aria-hidden /> Generating…</>
                 ) : (
-                  <><Sparkles className="h-4 w-4 mr-2" /> Generate Emails</>
+                  <><Sparkles aria-hidden /> Generate Emails</>
                 )}
               </Button>
             </div>
 
             {/* Right: results */}
-            <div className="flex flex-col min-h-0 overflow-hidden">
-              <div className="grid grid-cols-4 gap-2 p-3 border-b text-center text-xs">
-                <Stat label="Lines" value={totalLines} />
-                <Stat label="Generated" value={emails.length} />
-                <Stat label="Skipped" value={skipped.length} />
-                <Stat label="Batches" value={batches.length} />
+            <div className="flex min-h-[28rem] flex-col border-t-2 border-border bg-background md:min-h-0 md:overflow-hidden md:border-t-0">
+              <div className="grid grid-cols-2 gap-2 border-b-2 border-border p-3 sm:grid-cols-4">
+                <StatCard flat size="compact" label="Lines" value={totalLines} />
+                <StatCard flat size="compact" label="Generated" value={emails.length} tone={emails.length ? "success" : "default"} />
+                <StatCard flat size="compact" label="Skipped" value={skipped.length} tone={skipped.length ? "warning" : "default"} />
+                <StatCard flat size="compact" label="Batches" value={batches.length} />
               </div>
 
-              <Tabs defaultValue="list" className="flex-1 min-h-0 flex flex-col">
-                <TabsList className="mx-3 mt-3 self-start">
-                  <TabsTrigger value="list">Emails</TabsTrigger>
-                  <TabsTrigger value="comma">Comma</TabsTrigger>
-                  <TabsTrigger value="batches">Batches</TabsTrigger>
-                  <TabsTrigger value="skipped">Skipped</TabsTrigger>
-                </TabsList>
+              <Tabs defaultValue="list" className="flex min-h-0 flex-1 flex-col">
+                <div className="overflow-x-auto px-3 pt-3">
+                  <TabsList>
+                    <TabsTrigger value="list">Emails</TabsTrigger>
+                    <TabsTrigger value="comma">Comma</TabsTrigger>
+                    <TabsTrigger value="batches">Batches</TabsTrigger>
+                    <TabsTrigger value="skipped">Skipped</TabsTrigger>
+                  </TabsList>
+                </div>
 
-                <TabsContent value="list" className="flex-1 min-h-0 overflow-auto px-3 pb-3 mt-2">
+                <TabsContent value="list" className="mt-3 min-h-0 flex-1 overflow-auto px-3 pb-3">
                   {emails.length === 0 ? <Empty /> : (
-                    <pre className="text-xs font-mono whitespace-pre-wrap break-all">{emails.join("\n")}</pre>
+                    <pre className="whitespace-pre-wrap break-all border-2 border-border bg-card p-3 font-mono text-xs leading-5">{emails.join("\n")}</pre>
                   )}
                 </TabsContent>
 
-                <TabsContent value="comma" className="flex-1 min-h-0 overflow-auto px-3 pb-3 mt-2">
-                  <div className="flex justify-end mb-2">
+                <TabsContent value="comma" className="mt-3 min-h-0 flex-1 overflow-auto px-3 pb-3">
+                  <div className="mb-2 flex justify-end">
                     <Button size="sm" variant="outline" disabled={!commaList} onClick={() => copyText(commaList)}>
-                      <Copy className="h-3 w-3 mr-1" /> Copy all
+                      <Copy aria-hidden /> Copy all
                     </Button>
                   </div>
                   {commaList ? (
-                    <pre className="text-xs font-mono whitespace-pre-wrap break-all">{commaList}</pre>
+                    <pre className="whitespace-pre-wrap break-all border-2 border-border bg-card p-3 font-mono text-xs leading-5">{commaList}</pre>
                   ) : <Empty />}
                 </TabsContent>
 
-                <TabsContent value="batches" className="flex-1 min-h-0 overflow-auto px-3 pb-3 mt-2 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Label className="text-xs">Batch size</Label>
+                <TabsContent value="batches" className="mt-3 min-h-0 flex-1 space-y-3 overflow-auto px-3 pb-3">
+                  <div className="flex items-center gap-3">
+                    <Label htmlFor="eg-batch-size">Batch size</Label>
                     <Input
+                      id="eg-batch-size"
                       type="number"
                       min={1}
                       max={1000}
                       value={batchSize}
                       onChange={(e) => working && setWorking({ ...working, batch_size: parseInt(e.target.value) || 100 })}
-                      className="h-7 w-24"
+                      className="h-9 w-28 font-mono"
                     />
                   </div>
                   {batches.length === 0 && <Empty />}
                   {batches.map((b, i) => {
                     const text = b.join(", ");
                     return (
-                      <div key={i} className="rounded-lg border p-3">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="text-sm font-medium">Part {i + 1} <Badge variant="secondary" className="ml-1">{b.length}</Badge></div>
+                      <div key={i} className="border-2 border-border bg-card">
+                        <div className="flex items-center justify-between gap-2 border-b-2 border-border px-3 py-2">
+                          <div className="flex items-center gap-2 text-sm font-semibold">Part {i + 1} <Badge variant="secondary">{b.length}</Badge></div>
                           <Button size="sm" variant="outline" onClick={() => copyText(text)}>
-                            <Copy className="h-3 w-3 mr-1" /> Copy
+                            <Copy aria-hidden /> Copy<span className="sr-only"> part {i + 1}</span>
                           </Button>
                         </div>
-                        <pre className="text-xs font-mono whitespace-pre-wrap break-all max-h-32 overflow-auto">{text}</pre>
+                        <pre className="max-h-32 overflow-auto whitespace-pre-wrap break-all p-3 font-mono text-xs leading-5">{text}</pre>
                       </div>
                     );
                   })}
                 </TabsContent>
 
-                <TabsContent value="skipped" className="flex-1 min-h-0 overflow-auto px-3 pb-3 mt-2 space-y-2">
+                <TabsContent value="skipped" className="mt-3 min-h-0 flex-1 overflow-auto px-3 pb-3">
                   {skipped.length === 0 && <Empty />}
-                  {skipped.map((s, i) => (
-                    <div key={i} className="rounded-md border p-2 text-xs">
-                      <div className="font-medium">{s.name}</div>
-                      <div className="text-muted-foreground">Reason: {s.reason}</div>
-                    </div>
-                  ))}
+                  {skipped.length > 0 && (
+                    <ul className="divide-y divide-border/20 border-2 border-border bg-card">
+                      {skipped.map((s, i) => (
+                        <li key={i} className="px-3 py-2 text-sm">
+                          <div className="font-semibold">{s.name}</div>
+                          <div className="text-xs text-muted-foreground">Reason: {s.reason}</div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </TabsContent>
               </Tabs>
             </div>
           </div>
 
-          <DialogFooter className="px-6 py-3 border-t">
+          <DialogFooter className="gap-2 border-b-2 border-border px-5 py-3 sm:space-x-0 sm:px-6">
             <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
             <Button
               disabled={emails.length === 0}
@@ -447,20 +717,15 @@ export function EmailGeneratorDialog({ open, onOpenChange, onUse }: Props) {
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-md border bg-muted/30 px-2 py-1.5">
-      <div className="text-base font-semibold">{value}</div>
-      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
-    </div>
-  );
-}
-
 function Empty() {
   return (
-    <div className="text-xs text-muted-foreground text-center py-8">
-      No results yet. Paste data on the left and click Generate.
-    </div>
+    <EmptyState
+      framed={false}
+      icon={Inbox}
+      title="No results yet"
+      description="Paste data on the left and click Generate."
+      className="py-10"
+    />
   );
 }
 
@@ -490,75 +755,106 @@ function TemplateEditorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl w-[95vw] max-h-[90vh] flex flex-col p-0">
-        <DialogHeader className="px-6 py-4 border-b">
+      <DialogContent className="flex max-w-2xl flex-col gap-0 overflow-hidden p-0 sm:p-0">
+        <DialogHeader className="border-b-2 border-border px-5 py-4 sm:px-6">
+          <p className="eyebrow">Instruction template</p>
           <DialogTitle>{template?.id ? "Edit Template" : "New Template"}</DialogTitle>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2">
-              <Label>Name</Label>
-              <Input value={t.name} onChange={(e) => setT({ ...t, name: e.target.value })} />
+        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 py-5 sm:px-6">
+          <fieldset className="min-w-0">
+            <legend className="eyebrow mb-3 w-full border-b-2 border-border pb-1.5 text-foreground">01 · Basics</legend>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="Name" htmlFor="it-name" className="sm:col-span-2">
+                <Input id="it-name" value={t.name} onChange={(e) => setT({ ...t, name: e.target.value })} />
+              </Field>
+              <Field label="Email pattern" htmlFor="it-pattern">
+                <Select value={t.email_pattern} onValueChange={(v) => setT({ ...t, email_pattern: v as EmailPattern })}>
+                  <SelectTrigger id="it-pattern"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {EMAIL_PATTERN_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field
+                label="Company domain"
+                htmlFor="it-domain"
+                action={
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 px-2 text-xs"
+                    disabled={!companyKeywordFromDomain(t.company_domain)}
+                    onClick={() => {
+                      const kw = companyKeywordFromDomain(t.company_domain);
+                      if (!kw) {
+                        toast.message("Enter a company domain first");
+                        return;
+                      }
+                      window.open(linkedInCompanySearchUrl(kw), "_blank", "noopener,noreferrer");
+                    }}
+                  >
+                    <ExternalLink aria-hidden /> LinkedIn search
+                  </Button>
+                }
+              >
+                <Input id="it-domain" placeholder="milliman.com" value={t.company_domain} onChange={(e) => setT({ ...t, company_domain: e.target.value })} />
+              </Field>
+              {t.email_pattern === "custom" && (
+                <Field
+                  label="Custom pattern"
+                  htmlFor="it-custom-pattern"
+                  className="sm:col-span-2"
+                  hint={<>Tokens: <span className="font-mono">{"{first}"} {"{last}"} {"{f}"} {"{l}"}</span></>}
+                >
+                  <Input id="it-custom-pattern" className="font-mono" placeholder="{first}.{last}" value={t.custom_pattern} onChange={(e) => setT({ ...t, custom_pattern: e.target.value })} />
+                </Field>
+              )}
+              <Field label="Batch size" htmlFor="it-batch">
+                <Input id="it-batch" className="font-mono" type="number" min={1} max={1000} value={t.batch_size} onChange={(e) => setT({ ...t, batch_size: parseInt(e.target.value) || 100 })} />
+              </Field>
+              <Field label="Surname min length" htmlFor="it-surname">
+                <Input id="it-surname" className="font-mono" type="number" min={0} max={20} value={t.surname_min_length} onChange={(e) => setT({ ...t, surname_min_length: parseInt(e.target.value) || 0 })} />
+              </Field>
             </div>
-            <div>
-              <Label>Email Pattern</Label>
-              <Select value={t.email_pattern} onValueChange={(v) => setT({ ...t, email_pattern: v as EmailPattern })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {EMAIL_PATTERN_OPTIONS.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Company Domain</Label>
-              <Input placeholder="milliman.com" value={t.company_domain} onChange={(e) => setT({ ...t, company_domain: e.target.value })} />
-            </div>
-            {t.email_pattern === "custom" && (
-              <div className="col-span-2">
-                <Label>Custom Pattern</Label>
-                <Input className="font-mono" placeholder="{first}.{last}" value={t.custom_pattern} onChange={(e) => setT({ ...t, custom_pattern: e.target.value })} />
-                <p className="text-xs text-muted-foreground mt-1">Tokens: {"{first}"} {"{last}"} {"{f}"} {"{l}"}</p>
-              </div>
-            )}
-            <div>
-              <Label>Batch Size</Label>
-              <Input type="number" min={1} max={1000} value={t.batch_size} onChange={(e) => setT({ ...t, batch_size: parseInt(e.target.value) || 100 })} />
-            </div>
-            <div>
-              <Label>Surname min length</Label>
-              <Input type="number" min={0} max={20} value={t.surname_min_length} onChange={(e) => setT({ ...t, surname_min_length: parseInt(e.target.value) || 0 })} />
-            </div>
-          </div>
+          </fieldset>
 
-          <div>
-            <Label className="text-xs uppercase tracking-wide text-muted-foreground">Rule Library</Label>
-            <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <fieldset className="min-w-0">
+            <legend className="eyebrow mb-3 w-full border-b-2 border-border pb-1.5 text-foreground">02 · Rule library</legend>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {RULE_LIBRARY.map((r) => (
-                <label key={r.key} className="flex items-start gap-2 rounded-md border p-2 text-sm">
-                  <Checkbox checked={rules[r.key] !== false} onCheckedChange={(v) => setRule(r.key, !!v)} />
+                <label key={r.key} className="flex min-h-11 cursor-pointer items-start gap-3 border-2 border-border bg-card p-2.5 text-sm transition-colors hover:bg-accent has-[[data-state=checked]]:bg-muted">
+                  <Checkbox className="mt-0.5" checked={rules[r.key] !== false} onCheckedChange={(v) => setRule(r.key, !!v)} />
                   <span>{r.label}</span>
                 </label>
               ))}
             </div>
-          </div>
+          </fieldset>
 
-          <div>
-            <Label className="text-xs uppercase tracking-wide text-muted-foreground">Prefixes to strip</Label>
-            <div className="mt-2 flex flex-wrap gap-1.5">
+          <fieldset className="min-w-0">
+            <legend className="eyebrow mb-3 w-full border-b-2 border-border pb-1.5 text-foreground">03 · Prefixes to strip</legend>
+            <div className="flex flex-wrap items-center gap-2">
               {t.prefixes.map((p, i) => (
-                <Badge key={`${p}-${i}`} variant="secondary" className="gap-1">
-                  {p}
-                  <button onClick={() => setT({ ...t, prefixes: t.prefixes.filter((_, idx) => idx !== i) })}>
-                    <X className="h-3 w-3" />
+                <span key={`${p}-${i}`} className="inline-flex items-stretch border-2 border-border bg-card font-mono text-xs">
+                  <span className="flex items-center px-2">{p}</span>
+                  <button
+                    type="button"
+                    aria-label={`Remove prefix ${p}`}
+                    className="grid size-8 cursor-pointer place-items-center border-l-2 border-border transition-colors hover:bg-destructive-subtle"
+                    onClick={() => setT({ ...t, prefixes: t.prefixes.filter((_, idx) => idx !== i) })}
+                  >
+                    <X className="h-3.5 w-3.5" aria-hidden />
                   </button>
-                </Badge>
+                </span>
               ))}
-              <div className="flex gap-1">
+              <div className="flex gap-2">
+                <label htmlFor="it-new-prefix" className="sr-only">New prefix</label>
                 <Input
-                  className="h-7 w-24 text-xs"
+                  id="it-new-prefix"
+                  className="h-9 w-28 font-mono text-xs"
                   placeholder="Add…"
                   value={newPrefix}
                   onChange={(e) => setNewPrefix(e.target.value)}
@@ -575,24 +871,28 @@ function TemplateEditorDialog({
                 </Button>
               </div>
             </div>
-          </div>
+          </fieldset>
 
-          <div>
-            <Label className="text-xs uppercase tracking-wide text-muted-foreground">Custom Rules</Label>
-            <div className="mt-2 space-y-1.5">
+          <fieldset className="min-w-0">
+            <legend className="eyebrow mb-3 w-full border-b-2 border-border pb-1.5 text-foreground">04 · Custom rules</legend>
+            <div className="space-y-2">
               {t.custom_rules.map((r, i) => (
-                <div key={i} className="flex gap-2 items-center">
-                  <Input value={r} onChange={(e) => {
+                <div key={i} className="flex items-center gap-2">
+                  <label htmlFor={`it-rule-${i}`} className="sr-only">Custom rule {i + 1}</label>
+                  <Input id={`it-rule-${i}`} className="min-w-0 flex-1" value={r} onChange={(e) => {
                     const next = [...t.custom_rules]; next[i] = e.target.value;
                     setT({ ...t, custom_rules: next });
                   }} />
-                  <Button size="icon" variant="ghost" onClick={() => setT({ ...t, custom_rules: t.custom_rules.filter((_, idx) => idx !== i) })}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <IconButton label={`Delete custom rule ${i + 1}`} className="shrink-0 hover:bg-destructive-subtle" onClick={() => setT({ ...t, custom_rules: t.custom_rules.filter((_, idx) => idx !== i) })}>
+                    <Trash2 aria-hidden />
+                  </IconButton>
                 </div>
               ))}
-              <div className="flex gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <label htmlFor="it-new-rule" className="sr-only">New custom rule</label>
                 <Input
+                  id="it-new-rule"
+                  className="min-w-0 flex-1"
                   placeholder='e.g. Skip names ending with " Jr"'
                   value={newRule}
                   onChange={(e) => setNewRule(e.target.value)}
@@ -604,18 +904,18 @@ function TemplateEditorDialog({
                     }
                   }}
                 />
-                <Button variant="outline" type="button" onClick={() => { if (newRule.trim()) { setT({ ...t, custom_rules: [...t.custom_rules, newRule.trim()] }); setNewRule(""); } }}>
-                  <Plus className="h-4 w-4 mr-1" /> Add Rule
+                <Button variant="outline" type="button" className="shrink-0" onClick={() => { if (newRule.trim()) { setT({ ...t, custom_rules: [...t.custom_rules, newRule.trim()] }); setNewRule(""); } }}>
+                  <Plus aria-hidden /> Add Rule
                 </Button>
               </div>
             </div>
-          </div>
+          </fieldset>
         </div>
 
-        <DialogFooter className="px-6 py-3 border-t">
+        <DialogFooter className="gap-2 border-b-2 border-border px-5 py-3 sm:space-x-0 sm:px-6">
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button disabled={saving || !t.name.trim()} onClick={() => onSave(t)}>
-            {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving…</> : "Save"}
+            {saving ? <><Loader2 className="animate-spin" aria-hidden /> Saving…</> : "Save"}
           </Button>
         </DialogFooter>
       </DialogContent>

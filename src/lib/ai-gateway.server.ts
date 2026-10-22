@@ -1,0 +1,319 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { createOpenAI } from "@ai-sdk/openai";
+import { streamText } from "ai";
+import type { Database } from "@/integrations/supabase/types";
+import { AI_PROVIDERS, type AiProvider } from "@/lib/ai-provider";
+
+/** Shared chat-completion caller. A user can save a Gemini and/or Grok API key
+ *  and pick one as their active provider in Settings → AI. Whichever provider
+ *  is selected there is used strictly — the shared Lovable gateway is only
+ *  used when nothing is selected (or the selected provider has no key saved),
+ *  never as a silent runtime fallback if the selected provider's call fails. */
+
+const LOVABLE_MODEL = "openai/gpt-6-astra";
+
+const GEMINI_DIRECT_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+const GEMINI_DIRECT_MODEL = "gemini-flash-latest";
+
+const GROK_DIRECT_URL = "https://api.x.ai/v1/chat/completions";
+const GROK_DIRECT_MODEL = "grok-4-fast";
+
+const ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages";
+const ANTHROPIC_MODEL = "claude-sonnet-5";
+const ANTHROPIC_API_VERSION = "2023-06-01";
+
+type ChatCompletion = { choices?: { message?: { content?: string } }[] };
+type ChatMessage = { role: string; content: string };
+
+function gatewayErrorMessage(error: unknown): string {
+  const status =
+    error && typeof error === "object" && "statusCode" in error && typeof error.statusCode === "number"
+      ? error.statusCode
+      : undefined;
+  const raw = error instanceof Error ? error.message : String(error);
+  if (status === 402 || raw.toLowerCase().includes("payment required")) {
+    return "Not enough Lovable AI credits. Add workspace credits, then try again.";
+  }
+  if (status === 401) return "Lovable AI could not authenticate the managed project key.";
+  if (status === 403) return raw || "Lovable AI access is currently blocked for this workspace.";
+  if (status === 429) return "Lovable AI is rate-limited. Please wait a moment and try again.";
+  return raw || "Lovable AI request failed";
+}
+
+/** Providers occasionally return 503 "model overloaded" for a moment —
+ *  retry a couple of times with backoff before surfacing an error. */
+const OVERLOAD_RETRY_DELAYS_MS = [400, 1200];
+
+async function postChatCompletion(
+  url: string,
+  apiKey: string,
+  model: string,
+  messages: ChatMessage[],
+): Promise<Response> {
+  let res: Response;
+  for (let attempt = 0; ; attempt++) {
+    res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({ model, messages, response_format: { type: "json_object" } }),
+    });
+    if (res.status !== 503 || attempt >= OVERLOAD_RETRY_DELAYS_MS.length) return res;
+    await new Promise((r) => setTimeout(r, OVERLOAD_RETRY_DELAYS_MS[attempt]));
+  }
+}
+
+export async function getUserAiConfig(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+): Promise<{ provider: AiProvider; geminiKey: string | null; grokKey: string | null; claudeKey: string | null }> {
+  const { data } = await supabase
+    .from("profiles")
+    .select("gemini_api_key, grok_api_key, claude_api_key, active_ai_provider")
+    .eq("id", userId)
+    .maybeSingle();
+  const provider = (data?.active_ai_provider as AiProvider | undefined) ?? "lovable";
+  const gemini = data?.gemini_api_key;
+  const grok = data?.grok_api_key;
+  const claude = data?.claude_api_key;
+  return {
+    provider: AI_PROVIDERS.includes(provider) ? provider : "lovable",
+    geminiKey: gemini && gemini.trim() ? gemini.trim() : null,
+    grokKey: grok && grok.trim() ? grok.trim() : null,
+    claudeKey: claude && claude.trim() ? claude.trim() : null,
+  };
+}
+
+/** Most providers () return 401/403 for a bad key, but xAI's Grok API
+ *  returns plain 400 with {"code":"invalid-argument","error":"Incorrect API
+ *  key..."} — detect that shape too so it still reads as a rejected key. */
+function looksLikeInvalidKeyError(status: number, bodyText: string): boolean {
+  if (status !== 400) return false;
+  const lower = bodyText.toLowerCase();
+  return lower.includes("invalid-argument") && lower.includes("api key");
+}
+
+async function callOpenAiCompatible(
+  url: string,
+  apiKey: string,
+  model: string,
+  messages: ChatMessage[],
+  label: string,
+): Promise<string> {
+  const res = await postChatCompletion(url, apiKey, model, messages);
+  if (res.status === 429) throw new Error(`Your ${label} API key hit its rate limit. Try again shortly.`);
+  if (res.status === 401 || res.status === 403) {
+    throw new Error(`Your ${label} API key was rejected. Check it in Settings → AI.`);
+  }
+  if (res.status === 503) throw new Error(`${label} is temporarily overloaded with high demand. Try again in a moment.`);
+  if (!res.ok) {
+    const text = await res.text();
+    if (looksLikeInvalidKeyError(res.status, text)) {
+      throw new Error(`Your ${label} API key was rejected. Check it in Settings → AI.`);
+    }
+    throw new Error(`${label} API error ${res.status}: ${text.slice(0, 300)}`);
+  }
+  const j = (await res.json()) as ChatCompletion;
+  return j.choices?.[0]?.message?.content ?? "";
+}
+
+const callDirectGemini = (apiKey: string, messages: ChatMessage[]) =>
+  callOpenAiCompatible(GEMINI_DIRECT_URL, apiKey, GEMINI_DIRECT_MODEL, messages, "Gemini");
+
+const callDirectGrok = (apiKey: string, messages: ChatMessage[]) =>
+  callOpenAiCompatible(GROK_DIRECT_URL, apiKey, GROK_DIRECT_MODEL, messages, "Grok");
+
+type AnthropicMessagesResponse = { content?: { type: string; text?: string }[] };
+
+/** Claude (Anthropic) speaks its native Messages API, not OpenAI chat-completions:
+ *  system text goes to the top-level `system` field and the prompt to `messages`. */
+async function callDirectClaude(apiKey: string, messages: ChatMessage[]): Promise<string> {
+  const system = messages
+    .filter((m) => m.role === "system")
+    .map((m) => m.content)
+    .join("\n\n");
+  const prompt = messages
+    .filter((m) => m.role !== "system")
+    .map((m) => m.content)
+    .join("\n\n");
+
+  const res = await fetch(ANTHROPIC_MESSAGES_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": ANTHROPIC_API_VERSION,
+    },
+    body: JSON.stringify({
+      model: ANTHROPIC_MODEL,
+      max_tokens: 16000,
+      ...(system ? { system } : {}),
+      messages: [{ role: "user", content: prompt }],
+    }),
+  });
+
+  if (res.status === 401 || res.status === 403)
+    throw new Error("Your Claude API key was rejected. Check it in Settings → AI.");
+  if (res.status === 429) throw new Error("Your Claude API key hit its rate limit. Try again shortly.");
+  if (res.status === 529) throw new Error("Claude is temporarily overloaded with high demand. Try again in a moment.");
+  if (!res.ok) {
+    const text = await res.text();
+    if (res.status === 400 && text.toLowerCase().includes("credit balance")) {
+      throw new Error("Your Anthropic account is out of credits. Top up at console.anthropic.com.");
+    }
+    throw new Error(`Claude API error ${res.status}: ${text.slice(0, 300)}`);
+  }
+
+  const j = (await res.json()) as AnthropicMessagesResponse;
+  const text = (j.content ?? [])
+    .filter((b) => b.type === "text" && typeof b.text === "string")
+    .map((b) => b.text as string)
+    .join("");
+  if (!text.trim()) throw new Error("Claude completed without returning text. Please try again.");
+  return text;
+}
+
+async function callLovableGateway(messages: ChatMessage[]): Promise<string> {
+  const key = process.env['LOVABLE_API_KEY'];
+  if (!key?.trim()) {
+    throw new Error("Lovable AI is temporarily unavailable because its managed key was not loaded. Please refresh and try again.");
+  }
+
+  const lovable = createOpenAI({
+    baseURL: "https://ai.gateway.lovable.dev/v1",
+    apiKey: key,
+    headers: {
+      "Lovable-API-Key": key,
+      "X-Lovable-AIG-SDK": "vercel-ai-sdk",
+    },
+  });
+
+  try {
+    const instructions = messages
+      .filter((message) => message.role === "system")
+      .map((message) => message.content)
+      .join("\n\n");
+    const promptMessages = messages
+      .filter((message) => message.role !== "system")
+      .map((message) => ({ role: "user" as const, content: message.content }));
+    const result = streamText({
+      model: lovable.responses(LOVABLE_MODEL),
+      maxRetries: 0,
+      instructions,
+      messages: promptMessages,
+      providerOptions: {
+        openai: {
+          forceReasoning: true,
+          reasoningEffort: "low",
+          reasoningSummary: "auto",
+          store: false,
+          include: ["reasoning.encrypted_content"],
+        },
+      },
+    });
+    let text = "";
+    for await (const part of result.fullStream) {
+      if (part.type === "text-delta") text += part.text;
+      if (part.type === "error") {
+        throw new Error(gatewayErrorMessage(part.error));
+      }
+    }
+    if (!text.trim()) throw new Error("Lovable AI completed without returning text. Please try again.");
+    return text;
+  } catch (error) {
+    throw new Error(gatewayErrorMessage(error));
+  }
+}
+
+/** POST a chat-completion request (system + user message, JSON response) and
+ *  return the raw content string. Uses whichever provider is selected in
+ *  Settings → AI: "lovable" (or a selected provider with no key saved) goes
+ *  to the shared Lovable gateway; "gemini"/"grok" with a saved key goes
+ *  straight to that provider and its errors propagate as-is — no silent
+ *  fallback to Lovable if the selected provider's own call fails. */
+export async function aiChatJson(params: {
+  supabase: SupabaseClient<Database>;
+  userId: string;
+  system: string;
+  user: string;
+}): Promise<string> {
+  const { supabase, userId, system, user } = params;
+  const messages: ChatMessage[] = [
+    { role: "system", content: system },
+    { role: "user", content: user },
+  ];
+
+  const cfg = await getUserAiConfig(supabase, userId);
+  if (cfg.provider === "gemini" && cfg.geminiKey) return callDirectGemini(cfg.geminiKey, messages);
+  if (cfg.provider === "grok" && cfg.grokKey) return callDirectGrok(cfg.grokKey, messages);
+  if (cfg.provider === "claude" && cfg.claudeKey) return callDirectClaude(cfg.claudeKey, messages);
+
+  return callLovableGateway(messages);
+}
+
+/** Validates a Gemini API key by making a minimal live request against it. */
+export async function verifyGeminiApiKey(apiKey: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  return verifyApiKey(GEMINI_DIRECT_URL, GEMINI_DIRECT_MODEL, apiKey, "Gemini");
+}
+
+/** Validates a Grok (xAI) API key by making a minimal live request against it. */
+export async function verifyGrokApiKey(apiKey: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  return verifyApiKey(GROK_DIRECT_URL, GROK_DIRECT_MODEL, apiKey, "Grok");
+}
+
+/** Validates a Claude (Anthropic) API key by making a minimal live request against it. */
+export async function verifyClaudeApiKey(apiKey: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const res = await fetch(ANTHROPIC_MESSAGES_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": ANTHROPIC_API_VERSION,
+      },
+      body: JSON.stringify({
+        model: ANTHROPIC_MODEL,
+        max_tokens: 5,
+        messages: [{ role: "user", content: "Reply with the single word: ok" }],
+      }),
+    });
+    if (res.status === 401 || res.status === 403) return { ok: false, error: "Invalid API key." };
+    if (res.status === 429) return { ok: false, error: "Key is valid, but is currently rate-limited." };
+    if (res.status === 529) return { ok: false, error: "Key is valid, but Claude is currently overloaded." };
+    if (!res.ok) {
+      const text = await res.text();
+      return { ok: false, error: `Claude API error ${res.status}: ${text.slice(0, 200)}` };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Could not reach Claude API." };
+  }
+}
+
+async function verifyApiKey(
+  url: string,
+  model: string,
+  apiKey: string,
+  label: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "user", content: "Reply with the single word: ok" }],
+        max_tokens: 5,
+      }),
+    });
+    if (res.status === 401 || res.status === 403) return { ok: false, error: "Invalid API key." };
+    if (res.status === 429) return { ok: false, error: "Key is valid, but is currently rate-limited." };
+    if (!res.ok) {
+      const text = await res.text();
+      if (looksLikeInvalidKeyError(res.status, text)) return { ok: false, error: "Invalid API key." };
+      return { ok: false, error: `${label} API error ${res.status}: ${text.slice(0, 200)}` };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : `Could not reach ${label} API.` };
+  }
+}

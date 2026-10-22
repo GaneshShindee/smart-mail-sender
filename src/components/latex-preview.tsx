@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { IconButton } from "@/components/app/icon-button";
+import { SegmentedControl } from "@/components/app/segmented-control";
+import { EmptyState } from "@/components/app/empty-state";
 import {
   Loader2, RefreshCw, Download, FileText, AlertTriangle, CheckCircle2,
-  ZoomIn, ZoomOut, Maximize2, Printer, RotateCw,
+  ZoomIn, ZoomOut, Maximize2, Printer, RotateCw, SlidersHorizontal, ChevronDown,
 } from "lucide-react";
 import { PdfViewer } from "@/components/pdf-viewer";
 
@@ -20,7 +25,7 @@ export function LatexPreview({
   onCompiled,
   onErrors,
   autoCompile = true,
-  debounceMs = 900,
+  debounceMs = 10_000,
 }: {
   tex: string;
   filename?: string;
@@ -37,8 +42,11 @@ export function LatexPreview({
   const [pdfBytes, setPdfBytes] = useState<Uint8Array | null>(null);
   const [zoom, setZoom] = useState(100);
   const [rotation, setRotation] = useState(0);
+  // Fill the pane width by default (scroll inside the pane); "Page" fit is under Options.
   const [fitMode, setFitMode] = useState<"width" | "page" | "custom">("width");
   const [containerWidth, setContainerWidth] = useState(600);
+  const [containerHeight, setContainerHeight] = useState(0);
+  const [showOptions, setShowOptions] = useState(false);
   const viewerWrapRef = useRef<HTMLDivElement | null>(null);
   const lastTexRef = useRef<string>("");
   const inflightRef = useRef<AbortController | null>(null);
@@ -142,59 +150,93 @@ export function LatexPreview({
   useLayoutEffect(() => {
     const el = viewerWrapRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setContainerWidth(el.clientWidth));
+    const ro = new ResizeObserver(() => {
+      setContainerWidth(el.clientWidth);
+      setContainerHeight(el.clientHeight);
+    });
     ro.observe(el);
     setContainerWidth(el.clientWidth);
+    setContainerHeight(el.clientHeight);
     return () => ro.disconnect();
   }, []);
 
   return (
-    <div className="flex flex-col h-full min-h-0">
-      <div className="flex items-center justify-between border-b border-border px-3 py-2 gap-2 flex-wrap">
-        <div className="text-xs flex items-center gap-2 min-w-0">
-          <FileText className="h-3.5 w-3.5 shrink-0" />
-          <StatusPill status={status} />
-        </div>
-        <div className="flex items-center gap-1 flex-wrap">
-          <div className="flex items-center border border-border rounded-md">
-            <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => applyZoom(zoom - 25)} title="Zoom out">
-              <ZoomOut className="h-3.5 w-3.5" />
+    <div className="flex h-full min-h-0 flex-col bg-card">
+      {/* Slim header: status + Compile + Options toggle. View/download controls stay tucked away
+          so the PDF gets the vertical space. */}
+      <div className="border-b-2 border-border bg-background">
+        <div className="flex h-11 items-center justify-between gap-2 px-2">
+          <div className="flex min-w-0 items-center gap-2 pl-1">
+            <StatusPill status={status} />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Button size="sm" variant="secondary" className="h-8" onClick={() => void compile()} disabled={status === "compiling"}>
+              <RefreshCw className={status === "compiling" ? "animate-spin" : undefined} aria-hidden />
+              Compile
             </Button>
-            <button
-              type="button"
-              onClick={() => setFitMode(fitMode === "width" ? "page" : "width")}
-              className="text-xs px-2 min-w-[3.5rem] text-center hover:bg-accent h-8"
-              title="Toggle fit width / fit page"
+            <Button
+              size="sm"
+              variant={showOptions ? "secondary" : "outline"}
+              className="h-8"
+              aria-expanded={showOptions}
+              aria-controls="latex-preview-options"
+              onClick={() => setShowOptions((v) => !v)}
             >
-              {fitMode === "width" ? "Fit W" : fitMode === "page" ? "Fit P" : `${zoom}%`}
-            </button>
-            <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => applyZoom(zoom + 25)} title="Zoom in">
-              <ZoomIn className="h-3.5 w-3.5" />
+              <SlidersHorizontal aria-hidden />
+              Options
+              <ChevronDown className={showOptions ? "rotate-180 transition-transform" : "transition-transform"} aria-hidden />
             </Button>
           </div>
-          <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => setRotation((r) => (r + 90) % 360)} title="Rotate">
-            <RotateCw className="h-3.5 w-3.5" />
-          </Button>
-          <Button size="sm" variant="ghost" className="h-8 px-2" onClick={print} disabled={!pdfUrl} title="Print">
-            <Printer className="h-3.5 w-3.5" />
-          </Button>
-          <Button size="sm" variant="ghost" className="h-8 px-2" onClick={fullscreen} disabled={!pdfUrl} title="Fullscreen">
-            <Maximize2 className="h-3.5 w-3.5" />
-          </Button>
-          <Button size="sm" variant="outline" className="h-8" onClick={downloadTex} title="Download .tex source">
-            <Download className="h-3.5 w-3.5 mr-1" />.tex
-          </Button>
-          <Button size="sm" className="h-8" onClick={downloadPdf} disabled={!pdfUrl} title="Download the latest compiled PDF">
-            <Download className="h-3.5 w-3.5 mr-1" />PDF
-          </Button>
-          <Button size="sm" variant="outline" className="h-8" onClick={() => void compile()} disabled={status === "compiling"}>
-            <RefreshCw className={`h-3.5 w-3.5 mr-1 ${status === "compiling" ? "animate-spin" : ""}`} />
-            Compile
-          </Button>
         </div>
+        {showOptions && (
+          <div
+            id="latex-preview-options"
+            className="flex flex-wrap items-center gap-1.5 border-t-2 border-dashed border-border/40 px-2 py-2"
+          >
+            <IconButton label="Zoom out" size="sm" onClick={() => applyZoom(zoom - 25)}>
+              <ZoomOut aria-hidden />
+            </IconButton>
+            <SegmentedControl
+              size="sm"
+              ariaLabel="Fit preview to"
+              className="pb-0"
+              value={fitMode}
+              onValueChange={(v) => setFitMode(v)}
+              options={[
+                { value: "width", label: "Width" },
+                { value: "page", label: "Page" },
+              ]}
+            />
+            {fitMode === "custom" && (
+              <span className="min-w-12 text-center font-mono text-xs tabular-nums" aria-live="polite">
+                {zoom}%
+              </span>
+            )}
+            <IconButton label="Zoom in" size="sm" onClick={() => applyZoom(zoom + 25)}>
+              <ZoomIn aria-hidden />
+            </IconButton>
+            <span className="mx-0.5 h-6 w-0.5 bg-border" aria-hidden />
+            <IconButton label="Rotate 90°" size="sm" onClick={() => setRotation((r) => (r + 90) % 360)}>
+              <RotateCw aria-hidden />
+            </IconButton>
+            <IconButton label="Print PDF" size="sm" onClick={print} disabled={!pdfUrl}>
+              <Printer aria-hidden />
+            </IconButton>
+            <IconButton label="Fullscreen preview" size="sm" onClick={fullscreen} disabled={!pdfUrl}>
+              <Maximize2 aria-hidden />
+            </IconButton>
+            <span className="mx-0.5 h-6 w-0.5 bg-border" aria-hidden />
+            <Button size="sm" variant="outline" className="h-8" onClick={downloadTex} title="Download .tex source">
+              <Download aria-hidden />.tex
+            </Button>
+            <Button size="sm" variant="outline" className="h-8" onClick={downloadPdf} disabled={!pdfUrl} title="Download the latest compiled PDF">
+              <Download aria-hidden />PDF
+            </Button>
+          </div>
+        )}
       </div>
 
-      <div ref={viewerWrapRef} className="flex-1 min-h-0 relative bg-muted/20 overflow-hidden">
+      <div ref={viewerWrapRef} className="orbit-dots relative min-h-0 flex-1 overflow-hidden bg-muted">
         {pdfBytes ? (
           <div className="w-full h-full" style={{ transform: rotation && fitMode !== "custom" ? undefined : undefined }}>
             <PdfViewer
@@ -203,46 +245,71 @@ export function LatexPreview({
               fitMode={fitMode}
               rotation={rotation}
               containerWidth={containerWidth}
+              containerHeight={containerHeight}
             />
           </div>
+        ) : status === "compiling" ? (
+          <div className="flex h-full flex-col items-center gap-4 overflow-hidden p-4" role="status">
+            <p className="eyebrow inline-flex items-center gap-2 text-foreground">
+              <Loader2 className="size-4 animate-spin" aria-hidden /> Compiling…
+            </p>
+            <Skeleton className="aspect-[1/1.414] w-full max-w-md" />
+          </div>
         ) : (
-          <div className="h-full grid place-items-center text-center p-6">
-            <div>
-              <FileText className="h-8 w-8 mx-auto text-muted-foreground/60 mb-2" />
-              <div className="text-sm text-muted-foreground">
-                {status === "compiling" ? "Compiling…" : "Edit the LaTeX source to see a live PDF preview."}
-              </div>
-              <div className="text-xs text-muted-foreground/70 mt-1">
-                Compilation runs on a TeX Live server — no local install required.
-              </div>
-            </div>
+          <div className="grid h-full place-items-center overflow-auto p-4">
+            <EmptyState
+              icon={FileText}
+              title="No preview yet"
+              className="bg-card"
+              description="Edit the LaTeX source to see a live PDF preview. Compilation runs on a TeX Live server — no local install required."
+              action={
+                <Button variant="secondary" onClick={() => void compile()} disabled={!tex.trim()}>
+                  <RefreshCw aria-hidden /> Compile now
+                </Button>
+              }
+            />
           </div>
         )}
         {status === "compiling" && pdfUrl && (
-          <div className="absolute top-2 right-2 bg-background/90 border border-border rounded-md px-2 py-1 text-xs flex items-center gap-1 shadow">
-            <Loader2 className="h-3 w-3 animate-spin" /> Compiling…
+          <div
+            role="status"
+            className="absolute right-3 top-3 inline-flex items-center gap-1.5 border-2 border-border bg-card px-2 py-1 font-mono text-xs uppercase tracking-[0.08em] shadow-[var(--shadow-brutal-sm)]"
+          >
+            <Loader2 className="size-3.5 animate-spin" aria-hidden /> Compiling…
           </div>
         )}
         {status === "error" && errors.length > 0 && (
-          <div className="absolute inset-x-0 bottom-0 max-h-[50%] overflow-auto bg-destructive/10 border-t border-destructive/30 p-3">
-            <div className="flex items-center gap-2 text-destructive text-sm font-semibold mb-2">
-              <AlertTriangle className="h-4 w-4" /> Compilation failed ({errors.length} error{errors.length > 1 ? "s" : ""})
+          <div
+            role="alert"
+            className="absolute inset-x-0 bottom-0 flex max-h-[55%] flex-col border-t-2 border-border bg-card shadow-[0_-4px_0_0_var(--shadow-ink)]"
+          >
+            <div className="flex items-center gap-2 bg-destructive px-3 py-2 text-sm font-semibold text-destructive-foreground">
+              <AlertTriangle className="size-4 shrink-0" aria-hidden />
+              Compilation failed · {errors.length} error{errors.length > 1 ? "s" : ""}
             </div>
-            <ul className="space-y-2 text-xs">
-              {errors.slice(0, 20).map((e, i) => (
-                <li key={i} className="border-l-2 border-destructive/60 pl-2">
-                  {e.line !== null && <div className="font-mono text-destructive">Line {e.line}</div>}
-                  <div className="text-foreground/90">{e.message}</div>
-                  {e.suggestion && <div className="text-muted-foreground italic">{e.suggestion}</div>}
-                </li>
-              ))}
-            </ul>
-            {log && (
-              <details className="mt-2 text-xs text-muted-foreground">
-                <summary className="cursor-pointer">Full compiler log</summary>
-                <pre className="whitespace-pre-wrap mt-1 max-h-60 overflow-auto">{log}</pre>
-              </details>
-            )}
+            <div className="min-h-0 overflow-auto p-3">
+              <ul className="space-y-3">
+                {errors.slice(0, 20).map((e, i) => (
+                  <li key={i} className="border-l-4 border-destructive pl-3">
+                    {e.line !== null && (
+                      <span className="mb-1 inline-block border-[1.5px] border-border bg-destructive-subtle px-1.5 font-mono text-xs font-semibold uppercase">
+                        Line {e.line}
+                      </span>
+                    )}
+                    <div className="text-sm text-foreground">{e.message}</div>
+                    {e.suggestion && <div className="mt-0.5 text-xs text-muted-foreground">{e.suggestion}</div>}
+                  </li>
+                ))}
+              </ul>
+              {log && (
+                <details className="mt-3 border-2 border-border">
+                  <summary className="cursor-pointer bg-muted px-2 py-1.5 font-mono text-xs font-semibold uppercase tracking-[0.08em]">
+                    Full compiler log
+                  </summary>
+                  <pre className="max-h-60 overflow-auto whitespace-pre-wrap border-t-2 border-border bg-background p-2 font-mono text-xs text-muted-foreground">{log}</pre>
+                </details>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -251,10 +318,10 @@ export function LatexPreview({
 }
 
 function StatusPill({ status }: { status: Status }) {
-  if (status === "compiling") return <span className="inline-flex items-center gap-1 text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" /> Compiling…</span>;
-  if (status === "success")   return <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400"><CheckCircle2 className="h-3 w-3" /> Compiled</span>;
-  if (status === "error")     return <span className="inline-flex items-center gap-1 text-destructive"><AlertTriangle className="h-3 w-3" /> Failed</span>;
-  return <span className="text-muted-foreground">Live PDF preview</span>;
+  if (status === "compiling") return <Badge variant="info"><Loader2 className="animate-spin" aria-hidden /> Compiling</Badge>;
+  if (status === "success")   return <Badge variant="success"><CheckCircle2 aria-hidden /> Compiled</Badge>;
+  if (status === "error")     return <Badge variant="danger"><AlertTriangle aria-hidden /> Failed</Badge>;
+  return <Badge variant="muted"><FileText aria-hidden /> Live preview</Badge>;
 }
 
 function base64ToBytes(b64: string): Uint8Array {

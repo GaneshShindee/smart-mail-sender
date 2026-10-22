@@ -1,3 +1,4 @@
+import type { ErrorComponentProps } from "@tanstack/react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Outlet,
@@ -13,30 +14,37 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { supabase } from "@/integrations/supabase/client";
 import { Toaster } from "@/components/ui/sonner";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { ConfirmProvider } from "@/components/app/confirm-dialog";
+import { THEME_INIT_SCRIPT } from "@/hooks/use-theme";
+import { AlertTriangle, ArrowLeft, RotateCw } from "lucide-react";
 
 function NotFoundComponent() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="max-w-md text-center">
-        <h1 className="text-7xl font-bold text-foreground">404</h1>
-        <h2 className="mt-4 text-xl font-semibold text-foreground">Page not found</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          The page you're looking for doesn't exist or has been moved.
-        </p>
-        <div className="mt-6">
-          <Link
-            to="/"
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-          >
-            Go home
+    <main className="orbit-mesh flex min-h-screen flex-col">
+      <div aria-hidden className="airmail h-2" />
+      <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col justify-center px-5 py-16">
+        <p className="eyebrow">Error 404 · Return to sender</p>
+        <h1 className="display-xl mt-4">
+          Address
+          <br />
+          unknown.
+        </h1>
+        <div className="mt-8 grid gap-6 border-t-2 border-border pt-6 sm:grid-cols-[1fr_auto] sm:items-end">
+          <p className="max-w-md text-base text-muted-foreground">
+            The page you&apos;re looking for doesn&apos;t exist or has been moved. Check the address,
+            or head back to somewhere familiar.
+          </p>
+          <Link to="/" className={buttonVariants({ size: "lg" })}>
+            <ArrowLeft aria-hidden /> Go home
           </Link>
         </div>
       </div>
-    </div>
+    </main>
   );
 }
 
-function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
+function ErrorComponent({ error, reset }: ErrorComponentProps) {
   console.error(error);
   const router = useRouter();
   useEffect(() => {
@@ -44,33 +52,35 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   }, [error]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="max-w-md text-center">
-        <h1 className="text-xl font-semibold tracking-tight text-foreground">
-          This page didn't load
-        </h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Something went wrong on our end. You can try refreshing or head back home.
-        </p>
-        <div className="mt-6 flex flex-wrap justify-center gap-2">
-          <button
-            onClick={() => {
-              router.invalidate();
-              reset();
-            }}
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-          >
-            Try again
-          </button>
-          <a
-            href="/"
-            className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
-          >
-            Go home
-          </a>
+    <main className="orbit-mesh flex min-h-screen items-center justify-center px-4">
+      <div role="alert" className="w-full max-w-lg border-2 border-border bg-card shadow-[var(--shadow-brutal-lg)]">
+        <div className="flex items-center gap-2 border-b-2 border-border bg-destructive px-5 py-3 text-destructive-foreground">
+          <AlertTriangle className="size-4" aria-hidden />
+          <span className="font-mono text-xs font-semibold uppercase tracking-[0.12em]">
+            Delivery failed
+          </span>
+        </div>
+        <div className="p-6">
+          <h1 className="font-expanded text-2xl leading-tight">This page didn&apos;t load</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Something went wrong on our end. You can try again or head back home.
+          </p>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Button
+              onClick={() => {
+                router.invalidate();
+                reset();
+              }}
+            >
+              <RotateCw aria-hidden /> Try again
+            </Button>
+            <Button asChild variant="outline">
+              <a href="/">Go home</a>
+            </Button>
+          </div>
         </div>
       </div>
-    </div>
+    </main>
   );
 }
 
@@ -97,6 +107,19 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: appCss,
       },
+      {
+        rel: "preconnect",
+        href: "https://fonts.googleapis.com",
+      },
+      {
+        rel: "preconnect",
+        href: "https://fonts.gstatic.com",
+        crossOrigin: "anonymous",
+      },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=JetBrains+Mono:wght@400;500;600;700&display=swap",
+      },
     ],
   }),
   shellComponent: RootShell,
@@ -107,11 +130,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" suppressHydrationWarning>
       <head>
+        {/* Apply the saved theme before first paint (light "paper" is the default). */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         <HeadContent />
       </head>
-      <body>
+      <body className="font-sans antialiased">
         {children}
         <Scripts />
       </body>
@@ -134,7 +159,9 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <Outlet />
+      <ConfirmProvider>
+        <Outlet />
+      </ConfirmProvider>
       <Toaster richColors position="top-right" />
     </QueryClientProvider>
   );
