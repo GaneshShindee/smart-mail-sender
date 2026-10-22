@@ -5,20 +5,25 @@ import { listTemplates, upsertTemplate, deleteTemplate, duplicateTemplate, setDe
 import { updateTemplateByJD } from "@/lib/ai-template.functions";
 import { listResumes } from "@/lib/resumes.functions";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Pencil, Trash2, Copy, LayoutTemplate, Star, Globe, Sparkles, Search, Download, Eye } from "lucide-react";
-import { useState } from "react";
+import { Plus, Pencil, Trash2, Copy, LayoutTemplate, Star, Globe, GlobeLock, Sparkles, Search, Download, Eye, Check, Library } from "lucide-react";
+import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { EmptyState } from "./dashboard";
+import { Page, PageHeader } from "@/components/app/page";
+import { EmptyState } from "@/components/app/empty-state";
+import { ErrorState } from "@/components/app/error-state";
+import { SegmentedControl } from "@/components/app/segmented-control";
+import { IconButton } from "@/components/app/icon-button";
+import { Field } from "@/components/app/field";
+import { useConfirm } from "@/components/app/confirm-dialog";
 import { extractVariables } from "@/lib/templating";
 import { AiBodyDialog } from "@/components/ai-body-dialog";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/templates")({
   head: () => ({ meta: [{ title: "My Templates — Smart Email Sender" }] }),
@@ -27,8 +32,89 @@ export const Route = createFileRoute("/_authenticated/templates")({
 
 type Tpl = { id: string; name: string; subject: string; body: string; preferred_resume_id?: string | null; is_default?: boolean; is_public?: boolean; category?: string | null };
 
+/** Coloured top edge for each index card, cycled so the box reads like a tabbed card file. */
+const CARD_EDGES = ["bg-chart-1", "bg-chart-2", "bg-chart-4", "bg-chart-5", "bg-chart-3"];
+
+function VariableChips({ vars, empty }: { vars: string[]; empty?: ReactNode }) {
+  if (!vars.length) return empty ? <>{empty}</> : null;
+  return (
+    <ul className="flex flex-wrap gap-1.5" aria-label="Template variables">
+      {vars.map((v) => (
+        <li key={v}>
+          <Badge variant="outline" className="normal-case tracking-normal">{`{{${v}}}`}</Badge>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** A ruled index card: coloured top edge, expanded title, mono subject, excerpt and footer actions. */
+function IndexCard({
+  edge,
+  title,
+  subject,
+  body,
+  stamps,
+  meta,
+  footer,
+}: {
+  edge: string;
+  title: string;
+  subject: string;
+  body?: string;
+  stamps?: ReactNode;
+  meta?: ReactNode;
+  footer: ReactNode;
+}) {
+  return (
+    <article className="brutal-press relative flex min-w-0 flex-col border-2 border-border bg-card shadow-[var(--shadow-brutal)]">
+      <div aria-hidden className={cn("h-2.5 border-b-2 border-border", edge)} />
+      <div className="relative border-b-2 border-destructive px-4 pb-3 pt-4 sm:px-5">
+        {stamps && <div className="absolute right-3 top-3 flex flex-col items-end gap-2">{stamps}</div>}
+        <h3 className={cn("font-expanded text-lg leading-tight break-words", stamps && "pr-28")}>{title}</h3>
+        <p className="mt-1.5 truncate font-mono text-xs text-muted-foreground">
+          <span className="font-semibold uppercase tracking-[0.08em] text-foreground">Subj · </span>
+          {subject || "No subject"}
+        </p>
+      </div>
+      <div className="flex flex-1 flex-col gap-3 px-4 py-3 sm:px-5">
+        {body !== undefined && (
+          <p className="line-clamp-4 whitespace-pre-line text-sm leading-6 text-muted-foreground">
+            {body.trim() || "Empty body."}
+          </p>
+        )}
+        {meta}
+      </div>
+      <div className="flex flex-wrap items-center gap-2 border-t-2 border-border bg-muted px-3 py-2.5 sm:px-4">{footer}</div>
+    </article>
+  );
+}
+
+function CardGridSkeleton() {
+  return (
+    <div className="grid grid-cols-1 gap-5 md:grid-cols-2" aria-busy="true" aria-label="Loading templates">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div key={i} className="border-2 border-border bg-card shadow-[var(--shadow-brutal)]">
+          <Skeleton className="h-2.5 w-full" />
+          <div className="space-y-2 border-b-2 border-border p-4">
+            <Skeleton className="h-5 w-2/3" />
+            <Skeleton className="h-3 w-1/2" />
+          </div>
+          <div className="space-y-2 p-4">
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-5/6" />
+            <Skeleton className="h-3 w-4/6" />
+          </div>
+          <div className="border-t-2 border-border p-3"><Skeleton className="h-9 w-40" /></div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function TemplatesPage() {
   const qc = useQueryClient();
+  const confirm = useConfirm();
   const listFn = useServerFn(listTemplates);
   const upsertFn = useServerFn(upsertTemplate);
   const delFn = useServerFn(deleteTemplate);
@@ -40,7 +126,8 @@ function TemplatesPage() {
   const saveFn = useServerFn(saveMarketplaceTemplate);
   const jdFn = useServerFn(updateTemplateByJD);
 
-  const { data, isLoading } = useQuery({ queryKey: ["templates"], queryFn: () => listFn() });
+  const templatesQ = useQuery({ queryKey: ["templates"], queryFn: () => listFn() });
+  const { data, isLoading } = templatesQ;
   const { data: resumes } = useQuery({ queryKey: ["resumes"], queryFn: () => resumesFn() });
 
   const [editing, setEditing] = useState<Partial<Tpl> | null>(null);
@@ -71,18 +158,22 @@ function TemplatesPage() {
   const remove = useMutation({
     mutationFn: (id: string) => delFn({ data: { id } }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["templates"] }); toast.success("Deleted"); },
+    onError: (e) => toast.error("Delete failed", { description: (e as Error).message }),
   });
   const dup = useMutation({
     mutationFn: (id: string) => dupFn({ data: { id } }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["templates"] }); toast.success("Duplicated"); },
+    onError: (e) => toast.error("Duplicate failed", { description: (e as Error).message }),
   });
   const markDefault = useMutation({
     mutationFn: (id: string) => defFn({ data: { id } }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["templates"] }); toast.success("Set as default"); },
+    onError: (e) => toast.error("Couldn't set default", { description: (e as Error).message }),
   });
   const publish = useMutation({
     mutationFn: ({ id, isPublic }: { id: string; isPublic: boolean }) => pubFn({ data: { id, isPublic } }),
     onSuccess: (_, v) => { qc.invalidateQueries({ queryKey: ["templates"] }); toast.success(v.isPublic ? "Published to gallery" : "Unpublished"); },
+    onError: (e) => toast.error("Publish failed", { description: (e as Error).message }),
   });
   const saveFromGallery = useMutation({
     mutationFn: (id: string) => saveFn({ data: { id } }),
@@ -99,149 +190,216 @@ function TemplatesPage() {
     onError: (e) => toast.error("AI update failed", { description: (e as Error).message }),
   });
 
-  return (
-    <div className="mx-auto max-w-6xl space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="page-title">Templates</h1>
-          <p className="text-sm text-muted-foreground">Use <code className="text-xs bg-muted px-1 py-0.5 rounded">{`{{placeholder}}`}</code> syntax to insert dynamic fields.</p>
-        </div>
-        <Button onClick={() => setEditing({ name: "", subject: "", body: "" })}><Plus className="h-4 w-4 mr-2" />New template</Button>
-      </div>
+  const newTemplate = () => setEditing({ name: "", subject: "", body: "" });
+  const editingVars = editing ? extractVariables(`${editing.subject ?? ""}\n${editing.body ?? ""}`) : [];
 
-      <div className="flex gap-1 border-b border-border">
-        <button className={`px-3 py-2 text-sm ${tab === "mine" ? "border-b-2 border-primary font-medium" : "text-muted-foreground"}`} onClick={() => setTab("mine")}>My Templates</button>
-        <button className={`px-3 py-2 text-sm ${tab === "gallery" ? "border-b-2 border-primary font-medium" : "text-muted-foreground"}`} onClick={() => setTab("gallery")}>Gallery</button>
-      </div>
+  return (
+    <Page>
+      <PageHeader
+        eyebrow="03 · Library"
+        title="Templates"
+        icon={LayoutTemplate}
+        description={
+          <>
+            Your card file of reusable emails. Use{" "}
+            <code className="border border-border bg-muted px-1 font-mono text-xs text-foreground">{`{{placeholder}}`}</code>{" "}
+            syntax to insert dynamic fields.
+          </>
+        }
+        actions={<Button onClick={newTemplate}><Plus aria-hidden />New template</Button>}
+      />
+
+      <SegmentedControl
+        ariaLabel="Template source"
+        value={tab}
+        onValueChange={setTab}
+        options={[
+          { value: "mine", label: "My Templates", icon: LayoutTemplate, count: data?.length },
+          { value: "gallery", label: "Gallery", icon: Library },
+        ]}
+      />
 
       {tab === "mine" ? (
       isLoading ? (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-28 w-full rounded-xl" />)}</div>
+        <CardGridSkeleton />
+      ) : templatesQ.isError ? (
+        <ErrorState title="Couldn't load your templates" error={templatesQ.error} onRetry={() => templatesQ.refetch()} retrying={templatesQ.isFetching} />
       ) : data?.length ? (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          {data.map((t) => {
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+          {data.map((t, i) => {
             const vars = extractVariables(`${t.subject}\n${t.body}`);
             return (
-              <Card key={t.id}>
-                <CardContent className="py-5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="font-medium truncate flex items-center gap-1.5">
-                        {t.name}
-                        {t.is_default && <Badge variant="secondary" className="text-[10px]">Default</Badge>}
-                        {t.is_public && <Badge variant="outline" className="text-[10px] gap-1"><Globe className="h-2.5 w-2.5" />Public</Badge>}
-                      </div>
-                      <div className="text-xs text-muted-foreground truncate">{t.subject || "No subject"}</div>
+              <IndexCard
+                key={t.id}
+                edge={t.is_default ? "bg-primary" : CARD_EDGES[i % CARD_EDGES.length]}
+                title={t.name}
+                subject={t.subject}
+                body={t.body}
+                stamps={
+                  (t.is_default || t.is_public) && (
+                    <>
+                      {t.is_default && <span className="stamp bg-card px-1.5 py-0.5 text-xs text-destructive">Default</span>}
+                      {t.is_public && <span className="stamp rotate-6 bg-card px-1.5 py-0.5 text-xs text-info">Published</span>}
+                    </>
+                  )
+                }
+                meta={<VariableChips vars={vars} />}
+                footer={
+                  <>
+                    <Button size="sm" onClick={() => setEditing(t)}><Pencil aria-hidden />Edit</Button>
+                    <div className="ml-auto flex items-center gap-1">
+                      <IconButton
+                        label={t.is_default ? "Default template" : "Set as default"}
+                        aria-pressed={!!t.is_default}
+                        onClick={() => markDefault.mutate(t.id)}
+                      >
+                        <Star className={cn(t.is_default && "fill-current")} aria-hidden />
+                      </IconButton>
+                      <IconButton
+                        label={t.is_public ? "Unpublish from gallery" : "Publish to gallery"}
+                        aria-pressed={!!t.is_public}
+                        onClick={() => publish.mutate({ id: t.id, isPublic: !t.is_public })}
+                      >
+                        {t.is_public ? <GlobeLock aria-hidden /> : <Globe aria-hidden />}
+                      </IconButton>
+                      <IconButton label="Duplicate template" onClick={() => dup.mutate(t.id)}><Copy aria-hidden /></IconButton>
+                      <IconButton
+                        label="Delete template"
+                        className="hover:bg-destructive-subtle"
+                        onClick={async () => {
+                          if (await confirm({ title: `Delete "${t.name}"?`, description: "This template will be removed from your library.", confirmLabel: "Delete template" })) remove.mutate(t.id);
+                        }}
+                      >
+                        <Trash2 aria-hidden />
+                      </IconButton>
                     </div>
-                    <div className="flex gap-1">
-                      <Button size="icon" variant="ghost" title={t.is_default ? "Default" : "Set as default"} onClick={() => markDefault.mutate(t.id)}><Star className={`h-4 w-4 ${t.is_default ? "fill-current text-amber-500" : ""}`} /></Button>
-                      <Button size="icon" variant="ghost" title={t.is_public ? "Unpublish" : "Publish to gallery"} onClick={() => publish.mutate({ id: t.id, isPublic: !t.is_public })}><Globe className={`h-4 w-4 ${t.is_public ? "text-primary" : ""}`} /></Button>
-                      <Button size="icon" variant="ghost" onClick={() => setEditing(t)}><Pencil className="h-4 w-4" /></Button>
-                      <Button size="icon" variant="ghost" onClick={() => dup.mutate(t.id)}><Copy className="h-4 w-4" /></Button>
-                      <Button size="icon" variant="ghost" onClick={() => { if (confirm(`Delete "${t.name}"?`)) remove.mutate(t.id); }}><Trash2 className="h-4 w-4" /></Button>
-                    </div>
-                  </div>
-                  {vars.length > 0 && (
-                    <div className="mt-3 flex flex-wrap gap-1">
-                      {vars.map((v) => <span key={v} className="text-xs bg-accent text-accent-foreground rounded-full px-2 py-0.5">{`{{${v}}}`}</span>)}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                  </>
+                }
+              />
             );
           })}
         </div>
       ) : (
-        <Card><CardContent><EmptyState icon={LayoutTemplate} title="No templates yet" desc="Create your first template to get going." action={<Button onClick={() => setEditing({ name: "", subject: "", body: "" })}><Plus className="h-4 w-4 mr-2" />New template</Button>} /></CardContent></Card>
+        <EmptyState icon={LayoutTemplate} title="No templates yet" description="Create your first template to get going." action={<Button onClick={newTemplate}><Plus aria-hidden />New template</Button>} />
       )
       ) : (
-        <div className="space-y-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input value={gallerySearch} onChange={(e) => setGallerySearch(e.target.value)} placeholder="Search public templates…" className="pl-9" />
+        <div className="space-y-5">
+          <div className="relative max-w-xl">
+            <label htmlFor="gallery-search" className="sr-only">Search public templates</label>
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+            <Input id="gallery-search" value={gallerySearch} onChange={(e) => setGallerySearch(e.target.value)} placeholder="Search public templates…" className="pl-9" />
           </div>
           {gallery.isLoading ? (
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32 w-full rounded-xl" />)}</div>
+            <CardGridSkeleton />
+          ) : gallery.isError ? (
+            <ErrorState title="Couldn't load the gallery" error={gallery.error} onRetry={() => gallery.refetch()} retrying={gallery.isFetching} />
           ) : gallery.data?.length ? (
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              {gallery.data.map((g) => (
-                <Card key={g.id}>
-                  <CardContent className="py-5 space-y-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="font-medium truncate">{g.name}</div>
-                        <div className="text-xs text-muted-foreground truncate">{g.subject || "No subject"}</div>
-                      </div>
-                      <Badge variant="secondary" className="gap-1 text-[10px]"><Download className="h-2.5 w-2.5" />{g.saves_count ?? 0}</Badge>
-                    </div>
-                    <div className="text-xs text-muted-foreground">
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+              {gallery.data.map((g, i) => (
+                <IndexCard
+                  key={g.id}
+                  edge={CARD_EDGES[i % CARD_EDGES.length]}
+                  title={g.name}
+                  subject={g.subject}
+                  body={g.body}
+                  stamps={
+                    <Badge variant="secondary" title="Times saved"><Download aria-hidden />{g.saves_count ?? 0}<span className="sr-only"> saves</span></Badge>
+                  }
+                  meta={
+                    <p className="font-mono text-xs uppercase tracking-[0.08em] text-muted-foreground">
                       by {g.author?.full_name ?? g.author?.email ?? "Anonymous"}
                       {g.category ? ` · ${g.category}` : ""}
-                    </div>
-                    <div className="flex gap-2 pt-1">
+                    </p>
+                  }
+                  footer={
+                    <>
                       <Button size="sm" variant="outline" onClick={() => setPreviewTpl({ name: g.name, subject: g.subject, body: g.body })}>
-                        <Eye className="h-3.5 w-3.5 mr-1" /> Preview
+                        <Eye aria-hidden /> Preview
                       </Button>
                       <Button size="sm" disabled={g.isSaved || g.isMine || saveFromGallery.isPending} onClick={() => saveFromGallery.mutate(g.id)}>
-                        <Download className="h-3.5 w-3.5 mr-1" /> {g.isMine ? "Yours" : g.isSaved ? "Saved" : "Save to My Templates"}
+                        {g.isSaved || g.isMine ? <Check aria-hidden /> : <Download aria-hidden />} {g.isMine ? "Yours" : g.isSaved ? "Saved" : "Save to My Templates"}
                       </Button>
-                    </div>
-                  </CardContent>
-                </Card>
+                    </>
+                  }
+                />
               ))}
             </div>
           ) : (
-            <Card><CardContent><EmptyState icon={LayoutTemplate} title="Gallery is empty" desc="Publish one of your own to seed the marketplace." /></CardContent></Card>
+            <EmptyState
+              icon={Library}
+              title={gallerySearch ? "No matches in the gallery" : "Gallery is empty"}
+              description={gallerySearch ? "Try a different search term." : "Publish one of your own to seed the marketplace."}
+              action={
+                gallerySearch ? (
+                  <Button variant="outline" onClick={() => setGallerySearch("")}>Clear search</Button>
+                ) : (
+                  <Button variant="outline" onClick={() => setTab("mine")}><LayoutTemplate aria-hidden />Go to My Templates</Button>
+                )
+              }
+            />
           )}
         </div>
       )}
 
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
         <DialogContent className="max-w-2xl">
-          <DialogHeader><DialogTitle>{editing?.id ? "Edit template" : "New template"}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <p className="eyebrow">Index card</p>
+            <DialogTitle>{editing?.id ? "Edit template" : "New template"}</DialogTitle>
+          </DialogHeader>
           {editing && (
-            <div className="space-y-3">
-              <div><Label>Name</Label><Input value={editing.name ?? ""} onChange={(e) => setEditing({ ...editing, name: e.target.value })} placeholder="Job application" /></div>
-              <div>
-                <div className="flex items-center justify-between gap-2">
-                  <Label>Subject</Label>
-                  <Button type="button" size="sm" variant="outline" onClick={() => setAiOpen(true)}>
-                    <Sparkles className="h-3.5 w-3.5 mr-1" /> Generate subject & body with AI
-                  </Button>
+            <div className="space-y-6">
+              <fieldset className="space-y-4">
+                <legend className="eyebrow mb-3 w-full border-b-2 border-border pb-1.5 text-foreground">01 · Card</legend>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Name" htmlFor="tpl-name">
+                    <Input id="tpl-name" value={editing.name ?? ""} onChange={(e) => setEditing({ ...editing, name: e.target.value })} placeholder="Job application" />
+                  </Field>
+                  <Field label="Preferred resume (optional)" htmlFor="tpl-resume" hint="Auto-attaches on the Send page when this template is selected.">
+                    <Select
+                      value={editing.preferred_resume_id ?? "none"}
+                      onValueChange={(v) => setEditing({ ...editing, preferred_resume_id: v === "none" ? null : v })}
+                    >
+                      <SelectTrigger id="tpl-resume"><SelectValue placeholder="None" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        {resumes?.map((r) => (
+                          <SelectItem key={r.id} value={r.id}>{r.name}{r.is_default ? " · Default" : ""}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
                 </div>
-                <Input value={editing.subject ?? ""} onChange={(e) => setEditing({ ...editing, subject: e.target.value })} placeholder="Application for {{position}}" />
-              </div>
-              <div>
-                <div className="flex items-center justify-between">
-                  <Label>Body</Label>
+              </fieldset>
+
+              <fieldset className="space-y-4">
+                <legend className="eyebrow mb-3 w-full border-b-2 border-border pb-1.5 text-foreground">02 · Message</legend>
+                <div className="flex flex-col gap-2 border-2 border-dashed border-border p-3 sm:flex-row sm:flex-wrap sm:items-center">
+                  <span className="font-mono text-xs font-semibold uppercase tracking-[0.08em] sm:mr-auto">AI assist</span>
+                  <Button type="button" size="sm" variant="outline" onClick={() => setAiOpen(true)}>
+                    <Sparkles aria-hidden /> Generate subject & body with AI
+                  </Button>
                   {editing?.id && (
                     <Button type="button" size="sm" variant="outline" onClick={() => setJdOpen(true)}>
-                      <Sparkles className="h-3.5 w-3.5 mr-1" /> Update via JD
+                      <Sparkles aria-hidden /> Update via JD
                     </Button>
                   )}
                 </div>
-                <Textarea rows={10} value={editing.body ?? ""} onChange={(e) => setEditing({ ...editing, body: e.target.value })} placeholder={"Hello {{name}},\n\nI'm interested in the {{position}} role at {{company}}.\n\nThanks,\n{{sender_name}}"} />
-              </div>
-              <div>
-                <Label>Preferred resume (optional)</Label>
-                <Select
-                  value={editing.preferred_resume_id ?? "none"}
-                  onValueChange={(v) => setEditing({ ...editing, preferred_resume_id: v === "none" ? null : v })}
-                >
-                  <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    {resumes?.map((r) => (
-                      <SelectItem key={r.id} value={r.id}>{r.name}{r.is_default ? " · Default" : ""}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground mt-1">Auto-attaches on the Send page when this template is selected.</p>
-              </div>
-              <p className="text-xs text-muted-foreground">Detected variables: {extractVariables(`${editing.subject ?? ""}\n${editing.body ?? ""}`).map((v) => `{{${v}}}`).join(", ") || "none"}</p>
+                <Field label="Subject" htmlFor="tpl-subject">
+                  <Input id="tpl-subject" className="font-mono" value={editing.subject ?? ""} onChange={(e) => setEditing({ ...editing, subject: e.target.value })} placeholder="Application for {{position}}" />
+                </Field>
+                <Field label="Body" htmlFor="tpl-body">
+                  <Textarea id="tpl-body" rows={10} value={editing.body ?? ""} onChange={(e) => setEditing({ ...editing, body: e.target.value })} placeholder={"Hello {{name}},\n\nI'm interested in the {{position}} role at {{company}}.\n\nThanks,\n{{sender_name}}"} />
+                </Field>
+              </fieldset>
+
+              <fieldset>
+                <legend className="eyebrow mb-3 w-full border-b-2 border-border pb-1.5 text-foreground">03 · Detected variables</legend>
+                <VariableChips vars={editingVars} empty={<p className="text-sm text-muted-foreground">None yet — type <code className="font-mono text-xs">{`{{name}}`}</code> in the subject or body.</p>} />
+              </fieldset>
             </div>
           )}
-          <DialogFooter>
+          <DialogFooter className="gap-2 sm:space-x-0">
             <Button variant="ghost" onClick={() => setEditing(null)}>Cancel</Button>
             <Button onClick={() => editing && save.mutate(editing)} disabled={save.isPending}>{save.isPending ? "Saving…" : "Save"}</Button>
           </DialogFooter>
@@ -250,13 +408,17 @@ function TemplatesPage() {
 
       <Dialog open={jdOpen} onOpenChange={(o) => { setJdOpen(o); if (!o) setJdText(""); }}>
         <DialogContent className="max-w-xl">
-          <DialogHeader><DialogTitle>Update template via Job Description</DialogTitle></DialogHeader>
-          <p className="text-xs text-muted-foreground">Paste a JD — the AI will tweak the subject and body (~10%) to align with it. Your placeholders and structure stay intact.</p>
-          <Textarea rows={10} value={jdText} onChange={(e) => setJdText(e.target.value)} placeholder="Paste the job description here…" />
-          <DialogFooter>
+          <DialogHeader>
+            <DialogTitle>Update template via Job Description</DialogTitle>
+            <DialogDescription>Paste a JD — the AI will tweak the subject and body (~10%) to align with it. Your placeholders and structure stay intact.</DialogDescription>
+          </DialogHeader>
+          <Field label="Job description" htmlFor="tpl-jd">
+            <Textarea id="tpl-jd" rows={10} value={jdText} onChange={(e) => setJdText(e.target.value)} placeholder="Paste the job description here…" />
+          </Field>
+          <DialogFooter className="gap-2 sm:space-x-0">
             <Button variant="ghost" onClick={() => setJdOpen(false)}>Cancel</Button>
             <Button onClick={() => jdUpdate.mutate()} disabled={jdUpdate.isPending}>
-              <Sparkles className="h-4 w-4 mr-2" /> {jdUpdate.isPending ? "Rewriting…" : "Update template"}
+              <Sparkles aria-hidden /> {jdUpdate.isPending ? "Rewriting…" : "Update template"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -284,15 +446,21 @@ function TemplatesPage() {
 
       <Dialog open={!!previewTpl} onOpenChange={(o) => !o && setPreviewTpl(null)}>
         <DialogContent className="max-w-xl">
-          <DialogHeader><DialogTitle>{previewTpl?.name}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <p className="eyebrow">Gallery preview</p>
+            <DialogTitle>{previewTpl?.name}</DialogTitle>
+          </DialogHeader>
           {previewTpl && (
-            <div className="space-y-2 text-sm">
-              <div><span className="text-muted-foreground">Subject:</span> {previewTpl.subject}</div>
-              <div className="whitespace-pre-wrap border-t border-border pt-2">{previewTpl.body}</div>
+            <div className="border-2 border-border text-sm">
+              <div className="border-b-2 border-destructive px-4 py-3 font-mono text-xs">
+                <span className="font-semibold uppercase tracking-[0.08em]">Subj · </span>
+                {previewTpl.subject}
+              </div>
+              <div className="whitespace-pre-wrap px-4 py-3 leading-6">{previewTpl.body}</div>
             </div>
           )}
         </DialogContent>
       </Dialog>
-    </div>
+    </Page>
   );
 }

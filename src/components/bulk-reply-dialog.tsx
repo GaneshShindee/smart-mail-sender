@@ -2,10 +2,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { TemplateCombobox } from "@/components/template-combobox";
-import { Sparkles, Send, X, Check, Loader2, Circle, AlertTriangle, RotateCcw } from "lucide-react";
+import { IconButton } from "@/components/app/icon-button";
+import { SegmentedControl } from "@/components/app/segmented-control";
+import { StatusBadge } from "@/components/app/status-badge";
+import { Sparkles, Send, X, RotateCcw, PenLine, LayoutTemplate, Reply } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -184,6 +187,13 @@ export function BulkReplyDialog({
     }
   };
 
+  const ROW_STATUS: Record<RowState, string> = {
+    pending: "queued",
+    sending: "sending",
+    success: "sent",
+    failed: "failed",
+  };
+
   return (
     <>
       <Dialog
@@ -194,8 +204,12 @@ export function BulkReplyDialog({
           onOpenChange(o);
         }}
       >
-        <DialogContent className="max-w-2xl max-h-[90dvh] overflow-hidden flex flex-col p-0 w-[calc(100%-1rem)] sm:w-full sm:rounded-lg">
-          <DialogHeader className="p-5 pb-3">
+        <DialogContent className="flex max-h-[90dvh] w-[calc(100%-1rem)] max-w-2xl flex-col gap-0 overflow-hidden p-0 sm:w-full sm:p-0">
+          <div className="airmail order-first h-2 shrink-0 border-b-2 border-border" aria-hidden />
+          <DialogHeader className="shrink-0 border-b-2 border-border p-5 pr-14 text-left">
+            <p className="eyebrow">
+              Outbox · {active.length} letter{active.length === 1 ? "" : "s"}
+            </p>
             <DialogTitle>{initialMode === "followup" ? "Follow-up reply" : "Reply to selected"}</DialogTitle>
             <DialogDescription>
               {active.length} individual repl{active.length === 1 ? "y" : "ies"} — one per recipient, each inside their own
@@ -203,47 +217,30 @@ export function BulkReplyDialog({
             </DialogDescription>
           </DialogHeader>
 
-          <ScrollArea className="flex-1 px-5">
-            <div className="space-y-4 pb-4">
+          <ScrollArea className="min-h-0 flex-1">
+            <div className="space-y-6 p-5">
               {!finished && (
                 <>
-                  <div>
-                    <div className="flex items-center justify-between gap-2 mb-1.5">
-                      <Label>Reply body</Label>
-                      <Button size="sm" variant="outline" onClick={() => setAssistOpen(true)} disabled={generate.isPending}>
-                        <Sparkles className="h-3.5 w-3.5 mr-1" /> {generate.isPending ? "Drafting…" : "Generate AI reply"}
-                      </Button>
-                    </div>
-                    <Textarea
-                      rows={8}
-                      value={body}
-                      onChange={(e) => setBody(e.target.value)}
-                      placeholder="Write your reply. Use {{first_name}} for the recipient's name — each reply is personalized individually."
-                      className="min-h-[160px]"
-                      autoFocus
+                  <div className="space-y-2">
+                    <p className="font-mono text-xs font-semibold uppercase tracking-[0.08em]">Compose mode</p>
+                    <SegmentedControl<ComposeMode>
+                      value={mode}
+                      onValueChange={selectMode}
+                      ariaLabel="Compose mode"
+                      size="sm"
+                      options={[
+                        { value: "free", label: "Free-form", icon: PenLine },
+                        { value: "template", label: "Template", icon: LayoutTemplate },
+                        { value: "followup", label: "Follow-up template", icon: Reply },
+                      ]}
                     />
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Subject uses each original email with a <span className="font-mono">Re:</span> prefix. Each person gets this body in their own thread.
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-1 flex-wrap">
-                    <Button size="sm" variant={mode === "free" ? "default" : "outline"} onClick={() => selectMode("free")}>
-                      Free-form
-                    </Button>
-                    <Button size="sm" variant={mode === "template" ? "default" : "outline"} onClick={() => selectMode("template")}>
-                      Template
-                    </Button>
-                    <Button size="sm" variant={mode === "followup" ? "default" : "outline"} onClick={() => selectMode("followup")}>
-                      Follow-up template
-                    </Button>
                   </div>
 
                   {(mode === "template" || mode === "followup") && (
-                    <div className="space-y-1.5">
-                      <Label className="text-xs text-muted-foreground">
-                        {mode === "followup" ? "Follow-up template (fills body above)" : "Template (fills body above)"}
-                      </Label>
+                    <div className="space-y-2">
+                      <p className="font-mono text-xs font-semibold uppercase tracking-[0.08em]">
+                        {mode === "followup" ? "Follow-up template (fills body below)" : "Template (fills body below)"}
+                      </p>
                       <TemplateCombobox
                         templates={templates}
                         value={templateId}
@@ -266,49 +263,88 @@ export function BulkReplyDialog({
                       )}
                     </div>
                   )}
+
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <Label htmlFor="bulk-reply-body">Reply body</Label>
+                      <Button size="sm" variant="outline" onClick={() => setAssistOpen(true)} disabled={generate.isPending}>
+                        <Sparkles aria-hidden /> {generate.isPending ? "Drafting…" : "Generate AI reply"}
+                      </Button>
+                    </div>
+                    <Textarea
+                      id="bulk-reply-body"
+                      rows={8}
+                      value={body}
+                      onChange={(e) => setBody(e.target.value)}
+                      placeholder="Write your reply. Use {{first_name}} for the recipient's name — each reply is personalized individually."
+                      className="min-h-40"
+                      autoFocus
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Subject uses each original email with a <span className="font-mono">Re:</span> prefix. Each person gets this body in their own thread.
+                    </p>
+                  </div>
                 </>
               )}
 
-              <div>
-                <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-                  Recipients ({active.length})
-                </Label>
-                <ul className="mt-2 rounded-md border border-border divide-y divide-border">
-                  {active.map((r) => {
+              {finished && (
+                <div className="border-2 border-border">
+                  <div className="grid grid-cols-3 divide-x-2 divide-border">
+                    <Tally label="Sent" value={sentCount} className="bg-success-subtle" />
+                    <Tally label="Failed" value={failed.length} className={failed.length ? "bg-destructive-subtle" : "bg-card"} />
+                    <Tally label="Total" value={active.length} className="bg-card" />
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-mono text-xs font-semibold uppercase tracking-[0.08em]">
+                    Recipients ({active.length})
+                  </p>
+                  {(running || finished) && (
+                    <p className="tabular text-xs" aria-live="polite">
+                      {doneCount} / {active.length}
+                    </p>
+                  )}
+                </div>
+                {running && (
+                  <Progress
+                    value={active.length ? (doneCount / active.length) * 100 : 0}
+                    aria-label="Sending progress"
+                  />
+                )}
+                <ol className="divide-y divide-border/20 border-2 border-border bg-card">
+                  {active.map((r, i) => {
                     const st = progress[r.id]?.state;
                     return (
-                      <li key={r.id} className="flex items-center gap-2 px-3 py-2 text-sm transition-colors">
-                        <span className="shrink-0">
-                          {st === "success" ? (
-                            <Check className="h-4 w-4 text-primary" />
-                          ) : st === "sending" ? (
-                            <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                          ) : st === "failed" ? (
-                            <AlertTriangle className="h-4 w-4 text-destructive" />
-                          ) : st === "pending" ? (
-                            <Circle className="h-3.5 w-3.5 text-muted-foreground" />
-                          ) : null}
+                      <li
+                        key={r.id}
+                        className={`flex items-start gap-3 px-3 py-2.5 text-sm transition-colors ${st === "sending" ? "bg-accent" : ""}`}
+                      >
+                        <span className="tabular w-6 shrink-0 pt-0.5 text-xs text-muted-foreground" aria-hidden>
+                          {String(i + 1).padStart(2, "0")}
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="font-medium truncate block">{r.name ?? r.email}</span>
-                          <span className="text-xs text-muted-foreground truncate block">{r.email}</span>
-                          <span className="text-xs text-muted-foreground truncate block">
+                          <span className="block truncate font-semibold">{r.name ?? r.email}</span>
+                          <span className="block truncate font-mono text-xs text-muted-foreground">{r.email}</span>
+                          <span className="block truncate text-xs text-muted-foreground">
                             {replyPreviewSubject(r.subject)}
                           </span>
                           {progress[r.id]?.reason && (
-                            <span className="text-xs text-destructive block">{progress[r.id]?.reason}</span>
+                            <span className="mt-1 block text-xs text-destructive">{progress[r.id]?.reason}</span>
                           )}
                         </span>
+                        {st && <StatusBadge status={ROW_STATUS[st]} className="mt-0.5 shrink-0" />}
                         {!running && !finished && (
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-7 w-7 shrink-0"
-                            aria-label={`Remove ${r.email}`}
+                          <IconButton
+                            label={`Remove ${r.email}`}
+                            size="sm"
+                            className="-my-1 shrink-0"
                             onClick={() => setRemoved((s) => new Set(s).add(r.id))}
                           >
-                            <X className="h-3.5 w-3.5" />
-                          </Button>
+                            <X aria-hidden />
+                          </IconButton>
                         )}
                       </li>
                     );
@@ -316,47 +352,17 @@ export function BulkReplyDialog({
                   {active.length === 0 && (
                     <li className="px-3 py-4 text-sm text-muted-foreground">All recipients removed.</li>
                   )}
-                </ul>
+                </ol>
               </div>
-
-              {running && (
-                <div className="text-sm text-muted-foreground">
-                  Sending replies… {doneCount} / {active.length}
-                </div>
-              )}
-
-              {finished && (
-                <div className="rounded-md border border-border p-3 space-y-2">
-                  <div className="flex gap-2 flex-wrap">
-                    <Badge>Replies sent: {sentCount}</Badge>
-                    <Badge variant={failed.length ? "destructive" : "secondary"}>Failed: {failed.length}</Badge>
-                    <Badge variant="outline">Total: {active.length}</Badge>
-                  </div>
-                  {failed.length > 0 && (
-                    <ul className="text-xs space-y-1">
-                      {failed.map((f) => (
-                        <li key={f.id} className="flex justify-between gap-2">
-                          <span className="truncate">
-                            {f.name ?? f.email} · {f.email}
-                          </span>
-                          <span className="text-destructive shrink-0 max-w-[50%] truncate">
-                            {progress[f.id]?.reason}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              )}
             </div>
           </ScrollArea>
 
-          <DialogFooter className="p-5 pt-3 border-t border-border">
+          <DialogFooter className="shrink-0 gap-2 border-b-2 border-border bg-muted p-4 sm:px-5">
             {finished ? (
               <>
                 {failed.length > 0 && (
                   <Button variant="outline" onClick={() => runSend(failed)}>
-                    <RotateCcw className="h-4 w-4 mr-2" /> Retry failed ({failed.length})
+                    <RotateCcw aria-hidden /> Retry failed ({failed.length})
                   </Button>
                 )}
                 <Button
@@ -373,8 +379,8 @@ export function BulkReplyDialog({
                 <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={running}>
                   Cancel
                 </Button>
-                <Button onClick={() => runSend(active)} disabled={!canSend} className="transition-transform active:scale-95">
-                  <Send className="h-4 w-4 mr-2" />
+                <Button onClick={() => runSend(active)} disabled={!canSend}>
+                  <Send aria-hidden />
                   {running ? `Sending ${doneCount}/${active.length}…` : `Send ${active.length} repl${active.length === 1 ? "y" : "ies"}`}
                 </Button>
               </>
@@ -391,5 +397,14 @@ export function BulkReplyDialog({
         recipientCount={active.length}
       />
     </>
+  );
+}
+
+function Tally({ label, value, className }: { label: string; value: number; className?: string }) {
+  return (
+    <div className={`px-3 py-3 ${className ?? ""}`}>
+      <p className="font-mono text-xs font-semibold uppercase tracking-[0.08em]">{label}</p>
+      <p className="font-expanded mt-1 text-3xl leading-none tabular-nums">{value}</p>
+    </div>
   );
 }

@@ -6,10 +6,12 @@ import { listResumeProjects, generateResumeVersion } from "@/lib/resume-studio.f
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Field } from "@/components/app/field";
+import { ErrorState } from "@/components/app/error-state";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FileText, Loader2, Sparkles } from "lucide-react";
+import { AlertTriangle, FileText, Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "@tanstack/react-router";
 import { saveSendResumeHandoff } from "@/lib/send-resume-handoff";
@@ -201,55 +203,41 @@ export function GenerateResumeDialog({
       <DialogContent className="sm:max-w-2xl max-h-[min(92dvh,900px)] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <FileText className="h-4 w-4" /> Generate resume for this job
+            <FileText className="size-5" aria-hidden /> Generate resume for this job
           </DialogTitle>
           <DialogDescription>
             All Jobs Community fields (skills, location, salary, responsibilities, etc.) are included so the resume can match the posting closely.
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-3">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div>
-              <Label>Company</Label>
-              <Input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Acme Corp" />
+        <div className="space-y-5">
+          {projects.isLoading ? (
+            <div className="space-y-2" role="status" aria-label="Loading master resumes">
+              <Skeleton className="h-5 w-32" />
+              <Skeleton className="h-10 w-full" />
             </div>
-            <div>
-              <Label>Role</Label>
-              <Input value={role} onChange={(e) => setRole(e.target.value)} placeholder="Backend Engineer" />
+          ) : projects.isError ? (
+            <ErrorState
+              title="Couldn't load master resumes"
+              error={projects.error}
+              onRetry={() => projects.refetch()}
+              retrying={projects.isFetching}
+              className="py-6"
+            />
+          ) : (projects.data?.length ?? 0) === 0 ? (
+            <div className="flex items-start gap-3 border-2 border-border bg-warning-subtle p-3 text-sm">
+              <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
+              <p>
+                <span className="font-semibold">No master resume yet.</span>{" "}
+                <Link to="/resume-studio" className="font-semibold underline decoration-2 underline-offset-4" onClick={() => onOpenChange(false)}>
+                  Upload one in Resume Studio
+                </Link>{" "}
+                to generate a tailored version.
+              </p>
             </div>
-          </div>
-          <div>
-            <Label>Full job posting</Label>
-            <Textarea
-              rows={10}
-              value={jobContext}
-              onChange={(e) => setJobContext(e.target.value)}
-              placeholder="Paste or load from Jobs Community…"
-              className="text-xs font-mono"
-            />
-          </div>
-          <div>
-            <Label>Extra instructions (optional)</Label>
-            <Textarea
-              rows={2}
-              value={instructions}
-              onChange={(e) => setInstructions(e.target.value)}
-              placeholder="e.g. Keep to one page, emphasise React"
-            />
-          </div>
-          {(projects.data?.length ?? 0) === 0 ? (
-            <p className="text-xs text-muted-foreground">
-              No master resume yet.{" "}
-              <Link to="/resume-studio" className="underline text-foreground" onClick={() => onOpenChange(false)}>
-                Upload one in Resume Studio
-              </Link>
-              .
-            </p>
           ) : (
-            <div>
-              <Label>Master resume</Label>
+            <Field label="Master resume" htmlFor="generate-resume-master" hint="The tailored version is built from this LaTeX source.">
               <Select value={masterId} onValueChange={setMasterId}>
-                <SelectTrigger className="w-full mt-1.5">
+                <SelectTrigger id="generate-resume-master" className="w-full">
                   <SelectValue placeholder="Master resume…" />
                 </SelectTrigger>
                 <SelectContent>
@@ -260,8 +248,34 @@ export function GenerateResumeDialog({
                   ))}
                 </SelectContent>
               </Select>
-            </div>
+            </Field>
           )}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label="Company" htmlFor="generate-resume-company">
+              <Input id="generate-resume-company" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Acme Corp" />
+            </Field>
+            <Field label="Role" htmlFor="generate-resume-role">
+              <Input id="generate-resume-role" value={role} onChange={(e) => setRole(e.target.value)} placeholder="Backend Engineer" />
+            </Field>
+          </div>
+          <Field label="Full job posting" htmlFor="generate-resume-posting" hint="Add the posting or at least a role.">
+            <Textarea
+              id="generate-resume-posting"
+              rows={10}
+              value={jobContext}
+              onChange={(e) => setJobContext(e.target.value)}
+              placeholder="Paste or load from Jobs Community…"
+            />
+          </Field>
+          <Field label="Extra instructions (optional)" htmlFor="generate-resume-instructions">
+            <Textarea
+              id="generate-resume-instructions"
+              rows={2}
+              value={instructions}
+              onChange={(e) => setInstructions(e.target.value)}
+              placeholder="e.g. Keep to one page, emphasise React"
+            />
+          </Field>
         </div>
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={gen.isPending}>
@@ -271,7 +285,7 @@ export function GenerateResumeDialog({
             disabled={gen.isPending || !masterId || (!jobContext.trim() && !role.trim())}
             onClick={() => gen.mutate()}
           >
-            {gen.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 mr-1" />}
+            {gen.isPending ? <Loader2 className="animate-spin" aria-hidden /> : <Sparkles aria-hidden />}
             {gen.isPending ? "Generating…" : "Generate & edit"}
           </Button>
         </DialogFooter>

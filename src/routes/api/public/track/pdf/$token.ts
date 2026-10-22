@@ -72,7 +72,18 @@ export const Route = createFileRoute("/api/public/track/pdf/$token")({
         } catch { /* ignore */ }
 
         return new Response(
-          `<!doctype html><html><body style="font-family:system-ui;padding:2rem"><h2>Resume opened</h2><p>Thanks — the sender has been notified you viewed the attachment.</p></body></html>`,
+          `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Resume opened</title>
+<style>
+:root{--paper:#f3eedf;--card:#fdfbf4;--ink:#1a1a17;--muted:#5c574b;--red:#d8412f;--blue:#2f4fd1;--dot:rgba(26,26,23,.12);color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--paper:#191815;--card:#24231f;--ink:#ece8dc;--muted:#bab4a6;--red:#ef6b55;--blue:#8fa4f2;--dot:rgba(236,232,220,.14);color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:flex;flex-direction:column;font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background-color:var(--paper);background-image:radial-gradient(var(--dot) 1px,transparent 1.2px);background-size:20px 20px;color:var(--ink)}
+.airmail{height:8px;flex:none;background-image:repeating-linear-gradient(-45deg,var(--red) 0 10px,var(--paper) 10px 20px,var(--blue) 20px 30px,var(--paper) 30px 40px)}
+main{flex:1;display:grid;place-items:center;padding:32px 16px}
+.card{width:100%;max-width:440px;background:var(--card);border:2px solid var(--ink);box-shadow:6px 6px 0 0 var(--ink);padding:24px}
+h2{font-stretch:125%;font-weight:800;letter-spacing:-.02em;font-size:26px;line-height:1.1;margin:0 0 12px}
+p{color:var(--muted);font-size:15px;line-height:1.55;margin:0}
+</style></head><body><div class="airmail" aria-hidden="true"></div><main><div class="card"><h2>Resume opened</h2><p>Thanks — the sender has been notified you viewed the attachment.</p></div></main></body></html>`,
           { status: 200, headers: { "content-type": "text/html; charset=utf-8" } },
         );
       },

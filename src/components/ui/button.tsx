@@ -5,26 +5,29 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium cursor-pointer transition-orbit pressable focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-offset-1 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-semibold cursor-pointer select-none disabled:pointer-events-none disabled:opacity-45 disabled:cursor-not-allowed disabled:shadow-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
+        // Postage yellow + ink: the one primary action on a surface.
         default:
-          "bg-primary text-primary-foreground shadow-sm hover:brightness-110",
+          "brutal-press border-2 border-border bg-primary text-primary-foreground shadow-[var(--shadow-brutal-sm)]",
         destructive:
-          "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90",
+          "brutal-press border-2 border-border bg-destructive text-destructive-foreground shadow-[var(--shadow-brutal-sm)]",
         outline:
-          "border border-border bg-card hover:bg-accent hover:text-accent-foreground",
+          "brutal-press border-2 border-border bg-card text-foreground shadow-[var(--shadow-brutal-sm)] hover:bg-accent",
+        // Inverted ink block.
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
-        link: "text-primary underline-offset-4 hover:underline rounded-md",
+          "brutal-press border-2 border-border bg-secondary text-secondary-foreground shadow-[var(--shadow-brutal-sm)]",
+        ghost:
+          "border-2 border-transparent transition-colors hover:border-border hover:bg-accent hover:text-accent-foreground",
+        link: "text-foreground underline decoration-2 underline-offset-4 hover:decoration-primary hover:bg-accent",
       },
       size: {
         default: "h-10 px-4",
-        sm: "h-9 rounded-md px-3 text-[13px]",
-        lg: "h-11 rounded-lg px-6 text-[15px]",
-        icon: "h-10 w-10",
+        sm: "h-9 px-3",
+        lg: "h-12 px-6 text-base",
+        icon: "size-10",
       },
     },
     defaultVariants: {

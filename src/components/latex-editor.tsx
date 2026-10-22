@@ -1,5 +1,7 @@
 import Editor, { type OnMount } from "@monaco-editor/react";
 import { useEffect, useRef } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useTheme } from "@/hooks/use-theme";
 
 export type EditorSelection = {
   text: string;
@@ -36,6 +38,7 @@ export function LatexEditor({
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
   const monacoRef = useRef<Parameters<OnMount>[1] | null>(null);
   const decorationsRef = useRef<string[]>([]);
+  const { theme } = useTheme();
 
   useEffect(() => {
     const ed = editorRef.current;
@@ -49,10 +52,11 @@ export function LatexEditor({
         range: new monaco.Range(n, 1, n, 1),
         options: {
           isWholeLine: true,
-          className: "bg-destructive/10",
+          className: "bg-destructive/15",
           glyphMarginClassName: "before:content-['●'] before:text-destructive",
           linesDecorationsClassName: "border-l-2 border-destructive",
-          overviewRuler: { color: "rgba(239,68,68,0.9)", position: 4 },
+          // Theme colour id (not a hex) so the ruler mark follows vs / vs-dark.
+          overviewRuler: { color: { id: "editorError.foreground" }, position: 4 },
         },
       }));
     decorationsRef.current = ed.deltaDecorations(decorationsRef.current, decos);
@@ -68,7 +72,12 @@ export function LatexEditor({
       language="latex"
       value={value}
       onChange={(v) => onChange(v ?? "")}
-      theme="vs-dark"
+      theme={theme === "dark" ? "vs-dark" : "vs"}
+      loading={
+        <div className="h-full w-full p-3" role="status" aria-label="Loading editor">
+          <Skeleton className="h-full w-full" />
+        </div>
+      }
       onMount={(editor, monaco) => {
         editorRef.current = editor;
         monacoRef.current = monaco;
@@ -142,7 +151,7 @@ export function LatexEditor({
         }
       }}
       options={{
-        minimap: { enabled: true, scale: 1 },
+        minimap: { enabled: false },
         fontSize: 13,
         wordWrap: "on",
         lineNumbers: "on",

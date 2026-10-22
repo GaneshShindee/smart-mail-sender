@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Save, FolderOpen, Trash2, Loader2 } from "lucide-react";
+import { Save, FolderOpen, Trash2, Loader2, FileText } from "lucide-react";
+import { EmptyState } from "@/components/app/empty-state";
+import { IconButton } from "@/components/app/icon-button";
 import { toast } from "sonner";
 
 export type DraftState = {
@@ -116,26 +118,14 @@ export function DraftManager({
 
   return (
     <>
-      <div className="flex items-center gap-1.5">
-        <Button
-          type="button"
-          size="icon"
-          variant="outline"
-          className="h-10 w-10"
-          title={draftId ? "Update draft" : "Save draft"}
-          onClick={() => setOpenSave(true)}
-        >
-          <Save className="h-4 w-4" />
+      <div className="flex items-center gap-2">
+        <Button type="button" variant="outline" onClick={() => setOpenList(true)}>
+          <FolderOpen aria-hidden />
+          Drafts
         </Button>
-        <Button
-          type="button"
-          size="icon"
-          variant="outline"
-          className="h-10 w-10"
-          title="Drafts"
-          onClick={() => setOpenList(true)}
-        >
-          <FolderOpen className="h-4 w-4" />
+        <Button type="button" variant="outline" onClick={() => setOpenSave(true)}>
+          <Save aria-hidden />
+          {draftId ? "Update draft" : "Save draft"}
         </Button>
       </div>
 
@@ -145,9 +135,9 @@ export function DraftManager({
             <DialogTitle>Save draft</DialogTitle>
             <DialogDescription>Recipients, subject, body, variables and attachments are stored so you can pick this up later.</DialogDescription>
           </DialogHeader>
-          <div>
-            <Label>Draft name</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Backend applications — Nov batch" autoFocus />
+          <div className="space-y-2">
+            <Label htmlFor="draft-name">Draft name</Label>
+            <Input id="draft-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Backend applications — Nov batch" autoFocus />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpenSave(false)} disabled={save.isPending}>Cancel</Button>
@@ -160,17 +150,20 @@ export function DraftManager({
 
       <Dialog open={openList} onOpenChange={setOpenList}>
         <DialogContent className="sm:max-w-lg">
-          <DialogHeader><DialogTitle>Saved drafts</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Saved drafts</DialogTitle>
+            <DialogDescription>Load a draft to continue where you left off.</DialogDescription>
+          </DialogHeader>
           {drafts.isLoading ? (
-            <div className="py-6 text-center text-sm text-muted-foreground flex items-center justify-center gap-2">
-              <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+            <div role="status" className="py-6 text-center text-sm text-muted-foreground flex items-center justify-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Loading…
             </div>
           ) : (drafts.data?.length ?? 0) === 0 ? (
-            <div className="py-8 text-center text-sm text-muted-foreground">No drafts yet.</div>
+            <EmptyState icon={FileText} title="No drafts yet" description="Use “Save draft” to keep an email for later." className="py-8" framed={false} />
           ) : (
-            <div className="max-h-80 overflow-auto space-y-2">
+            <ul className="max-h-80 overflow-auto divide-y divide-border/20 border-2 border-border">
               {drafts.data?.map((d) => (
-                <div key={d.id} className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2">
+                <li key={d.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
                   <div className="min-w-0">
                     <div className="text-sm font-medium truncate">{d.name}</div>
                     <div className="text-xs text-muted-foreground truncate">
@@ -179,15 +172,15 @@ export function DraftManager({
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <Button size="sm" variant="outline" onClick={() => load.mutate(d.id)} disabled={load.isPending}>
-                      {load.isPending ? "Loading…" : "Load"}
+                      {load.isPending && load.variables === d.id ? "Loading…" : "Load"}
                     </Button>
-                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => del.mutate(d.id)}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    <IconButton label={`Delete draft “${d.name}”`} size="sm" onClick={() => del.mutate(d.id)}>
+                      <Trash2 aria-hidden />
+                    </IconButton>
                   </div>
-                </div>
+                </li>
               ))}
-            </div>
+            </ul>
           )}
         </DialogContent>
       </Dialog>

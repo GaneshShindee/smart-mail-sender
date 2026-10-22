@@ -13,14 +13,29 @@ import {
 } from "@/lib/resume-studio.functions";
 import { getUserPreferences, setUserPreferences } from "@/lib/profile.functions";
 import { resumeFileBaseName } from "@/lib/naming";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LatexEditor, type EditorSelection, type LatexEditorApi } from "@/components/latex-editor";
 import { LatexPreview } from "@/components/latex-preview";
 import { UpdateResumeDialog, InlineAskAi } from "@/components/resume-ai-dialogs";
-import { ArrowLeft, Save, Wand2, Sparkles, Trash2, Send, CheckCircle2, AlertCircle, FolderPlus, Paperclip, Copy, ChevronDown, ChevronUp } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Page } from "@/components/app/page";
+import { ErrorState } from "@/components/app/error-state";
+import { IconButton } from "@/components/app/icon-button";
+import { SegmentedControl } from "@/components/app/segmented-control";
+import { useConfirm } from "@/components/app/confirm-dialog";
+import { cn } from "@/lib/utils";
+import {
+  ArrowLeft, Save, Wand2, Sparkles, Trash2, Send, CheckCircle2, AlertCircle, FolderPlus, Paperclip, Copy,
+  ChevronDown, ChevronUp, Check, CircleDashed, Code2, Eye, Loader2, MoreHorizontal, X, type LucideIcon,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AI_JD_RESUME_FOLDER } from "@/lib/linkedin";
@@ -78,6 +93,9 @@ function WorkspacePage() {
   const [showInsights, setShowInsights] = useState(false);
   const [selection, setSelection] = useState<EditorSelection | null>(null);
   const editorApi = useRef<LatexEditorApi | null>(null);
+  /** Mobile only: which pane fills the workspace (both show side by side on lg+). */
+  const [pane, setPane] = useState<"editor" | "preview">("editor");
+  const confirm = useConfirm();
   const [attachOnlyHandoff, setAttachOnlyHandoff] = useState(
     () => peekSendResumeHandoff()?.attachOnly === true || isReturnToSend(search.returnToSend),
   );
@@ -112,6 +130,7 @@ function WorkspacePage() {
       qc.invalidateQueries({ queryKey: ["resume-version", id] });
       qc.invalidateQueries({ queryKey: ["resumes"] });
     },
+    onError: (e) => toast.error("Couldn't upload the compiled PDF", { description: (e as Error).message }),
   });
 
   const saveToLibrary = useMutation({
@@ -143,7 +162,14 @@ function WorkspacePage() {
   const del = useMutation({
     mutationFn: () => delFn({ data: { id } }),
     onSuccess: () => { toast.success("Version deleted"); nav({ to: "/resume-studio" }); },
+    onError: (e) => toast.error("Delete failed", { description: (e as Error).message }),
   });
+
+  const confirmDelete = async () => {
+    if (await confirm({ title: "Delete this version?", description: "The tailored LaTeX and its compiled PDF are removed.", confirmLabel: "Delete version" })) {
+      del.mutate();
+    }
+  };
 
   const improve = useMutation({
     mutationFn: (section: "summary" | "experience" | "projects" | "skills" | "ats") =>
@@ -233,15 +259,36 @@ function WorkspacePage() {
     draftEmail.mutate();
   };
 
+  if (q.isError) {
+    return (
+      <Page size="narrow">
+        <ErrorState
+          title="Couldn't open this resume"
+          error={q.error}
+          onRetry={() => q.refetch()}
+          retrying={q.isFetching}
+        />
+        <Button asChild variant="outline">
+          <Link to="/resume-studio"><ArrowLeft aria-hidden /> All resumes</Link>
+        </Button>
+      </Page>
+    );
+  }
+
   if (q.isLoading || !q.data) {
     return (
-      <div className="mx-auto max-w-7xl space-y-4">
-        <Skeleton className="h-8 w-64" />
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_1fr]">
-          <Skeleton className="h-[600px]" />
-          <Skeleton className="h-[600px]" />
+      <Page size="full" className={cn("flex flex-col gap-0 space-y-0", WORKSPACE_HEIGHT)}>
+        <div role="status" aria-label="Loading resume workspace" className={WORKSPACE_FRAME}>
+          <div className="space-y-3 border-b-2 border-border p-4">
+            <Skeleton className="h-8 w-72 max-w-full" />
+            <Skeleton className="h-9 w-96 max-w-full" />
+          </div>
+          <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-2">
+            <Skeleton className="h-full border-0" />
+            <Skeleton className="hidden h-full border-0 border-l-2 border-l-border lg:block" />
+          </div>
         </div>
-      </div>
+      </Page>
     );
   }
 
@@ -250,138 +297,201 @@ function WorkspacePage() {
   const hasInsights = Boolean(
     v.matched_keywords.length || v.missing_keywords.length || v.strengths.length || v.suggestions.length,
   );
+  const band = score !== null ? atsBand(score) : null;
 
   return (
-    <div className="mx-auto max-w-7xl space-y-4 h-[calc(100vh-100px)] flex flex-col">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <Button asChild variant="ghost" size="sm">
-            <Link to="/resume-studio"><ArrowLeft className="h-4 w-4 mr-1" /> All resumes</Link>
-          </Button>
-          <div className="min-w-0">
-            <h1 className="page-title truncate">{v.job_title || "Untitled role"}{v.company ? ` · ${v.company}` : ""}</h1>
-            <div className="text-xs text-muted-foreground">Version updated {new Date(v.updated_at).toLocaleString()}</div>
+    <Page size="full" className={cn("flex flex-col gap-0 space-y-0", WORKSPACE_HEIGHT)}>
+      <div className={WORKSPACE_FRAME}>
+        {/* ── One compact toolbar: identity · AI tools · save/send. Keeps code + preview tall. ── */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b-2 border-border bg-background px-2 py-2 sm:px-3">
+          <div className="flex min-w-0 flex-1 items-center gap-2.5">
+            <IconButton label="Back to all resumes" variant="outline" size="sm" asChild className="shrink-0">
+              <Link to="/resume-studio"><ArrowLeft aria-hidden /></Link>
+            </IconButton>
+            <div className="min-w-0">
+              <h1
+                className="font-expanded truncate text-base leading-tight sm:text-lg"
+                title={`Updated ${new Date(v.updated_at).toLocaleString()}`}
+              >
+                {v.job_title || "Untitled role"}{v.company ? ` · ${v.company}` : ""}
+              </h1>
+              <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                {save.isPending ? (
+                  <Badge variant="info"><Loader2 className="animate-spin" aria-hidden /> Saving</Badge>
+                ) : dirty ? (
+                  <Badge variant="warning"><CircleDashed aria-hidden /> Unsaved</Badge>
+                ) : (
+                  <Badge variant="success"><Check aria-hidden /> Saved</Badge>
+                )}
+                {band && (
+                  <span
+                    className={cn("inline-flex items-center gap-1.5 border-[1.5px] border-border px-1.5 font-mono text-xs font-semibold uppercase leading-4 text-foreground", band.tone)}
+                    aria-label={`ATS score ${score}, ${band.label}`}
+                  >
+                    ATS <span className="tabular-nums">{score}</span> · {band.label}
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {score !== null && (
-            <Badge variant={score >= 75 ? "default" : score >= 50 ? "secondary" : "outline"} className="h-8 px-3 text-sm">
-              ATS Score: {score}
-            </Badge>
-          )}
-          <Button size="sm" variant="outline" onClick={() => save.mutate()} disabled={!dirty || save.isPending}>
-            <Save className="h-3.5 w-3.5 mr-1" /> {save.isPending ? "Saving…" : dirty ? "Save" : "Saved"}
-          </Button>
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={() => saveToLibrary.mutate()}
-            disabled={!hasPdf || pdfStale || saveToLibrary.isPending}
-            title={
-              !hasPdf
-                ? "Compile the PDF first"
-                : pdfStale
-                  ? "Re-compile so the newest PDF is saved"
-                  : `Save PDF to Resumes → ${AI_JD_RESUME_FOLDER}`
-            }
-          >
-            <FolderPlus className="h-3.5 w-3.5 mr-1" />
-            {saveToLibrary.isPending ? "Saving…" : "Save to Resumes"}
-          </Button>
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={() => saveAsMaster.mutate()}
-            disabled={saveAsMaster.isPending}
-            title="Save this .tex as a new Master resume, so you can Tailor/Duplicate from it later"
-          >
-            <Copy className="h-3.5 w-3.5 mr-1" />
-            {saveAsMaster.isPending ? "Saving…" : "Save as Master"}
-          </Button>
-          <Button
-            size="sm"
-            onClick={onSendClick}
-            disabled={draftEmail.isPending}
-            title={
-              !hasPdf
-                ? "Compile first to generate resume.pdf"
-                : pdfStale
-                  ? "Source changed — re-compile before sending"
-                  : attachOnlyHandoff
-                    ? "Attach this PDF to your existing email (no new body)"
-                    : "Attach the latest PDF and open the email composer"
-            }
-          >
-            {attachOnlyHandoff ? (
-              <><Paperclip className="h-3.5 w-3.5 mr-1" /> {!hasPdf ? "Compile to attach" : pdfStale ? "Re-compile to attach" : "Attach to email"}</>
-            ) : (
-              <><Send className="h-3.5 w-3.5 mr-1" /> {draftEmail.isPending ? "Drafting…" : !hasPdf ? "Compile to send" : pdfStale ? "Re-compile to send" : "Send with email"}</>
+
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Button size="sm" variant="secondary" className="h-8" onClick={() => setUpdateOpen(true)}>
+              <Wand2 aria-hidden /> Update with AI
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" variant="outline" className="h-8" disabled={improve.isPending}>
+                  {improve.isPending ? <Loader2 className="animate-spin" aria-hidden /> : <Sparkles aria-hidden />}
+                  {improve.isPending ? "Improving…" : "Improve"}
+                  <ChevronDown aria-hidden />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-56">
+                {(["summary", "experience", "projects", "skills", "ats"] as const).map((s) => (
+                  <DropdownMenuItem key={s} onSelect={() => improve.mutate(s)} disabled={improve.isPending}>
+                    <Wand2 aria-hidden /> Improve {s === "ats" ? "ATS coverage" : s}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            {hasInsights && (
+              <Button
+                size="sm"
+                variant={showInsights ? "secondary" : "ghost"}
+                className="h-8"
+                onClick={() => setShowInsights((s) => !s)}
+                aria-expanded={showInsights}
+                aria-controls="ats-insights"
+              >
+                {showInsights ? <ChevronUp aria-hidden /> : <ChevronDown aria-hidden />}
+                ATS insights
+              </Button>
             )}
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => { if (confirm("Delete this version?")) del.mutate(); }}>
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
+            <span className="mx-0.5 hidden h-6 w-0.5 bg-border sm:block" aria-hidden />
+            <Button size="sm" variant="outline" className="h-8" onClick={() => save.mutate()} disabled={!dirty || save.isPending}>
+              <Save aria-hidden /> {save.isPending ? "Saving…" : dirty ? "Save" : "Saved"}
+            </Button>
+            <Button
+              size="sm"
+              className="h-8"
+              onClick={onSendClick}
+              disabled={draftEmail.isPending}
+              title={
+                !hasPdf
+                  ? "Compile first to generate resume.pdf"
+                  : pdfStale
+                    ? "Source changed — re-compile before sending"
+                    : attachOnlyHandoff
+                      ? "Attach this PDF to your existing email (no new body)"
+                      : "Attach the latest PDF and open the email composer"
+              }
+            >
+              {attachOnlyHandoff ? (
+                <><Paperclip aria-hidden /> {!hasPdf ? "Compile to attach" : pdfStale ? "Re-compile to attach" : "Attach to email"}</>
+              ) : (
+                <>{draftEmail.isPending ? <Loader2 className="animate-spin" aria-hidden /> : <Send aria-hidden />} {draftEmail.isPending ? "Drafting…" : !hasPdf ? "Compile to send" : pdfStale ? "Re-compile to send" : "Send with email"}</>
+              )}
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" variant="outline" className="h-8" aria-label="More actions">
+                  <MoreHorizontal aria-hidden /> More
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64">
+                <DropdownMenuItem
+                  onSelect={() => saveToLibrary.mutate()}
+                  disabled={!hasPdf || pdfStale || saveToLibrary.isPending}
+                >
+                  <FolderPlus aria-hidden />
+                  <span className="flex flex-col">
+                    <span>{saveToLibrary.isPending ? "Saving…" : "Save to Resumes"}</span>
+                    <span className="text-xs opacity-75">
+                      {!hasPdf
+                        ? "Compile the PDF first"
+                        : pdfStale
+                          ? "Re-compile so the newest PDF is saved"
+                          : `Save PDF to Resumes → ${AI_JD_RESUME_FOLDER}`}
+                    </span>
+                  </span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => saveAsMaster.mutate()} disabled={saveAsMaster.isPending}>
+                  <Copy aria-hidden />
+                  <span className="flex flex-col">
+                    <span>{saveAsMaster.isPending ? "Saving…" : "Save as Master"}</span>
+                    <span className="text-xs opacity-75">Reuse this .tex to Tailor/Duplicate later</span>
+                  </span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-destructive focus:bg-destructive focus:text-destructive-foreground"
+                  onSelect={() => void confirmDelete()}
+                >
+                  <Trash2 aria-hidden /> Delete version
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <SegmentedControl
+              size="sm"
+              ariaLabel="Show editor or preview"
+              className="pb-0 lg:hidden"
+              value={pane}
+              onValueChange={setPane}
+              options={[
+                { value: "editor", label: "Editor", icon: Code2 },
+                { value: "preview", label: "Preview", icon: Eye },
+              ]}
+            />
+          </div>
         </div>
-      </div>
 
-      <div className="flex flex-wrap gap-2">
-        <Button size="sm" onClick={() => setUpdateOpen(true)}>
-          <Wand2 className="h-3.5 w-3.5 mr-1" /> Update Resume with AI
-        </Button>
-        {(["summary", "experience", "projects", "skills", "ats"] as const).map((s) => (
-          <Button key={s} size="sm" variant="outline" onClick={() => improve.mutate(s)} disabled={improve.isPending}>
-            <Wand2 className="h-3.5 w-3.5 mr-1" /> Improve {s === "ats" ? "ATS coverage" : s}
-          </Button>
-        ))}
-        <span className="text-xs text-muted-foreground self-center">
-          Tip: select any LaTeX in the editor to get an inline “Ask AI” rewrite.
-        </span>
-        {hasInsights && (
-          <Button size="sm" variant="ghost" className="ml-auto" onClick={() => setShowInsights((s) => !s)}>
-            {showInsights ? <ChevronUp className="h-3.5 w-3.5 mr-1" /> : <ChevronDown className="h-3.5 w-3.5 mr-1" />}
-            {showInsights ? "Hide" : "Show"} ATS insights
-          </Button>
-        )}
-      </div>
+        {hasInsights && showInsights && <InsightsBar version={v} />}
 
-      {hasInsights && showInsights && <InsightsBar version={v} />}
-
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 flex-1 min-h-0">
-        <Card className="overflow-hidden flex flex-col min-h-0">
-          <div className="border-b border-border px-3 py-2 text-xs text-muted-foreground flex items-center justify-between">
-            <span>LaTeX source · {q.data.project?.main_tex_filename ?? "resume.tex"}</span>
-            {dirty && <span className="text-amber-600 dark:text-amber-400">● Unsaved</span>}
-          </div>
-          <div className="flex-1 min-h-0 relative">
-            <LatexEditor
-              value={tex}
-              onChange={(v) => { setTex(v); setDirty(true); }}
-              errorLines={errorLines}
-              onSelectionChange={setSelection}
-              onReady={(api) => { editorApi.current = api; }}
+        {/* ── Editor | Preview ──────────────────────────────────────── */}
+        <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-2">
+          <section
+            aria-label="LaTeX editor"
+            className={cn("min-h-0 flex-col", pane === "editor" ? "flex" : "hidden lg:flex")}
+          >
+            <div className="flex h-11 items-center justify-between gap-2 border-b-2 border-border bg-background px-3">
+              <span className="eyebrow truncate">Source · {q.data.project?.main_tex_filename ?? "resume.tex"}</span>
+              <span className="hidden font-mono text-xs text-muted-foreground sm:inline lg:hidden xl:inline">Select text → Ask AI</span>
+            </div>
+            <div className="relative min-h-0 flex-1">
+              <LatexEditor
+                value={tex}
+                onChange={(v) => { setTex(v); setDirty(true); }}
+                errorLines={errorLines}
+                onSelectionChange={setSelection}
+                onReady={(api) => { editorApi.current = api; }}
+              />
+              <InlineAskAi
+                selection={selection}
+                versionId={id}
+                document={tex}
+                onReplace={(start, end, text) => {
+                  editorApi.current?.replaceRange(start, end, text);
+                  setDirty(true);
+                  setSelection(null);
+                }}
+              />
+            </div>
+          </section>
+          <section
+            aria-label="PDF preview"
+            className={cn("min-h-0 flex-col lg:border-l-2 lg:border-border", pane === "preview" ? "flex" : "hidden lg:flex")}
+          >
+            <LatexPreview
+              tex={tex}
+              filename={q.data.project?.main_tex_filename ?? "resume.tex"}
+              downloadName={resumeFileBaseName({ fullName: prefs.data?.fullName ?? null, email: prefs.data?.email ?? null, company: v.company ?? null })}
+              autoCompile
+              onCompiled={(b64) => { setCompiledTex(tex); setHasPdf(true); uploadPdf.mutate(b64); }}
+              onErrors={(errs) => setErrorLines(errs.map((e) => e.line ?? 0).filter((n) => n > 0))}
             />
-            <InlineAskAi
-              selection={selection}
-              versionId={id}
-              document={tex}
-              onReplace={(start, end, text) => {
-                editorApi.current?.replaceRange(start, end, text);
-                setDirty(true);
-                setSelection(null);
-              }}
-            />
-          </div>
-        </Card>
-        <Card className="overflow-hidden flex flex-col min-h-0">
-          <LatexPreview
-            tex={tex}
-            filename={q.data.project?.main_tex_filename ?? "resume.tex"}
-            downloadName={resumeFileBaseName({ fullName: prefs.data?.fullName ?? null, email: prefs.data?.email ?? null, company: v.company ?? null })}
-            autoCompile
-            onCompiled={(b64) => { setCompiledTex(tex); setHasPdf(true); uploadPdf.mutate(b64); }}
-            onErrors={(errs) => setErrorLines(errs.map((e) => e.line ?? 0).filter((n) => n > 0))}
-          />
-        </Card>
+          </section>
+        </div>
       </div>
 
       <UpdateResumeDialog
@@ -392,8 +502,27 @@ function WorkspacePage() {
         presets={prefs.data?.resumeAiPresets}
         onPresetsChange={(p) => savePresets.mutate(p)}
       />
-    </div>
+    </Page>
   );
+}
+
+/**
+ * The workspace never scrolls the page — only the editor and the PDF scroll inside their panes.
+ * Mobile/tablet: fill the viewport under the app header (h-16 = 4rem) minus <main>'s padding.
+ * Desktop (lg+): bleed over <main>'s p-10 so the panes get every pixel under the header.
+ */
+const WORKSPACE_HEIGHT =
+  "h-[calc(100dvh-12rem)] min-h-[34rem] sm:h-[calc(100dvh-12.5rem)] md:h-[calc(100dvh-8.5rem)] lg:-m-10 lg:h-[calc(100dvh-4rem)] lg:min-h-0 lg:w-auto lg:max-w-none";
+
+/** Frame around the workspace: a bordered card on small screens, edge-to-edge on desktop. */
+const WORKSPACE_FRAME =
+  "flex min-h-0 flex-1 flex-col border-2 border-border bg-card shadow-[var(--shadow-brutal)] lg:border-0 lg:shadow-none";
+
+/** ATS score thresholds — one place for the number → label mapping on this page. */
+function atsBand(score: number) {
+  if (score >= 75) return { label: "Strong", tone: "bg-success-subtle" };
+  if (score >= 50) return { label: "Fair", tone: "bg-warning-subtle" };
+  return { label: "Weak", tone: "bg-destructive-subtle" };
 }
 
 function InsightsBar({ version }: { version: { matched_keywords: string[]; missing_keywords: string[]; strengths: string[]; suggestions: string[] } }) {
@@ -401,32 +530,57 @@ function InsightsBar({ version }: { version: { matched_keywords: string[]; missi
   const hasAny = matched_keywords.length || missing_keywords.length || strengths.length || suggestions.length;
   if (!hasAny) return null;
   return (
-    <Card>
-      <CardContent className="py-3 grid gap-3 md:grid-cols-4">
-        <InsightCol icon={<CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />} title="Matched" items={matched_keywords} tone="ok" />
-        <InsightCol icon={<AlertCircle className="h-3.5 w-3.5 text-amber-500" />} title="Missing" items={missing_keywords} tone="warn" />
-        <InsightCol icon={<Sparkles className="h-3.5 w-3.5 text-primary" />} title="Strengths" items={strengths} />
-        <InsightCol icon={<Wand2 className="h-3.5 w-3.5 text-primary" />} title="Suggestions" items={suggestions} />
-      </CardContent>
-    </Card>
+    <div
+      id="ats-insights"
+      className="grid max-h-[40%] shrink-0 grid-cols-1 overflow-auto border-b-2 border-border bg-background sm:grid-cols-2 xl:grid-cols-4 [&>*]:border-border/20 [&>*+*]:border-t sm:[&>*+*]:border-t-0 sm:[&>*:nth-child(n+3)]:border-t sm:[&>*:nth-child(even)]:border-l xl:[&>*:nth-child(n+3)]:border-t-0 xl:[&>*+*]:border-l"
+    >
+      <InsightCol icon={CheckCircle2} title="Matched" items={matched_keywords} variant="success" itemIcon={Check} />
+      <InsightCol icon={AlertCircle} title="Missing" items={missing_keywords} variant="danger" itemIcon={X} />
+      <InsightCol icon={Sparkles} title="Strengths" items={strengths} variant="info" itemIcon={Sparkles} />
+      <InsightCol icon={Wand2} title="Suggestions" items={suggestions} asList />
+    </div>
   );
 }
 
-function InsightCol({ icon, title, items, tone }: { icon: React.ReactNode; title: string; items: string[]; tone?: "ok" | "warn" }) {
+function InsightCol({
+  icon: Icon,
+  title,
+  items,
+  variant = "outline",
+  itemIcon: ItemIcon,
+  asList,
+}: {
+  icon: LucideIcon;
+  title: string;
+  items: string[];
+  variant?: "success" | "danger" | "info" | "outline";
+  itemIcon?: LucideIcon;
+  asList?: boolean;
+}) {
   return (
-    <div className="min-w-0">
-      <div className="text-[11px] uppercase tracking-wide text-muted-foreground flex items-center gap-1 mb-1">
-        {icon} {title}
-      </div>
+    <div className="min-w-0 p-3 sm:p-4">
+      <p className="eyebrow mb-2 flex items-center gap-1.5 text-foreground">
+        <Icon className="size-4" aria-hidden /> {title}
+        <span className="text-muted-foreground">· {items.length}</span>
+      </p>
       {items.length ? (
-        <div className="flex flex-wrap gap-1">
-          {items.slice(0, 12).map((k, i) => (
-            <Badge key={i} variant={tone === "ok" ? "secondary" : tone === "warn" ? "outline" : "outline"} className="text-[10px]">
-              {k}
-            </Badge>
-          ))}
-        </div>
-      ) : <div className="text-xs text-muted-foreground">—</div>}
+        asList ? (
+          <ul className="space-y-1.5 text-sm">
+            {items.slice(0, 12).map((k, i) => (
+              <li key={i} className="border-l-2 border-border pl-2">{k}</li>
+            ))}
+          </ul>
+        ) : (
+          <div className="flex flex-wrap gap-1.5">
+            {items.slice(0, 12).map((k, i) => (
+              <Badge key={i} variant={variant} className="whitespace-normal">
+                {ItemIcon && <ItemIcon aria-hidden />}
+                {k}
+              </Badge>
+            ))}
+          </div>
+        )
+      ) : <p className="text-xs text-muted-foreground">None.</p>}
     </div>
   );
 }

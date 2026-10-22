@@ -1,12 +1,17 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Sparkles } from "lucide-react";
+import { Field } from "@/components/app/field";
+import { SegmentedControl } from "@/components/app/segmented-control";
+import { Loader2, Sparkles } from "lucide-react";
 import { useState } from "react";
 
 export type ReplyTone = "professional" | "friendly" | "formal" | "confident" | "enthusiastic" | "neutral";
 export type ReplyLength = "short" | "medium" | "detailed";
+
+const TONES: ReplyTone[] = ["professional", "friendly", "formal", "confident", "enthusiastic", "neutral"];
+const LENGTHS: ReplyLength[] = ["short", "medium", "detailed"];
+const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
 
 export function ReplyAssistantModal({
   open,
@@ -27,51 +32,62 @@ export function ReplyAssistantModal({
   const [instruction, setInstruction] = useState("");
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-primary" /> AI Reply Assistant</DialogTitle>
-          {recipientCount ? (
-            <p className="text-sm text-muted-foreground">
-              One draft, personalized and sent individually to {recipientCount} recipient{recipientCount === 1 ? "" : "s"}.
-            </p>
-          ) : null}
+          <p className="eyebrow">AI desk</p>
+          <DialogTitle className="flex items-center gap-3">
+            <span className="grid size-9 shrink-0 place-items-center border-2 border-border bg-primary text-primary-foreground">
+              <Sparkles className="size-4" strokeWidth={2.4} aria-hidden />
+            </span>
+            Reply assistant
+          </DialogTitle>
+          <DialogDescription>
+            {recipientCount
+              ? `One draft, personalized and sent individually to ${recipientCount} recipient${recipientCount === 1 ? "" : "s"}.`
+              : "Pick a tone and length — the draft lands in your reply body for review."}
+          </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3">
-          <div>
-            <Label>Tone</Label>
-            <div className="flex flex-wrap gap-1 mt-1">
-              {(["professional", "friendly", "formal", "confident", "enthusiastic", "neutral"] as ReplyTone[]).map((t) => (
-                <Button key={t} type="button" size="sm" variant={tone === t ? "default" : "outline"} onClick={() => setTone(t)}>
-                  {t[0].toUpperCase() + t.slice(1)}
-                </Button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <Label>Length</Label>
-            <div className="flex gap-1 mt-1">
-              {(["short", "medium", "detailed"] as ReplyLength[]).map((l) => (
-                <Button key={l} type="button" size="sm" variant={length === l ? "default" : "outline"} onClick={() => setLength(l)}>
-                  {l[0].toUpperCase() + l.slice(1)}
-                </Button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <Label>Custom instructions (optional)</Label>
-            <Textarea
-              rows={4}
-              value={instruction}
-              onChange={(e) => setInstruction(e.target.value)}
-              placeholder="e.g. Politely decline and suggest reconnecting in Q4. Ask about interview timeline. Confirm availability next Tuesday."
+        <div className="divide-y divide-border/20 border-y-2 border-border">
+          <div className="space-y-2 py-4">
+            <p className="font-mono text-xs font-semibold uppercase tracking-[0.08em]">
+              Tone
+            </p>
+            <SegmentedControl
+              value={tone}
+              onValueChange={setTone}
+              ariaLabel="Tone"
+              size="sm"
+              options={TONES.map((t) => ({ value: t, label: cap(t) }))}
             />
           </div>
+          <div className="space-y-2 py-4">
+            <p className="font-mono text-xs font-semibold uppercase tracking-[0.08em]">Length</p>
+            <SegmentedControl
+              value={length}
+              onValueChange={setLength}
+              ariaLabel="Length"
+              size="sm"
+              options={LENGTHS.map((l) => ({ value: l, label: cap(l) }))}
+            />
+          </div>
+          <div className="py-4">
+            <Field label="Custom instructions (optional)" htmlFor="assist-instruction">
+              <Textarea
+                id="assist-instruction"
+                rows={4}
+                value={instruction}
+                onChange={(e) => setInstruction(e.target.value)}
+                placeholder="e.g. Politely decline and suggest reconnecting in Q4. Ask about interview timeline. Confirm availability next Tuesday."
+              />
+            </Field>
+          </div>
         </div>
-        <DialogFooter>
+        <DialogFooter className="gap-2">
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={() => onGenerate({ tone, length, instruction: instruction.trim() })} disabled={pending}>
-            <Sparkles className="h-4 w-4 mr-2" /> {pending ? "Drafting…" : "Generate draft"}
+            {pending ? <Loader2 className="animate-spin" aria-hidden /> : <Sparkles aria-hidden />}
+            {pending ? "Drafting…" : "Generate draft"}
           </Button>
         </DialogFooter>
       </DialogContent>

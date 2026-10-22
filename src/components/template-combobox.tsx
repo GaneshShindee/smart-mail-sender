@@ -65,12 +65,12 @@ export function TemplateCombobox({
       <PopoverTrigger asChild>
         <Button
           type="button"
-          variant="outline"
+          variant="ghost"
           role="combobox"
           aria-expanded={open}
           disabled={disabled}
           className={cn(
-            "w-full justify-between font-normal h-10 px-3.5",
+            "h-10 w-full justify-between border-2 border-input bg-card px-3 font-normal hover:bg-card data-[state=open]:shadow-[var(--shadow-brutal-sm)]",
             !selected && "text-muted-foreground",
             className,
           )}
