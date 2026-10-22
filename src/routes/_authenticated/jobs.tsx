@@ -635,7 +635,7 @@ function JobsPage() {
               </div>
             </FormSection>
           </div>
-          <DialogFooter className="gap-2 sm:space-x-0 border-t-2 border-border px-5 py-3 sm:px-6">
+          <DialogFooter className="gap-2 sm:space-x-0 border-b-2 border-border px-5 py-3 sm:px-6">
             <Button variant="ghost" onClick={() => setEditOpen(false)}>Cancel</Button>
             <Button onClick={() => save.mutate(form)} disabled={save.isPending}>
               {save.isPending ? "Saving…" : form.id ? "Save changes" : "Publish"}

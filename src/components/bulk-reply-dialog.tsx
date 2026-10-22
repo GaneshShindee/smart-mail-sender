@@ -205,7 +205,7 @@ export function BulkReplyDialog({
         }}
       >
         <DialogContent className="flex max-h-[90dvh] w-[calc(100%-1rem)] max-w-2xl flex-col gap-0 overflow-hidden p-0 sm:w-full sm:p-0">
-          <div className="airmail h-2 shrink-0 border-b-2 border-border" aria-hidden />
+          <div className="airmail order-first h-2 shrink-0 border-b-2 border-border" aria-hidden />
           <DialogHeader className="shrink-0 border-b-2 border-border p-5 pr-14 text-left">
             <p className="eyebrow">
               Outbox · {active.length} letter{active.length === 1 ? "" : "s"}
@@ -357,7 +357,7 @@ export function BulkReplyDialog({
             </div>
           </ScrollArea>
 
-          <DialogFooter className="shrink-0 gap-2 border-t-2 border-border bg-muted p-4 sm:px-5">
+          <DialogFooter className="shrink-0 gap-2 border-b-2 border-border bg-muted p-4 sm:px-5">
             {finished ? (
               <>
                 {failed.length > 0 && (

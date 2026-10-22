@@ -207,7 +207,7 @@ function MergeDemo() {
           itself — that&apos;s exactly what happens for every person in your batch.
         </p>
         <div className="space-y-2">
-          <Label htmlFor="demo-name">{"{{name}}"} · recipient</Label>
+          <Label htmlFor="demo-name"><span className="normal-case">{"{{name}}"}</span> · recipient</Label>
           <Input
             id="demo-name"
             value={name}
@@ -217,7 +217,7 @@ function MergeDemo() {
           />
         </div>
         <fieldset className="space-y-2">
-          <legend className="font-mono text-xs font-semibold uppercase tracking-[0.08em]">{"{{company}}"}</legend>
+          <legend className="font-mono text-xs font-semibold tracking-[0.08em]">{"{{company}}"}</legend>
           <div className="flex flex-wrap gap-2">
             {companies.map((c) => (
               <Button
@@ -234,7 +234,7 @@ function MergeDemo() {
           </div>
         </fieldset>
         <fieldset className="space-y-2">
-          <legend className="font-mono text-xs font-semibold uppercase tracking-[0.08em]">{"{{role}}"}</legend>
+          <legend className="font-mono text-xs font-semibold tracking-[0.08em]">{"{{role}}"}</legend>
           <div className="flex flex-wrap gap-2">
             {roles.map((r) => (
               <Button

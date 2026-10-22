@@ -288,7 +288,7 @@ export function EmailGeneratorDialog({ open, onOpenChange, onUse, companyFromEma
 
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto md:grid md:grid-cols-2 md:overflow-hidden">
             {/* Left: template + data */}
-            <div className="flex min-h-0 flex-col gap-5 p-4 sm:p-5 md:overflow-y-auto md:border-r-2 md:border-border">
+            <div className="flex min-h-0 flex-col gap-3.5 p-4 md:overflow-y-auto md:border-r-2 md:border-border">
               {/* Template selector */}
               <section aria-labelledby="eg-template-title" className="space-y-2">
                 <h3 id="eg-template-title" className="eyebrow border-b-2 border-border pb-1.5 text-foreground">01 · Instruction template</h3>
@@ -350,9 +350,9 @@ export function EmailGeneratorDialog({ open, onOpenChange, onUse, companyFromEma
 
               {/* Quick controls bound to working copy */}
               {working && (
-                <section aria-labelledby="eg-pattern-title" className="space-y-4">
+                <section aria-labelledby="eg-pattern-title" className="space-y-3">
                   <h3 id="eg-pattern-title" className="eyebrow border-b-2 border-border pb-1.5 text-foreground">02 · Pattern & company</h3>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <Field label="Email pattern" htmlFor="eg-pattern">
                       <Select
                         value={working.email_pattern}
@@ -410,7 +410,7 @@ export function EmailGeneratorDialog({ open, onOpenChange, onUse, companyFromEma
                     </Field>
                   )}
 
-                  <div className="flex flex-col gap-3 border-2 border-border bg-muted px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex flex-col gap-2 border-2 border-border bg-muted px-3 py-1.5 sm:flex-row sm:items-center sm:justify-between">
                     <p className="min-w-0 text-sm">
                       <span className="font-mono text-xs font-semibold uppercase tracking-[0.08em]">Live preview · </span>
                       <span className="font-mono text-xs">Ganesh Shinde → </span>
@@ -420,105 +420,98 @@ export function EmailGeneratorDialog({ open, onOpenChange, onUse, companyFromEma
                       <span className="font-mono text-xs text-muted-foreground">
                         {Object.values(working.rules).filter(Boolean).length}/{RULE_LIBRARY.length} rules on · {working.custom_rules.length} custom
                       </span>
-                      <Button variant="outline" size="sm" onClick={() => { setEditing({ ...working }); setEditorOpen(true); }}>
+                      <Button variant="outline" size="sm" className="h-8" onClick={() => { setEditing({ ...working }); setEditorOpen(true); }}>
                         <Settings2 aria-hidden /> Rules
                       </Button>
                     </div>
                   </div>
 
-                  <div className="space-y-3 border-2 border-dashed border-border p-3">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold">Find sample emails from databases</p>
-                        <p className="text-xs text-muted-foreground">
-                          Hunter, Snov, GetProspect, Clearout, Skrapp, Findymail & more — API keys in .env when set
-                          {(finderStatus.data?.filter((p) => p.configured).length ?? 0) > 0
+                  <div className="space-y-2 border-2 border-dashed border-border px-3 py-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p
+                        className="min-w-0 text-sm font-semibold"
+                        title={`Hunter, Snov, GetProspect, Clearout, Skrapp, Findymail & more — API keys in .env when set${
+                          (finderStatus.data?.filter((p) => p.configured).length ?? 0) > 0
                             ? ` · ${finderStatus.data!.filter((p) => p.configured).length} API ready`
-                            : " · no API keys yet (web links still work)"}
-                        </p>
-                      </div>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="secondary"
-                        className="shrink-0"
-                        disabled={findEmails.isPending || !working.company_domain.trim()}
-                        onClick={() => findEmails.mutate()}
+                            : " · no API keys yet (web links still work)"
+                        }`}
                       >
-                        {findEmails.isPending ? (
-                          <><Loader2 className="animate-spin" aria-hidden /> Searching…</>
-                        ) : (
-                          <><Search aria-hidden /> Search databases</>
-                        )}
-                      </Button>
-                    </div>
-
-                    <div className="space-y-2">
-                      <p className="eyebrow">Search</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {EMAIL_FIND_PROVIDERS.map((p) => {
-                          const st = finderStatus.data?.find((x) => x.id === p.id);
-                          const run = finderMeta?.providers.find((x) => x.provider === p.id);
-                          const openProvider = () => {
-                            const domainHint = (finderMeta?.domain || working.company_domain.trim() || "allen.in")
-                              .toLowerCase()
-                              .replace(/^https?:\/\//, "")
-                              .split("/")[0]!;
-                            const domain = domainHint.includes(".")
-                              ? domainHint
-                              : `${domainHint.replace(/[^a-z0-9]+/g, "")}.com`;
-                            window.open(run?.webUrl || p.webSearchUrl(domain), "_blank", "noopener,noreferrer");
-                          };
-                          return (
-                            <button
-                              key={p.id}
-                              type="button"
-                              title={st?.configured ? `${p.name} API ready` : p.freeNote}
-                              className={cn(
-                                "inline-flex h-8 cursor-pointer items-center gap-1.5 border-2 border-border px-2 text-xs font-semibold transition-colors hover:bg-accent",
-                                st?.configured ? "bg-success-subtle text-foreground" : "bg-card text-muted-foreground",
-                              )}
-                              onClick={openProvider}
-                            >
-                              {st?.configured && <Check className="h-3.5 w-3.5" aria-hidden />}
-                              {p.name}
-                              {st?.configured && <span className="sr-only"> (API ready)</span>}
-                              {run && run.count > 0 ? <span className="font-mono"> · {run.count}</span> : ""}
-                              <ExternalLink className="h-3.5 w-3.5 opacity-60" aria-hidden />
-                              <span className="sr-only"> (opens in new tab)</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <p className="eyebrow pt-1">Verify</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {EMAIL_VERIFY_PROVIDERS.map((p) => {
-                          const openProvider = () => {
-                            const domainHint = (finderMeta?.domain || working.company_domain.trim() || "")
-                              .toLowerCase()
-                              .replace(/^https?:\/\//, "")
-                              .split("/")[0]!;
-                            const domain = domainHint.includes(".")
-                              ? domainHint
-                              : domainHint
-                                ? `${domainHint.replace(/[^a-z0-9]+/g, "")}.com`
-                                : "";
-                            window.open(p.webSearchUrl(domain), "_blank", "noopener,noreferrer");
-                          };
-                          return (
-                            <button
-                              key={p.id}
-                              type="button"
-                              title={p.freeNote}
-                              className="inline-flex h-8 cursor-pointer items-center gap-1.5 border-2 border-border bg-card px-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent"
-                              onClick={openProvider}
-                            >
-                              {p.name}
-                              <ExternalLink className="h-3.5 w-3.5 opacity-60" aria-hidden />
-                              <span className="sr-only"> (opens in new tab)</span>
-                            </button>
-                          );
-                        })}
+                        Find sample emails
+                        <span className="ml-2 font-mono text-xs font-normal text-muted-foreground">
+                          {(finderStatus.data?.filter((p) => p.configured).length ?? 0) > 0
+                            ? `${finderStatus.data!.filter((p) => p.configured).length} API ready`
+                            : "web links"}
+                        </span>
+                      </p>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button type="button" size="sm" variant="outline" className="h-8">
+                              <ExternalLink aria-hidden /> Providers <ChevronDown aria-hidden />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="max-h-80 w-60 overflow-y-auto">
+                            <p className="eyebrow px-2 py-1.5">Search · opens in new tab</p>
+                            {EMAIL_FIND_PROVIDERS.map((p) => {
+                              const st = finderStatus.data?.find((x) => x.id === p.id);
+                              const run = finderMeta?.providers.find((x) => x.provider === p.id);
+                              const openProvider = () => {
+                                const domainHint = (finderMeta?.domain || working.company_domain.trim() || "allen.in")
+                                  .toLowerCase()
+                                  .replace(/^https?:\/\//, "")
+                                  .split("/")[0]!;
+                                const domain = domainHint.includes(".")
+                                  ? domainHint
+                                  : `${domainHint.replace(/[^a-z0-9]+/g, "")}.com`;
+                                window.open(run?.webUrl || p.webSearchUrl(domain), "_blank", "noopener,noreferrer");
+                              };
+                              return (
+                                <DropdownMenuItem key={p.id} onSelect={openProvider} title={st?.configured ? `${p.name} API ready` : p.freeNote}>
+                                  {st?.configured ? <Check aria-hidden /> : <ExternalLink className="opacity-50" aria-hidden />}
+                                  <span className="flex-1">{p.name}</span>
+                                  {st?.configured && <span className="sr-only"> (API ready)</span>}
+                                  {run && run.count > 0 && <span className="font-mono text-xs">{run.count}</span>}
+                                </DropdownMenuItem>
+                              );
+                            })}
+                            <DropdownMenuSeparator />
+                            <p className="eyebrow px-2 py-1.5">Verify · opens in new tab</p>
+                            {EMAIL_VERIFY_PROVIDERS.map((p) => {
+                              const openProvider = () => {
+                                const domainHint = (finderMeta?.domain || working.company_domain.trim() || "")
+                                  .toLowerCase()
+                                  .replace(/^https?:\/\//, "")
+                                  .split("/")[0]!;
+                                const domain = domainHint.includes(".")
+                                  ? domainHint
+                                  : domainHint
+                                    ? `${domainHint.replace(/[^a-z0-9]+/g, "")}.com`
+                                    : "";
+                                window.open(p.webSearchUrl(domain), "_blank", "noopener,noreferrer");
+                              };
+                              return (
+                                <DropdownMenuItem key={p.id} onSelect={openProvider} title={p.freeNote}>
+                                  <ExternalLink className="opacity-50" aria-hidden />
+                                  <span className="flex-1">{p.name}</span>
+                                </DropdownMenuItem>
+                              );
+                            })}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          className="h-8"
+                          disabled={findEmails.isPending || !working.company_domain.trim()}
+                          onClick={() => findEmails.mutate()}
+                        >
+                          {findEmails.isPending ? (
+                            <><Loader2 className="animate-spin" aria-hidden /> Searching…</>
+                          ) : (
+                            <><Search aria-hidden /> Search databases</>
+                          )}
+                        </Button>
                       </div>
                     </div>
 
@@ -555,7 +548,7 @@ export function EmailGeneratorDialog({ open, onOpenChange, onUse, companyFromEma
                 </section>
               )}
 
-              <section aria-labelledby="eg-data-title" className="shrink-0 space-y-2">
+              <section aria-labelledby="eg-data-title" className="flex min-h-36 flex-1 flex-col gap-2">
                 <div className="flex items-baseline justify-between gap-2 border-b-2 border-border pb-1.5">
                   <h3 id="eg-data-title" className="eyebrow text-foreground"><label htmlFor="eg-data">03 · Data</label></h3>
                   <span className="font-mono text-xs text-muted-foreground tabular-nums">{totalLines} non-empty lines</span>
@@ -565,7 +558,7 @@ export function EmailGeneratorDialog({ open, onOpenChange, onUse, companyFromEma
                   value={data}
                   onChange={(e) => setData(e.target.value)}
                   placeholder="Paste LinkedIn search results, employee list, Excel data, CSV, or any text…"
-                  className="min-h-40 font-mono text-xs"
+                  className="min-h-28 flex-1 resize-none font-mono text-xs"
                 />
               </section>
 
@@ -576,7 +569,7 @@ export function EmailGeneratorDialog({ open, onOpenChange, onUse, companyFromEma
                   aria-expanded={advancedOpen}
                   aria-controls="eg-advanced"
                   onClick={() => setAdvancedOpen((v) => !v)}
-                  className="flex h-10 w-full cursor-pointer items-center justify-between gap-2 px-3 font-mono text-xs font-semibold uppercase tracking-[0.08em] hover:bg-accent"
+                  className="flex h-9 w-full cursor-pointer items-center justify-between gap-2 px-3 font-mono text-xs font-semibold uppercase tracking-[0.08em] hover:bg-accent"
                 >
                   <span>Advanced · generated prompt</span>
                   <ChevronDown className={cn("h-4 w-4 shrink-0 transition-transform", advancedOpen && "rotate-180")} aria-hidden />
@@ -697,7 +690,7 @@ export function EmailGeneratorDialog({ open, onOpenChange, onUse, companyFromEma
             </div>
           </div>
 
-          <DialogFooter className="gap-2 border-t-2 border-border px-5 py-3 sm:space-x-0 sm:px-6">
+          <DialogFooter className="gap-2 border-b-2 border-border px-5 py-3 sm:space-x-0 sm:px-6">
             <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
             <Button
               disabled={emails.length === 0}
@@ -919,7 +912,7 @@ function TemplateEditorDialog({
           </fieldset>
         </div>
 
-        <DialogFooter className="gap-2 border-t-2 border-border px-5 py-3 sm:space-x-0 sm:px-6">
+        <DialogFooter className="gap-2 border-b-2 border-border px-5 py-3 sm:space-x-0 sm:px-6">
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button disabled={saving || !t.name.trim()} onClick={() => onSave(t)}>
             {saving ? <><Loader2 className="animate-spin" aria-hidden /> Saving…</> : "Save"}

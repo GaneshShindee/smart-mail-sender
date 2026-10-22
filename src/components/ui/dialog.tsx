@@ -54,13 +54,17 @@ const DialogContent = React.forwardRef<
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
 const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("flex flex-col space-y-1.5 text-center sm:text-left", className)} {...props} />
+  <div className={cn("order-first flex flex-col space-y-1.5 text-left", className)} {...props} />
 );
 DialogHeader.displayName = "DialogHeader";
 
 const DialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
-    className={cn("flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2", className)}
+    // Actions live at the TOP of every dialog: CSS order places the footer right under the header.
+    className={cn(
+      "sticky top-0 z-10 order-[-1] flex flex-row flex-wrap items-center justify-end gap-2 border-b-2 border-border bg-card pb-4 pt-1",
+      className,
+    )}
     {...props}
   />
 );
