@@ -5,21 +5,33 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Signal design system — Smart Email Sender
- * Calm graphite · crisp mint · Linear-tight rhythm
+ * POSTAL BRUTALISM — Smart Email Sender design system
+ * ------------------------------------------------------------------
+ * Paper + ink. 2px ink borders, hard offset shadows (never blurred),
+ * square corners, postage-yellow actions, airmail red/blue accents.
+ *
+ * Type:    Archivo Expanded (display) · Archivo (UI) · JetBrains Mono (labels, data)
+ *          xs 12 · sm 14 · base 16 · lg 18 · xl 20 · 2xl 24 · display clamp(2rem→3.5rem)
+ * Border:  2px ink (structure) · 1px ink/20 (row rules inside tables & lists)
+ * Shadow:  --shadow-brutal-sm 2px · --shadow-brutal 4px · --shadow-brutal-lg 8px
+ * Motion:  120–160ms; hover lifts (-2px), active presses flat. Reduced motion respected.
+ * Status:  success · warning · info · destructive — solid pastel "-subtle" + ink text
  */
 
 @theme inline {
-  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Archivo", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Archivo", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --radius-2xl: calc(var(--radius) + 8px);
-  --radius-3xl: calc(var(--radius) + 12px);
-  --radius-4xl: calc(var(--radius) + 16px);
+  /* Square by design. `rounded-full` is still available for pills/avatars. */
+  --radius-xs: 0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-2xl: 0px;
+  --radius-3xl: 0px;
+  --radius-4xl: 0px;
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -37,6 +49,20 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-subtle: var(--destructive-subtle);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-success-subtle: var(--success-subtle);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning-subtle: var(--warning-subtle);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-info-subtle: var(--info-subtle);
+  --color-highlight: var(--highlight);
+  --color-highlight-subtle: var(--highlight-subtle);
+  --color-ink: var(--ink);
+  --color-paper: var(--paper);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -54,83 +80,140 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  --shadow-brutal-sm: 2px 2px 0 0 var(--shadow-ink);
+  --shadow-brutal: 4px 4px 0 0 var(--shadow-ink);
+  --shadow-brutal-lg: 8px 8px 0 0 var(--shadow-ink);
 }
 
+/* ── Light: "Paper" (default) ─────────────────────────────────────── */
 :root {
-  --radius: 0.875rem;
-  --background: oklch(0.985 0.004 220);
-  --foreground: oklch(0.22 0.02 250);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.22 0.02 250);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.22 0.02 250);
-  --primary: oklch(0.5 0.11 185);
-  --primary-foreground: oklch(0.99 0.01 185);
-  --secondary: oklch(0.955 0.008 220);
-  --secondary-foreground: oklch(0.3 0.02 250);
-  --muted: oklch(0.96 0.006 220);
-  --muted-foreground: oklch(0.5 0.02 250);
-  --accent: oklch(0.95 0.03 185);
-  --accent-foreground: oklch(0.32 0.07 185);
-  --destructive: oklch(0.55 0.2 25);
-  --destructive-foreground: oklch(0.99 0 0);
-  --border: oklch(0.91 0.01 230);
-  --input: oklch(0.91 0.01 230);
-  --ring: oklch(0.5 0.11 185);
-  --chart-1: oklch(0.55 0.12 185);
-  --chart-2: oklch(0.62 0.12 150);
-  --chart-3: oklch(0.7 0.12 80);
-  --chart-4: oklch(0.58 0.1 250);
-  --chart-5: oklch(0.62 0.14 30);
-  --sidebar: oklch(0.99 0.003 220);
-  --sidebar-foreground: oklch(0.32 0.02 250);
-  --sidebar-primary: oklch(0.5 0.11 185);
-  --sidebar-primary-foreground: oklch(0.99 0.01 185);
-  --sidebar-accent: oklch(0.94 0.03 185);
-  --sidebar-accent-foreground: oklch(0.3 0.07 185);
-  --sidebar-border: oklch(0.92 0.01 230);
-  --sidebar-ring: oklch(0.5 0.11 185);
-  --surface-glow: oklch(0.72 0.08 185 / 12%);
-  --shadow-soft: 0 1px 2px oklch(0.4 0.02 250 / 4%), 0 8px 24px -12px oklch(0.35 0.03 250 / 12%);
-  --shadow-lift: 0 4px 16px -6px oklch(0.35 0.04 185 / 18%);
+  --radius: 0px;
+  --ink: oklch(0.18 0.012 85);
+  --paper: oklch(0.958 0.02 92);
+  --shadow-ink: var(--ink);
+
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --card: oklch(0.993 0.007 92);
+  --card-foreground: var(--ink);
+  --popover: oklch(0.993 0.007 92);
+  --popover-foreground: var(--ink);
+
+  /* Postage yellow — primary actions. Always paired with ink text. */
+  --primary: oklch(0.88 0.17 96);
+  --primary-foreground: var(--ink);
+  /* Inverted ink block — secondary emphasis. */
+  --secondary: var(--ink);
+  --secondary-foreground: var(--paper);
+  --muted: oklch(0.915 0.02 90);
+  --muted-foreground: oklch(0.42 0.018 85);
+  --accent: oklch(0.94 0.075 96);
+  --accent-foreground: var(--ink);
+
+  /* Airmail red */
+  --destructive: oklch(0.585 0.205 29);
+  --destructive-foreground: oklch(0.99 0.005 92);
+  --destructive-subtle: oklch(0.88 0.075 30);
+  --success: oklch(0.5 0.13 152);
+  --success-foreground: oklch(0.99 0.005 92);
+  --success-subtle: oklch(0.88 0.1 152);
+  --warning: oklch(0.55 0.13 62);
+  --warning-foreground: var(--ink);
+  --warning-subtle: oklch(0.9 0.1 78);
+  /* Airmail blue */
+  --info: oklch(0.47 0.2 266);
+  --info-foreground: oklch(0.99 0.005 92);
+  --info-subtle: oklch(0.87 0.07 266);
+  /* Stamp pink — tertiary accent for variety */
+  --highlight: oklch(0.6 0.19 350);
+  --highlight-subtle: oklch(0.88 0.08 350);
+
+  --border: var(--ink);
+  --input: var(--ink);
+  --ring: var(--info);
+
+  --chart-1: oklch(0.47 0.2 266);
+  --chart-2: oklch(0.585 0.205 29);
+  --chart-3: oklch(0.78 0.16 90);
+  --chart-4: oklch(0.55 0.13 152);
+  --chart-5: oklch(0.6 0.19 350);
+
+  /* Inverted ink rail */
+  --sidebar: var(--ink);
+  --sidebar-foreground: oklch(0.93 0.02 92);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--ink);
+  --sidebar-accent: oklch(0.27 0.012 85);
+  --sidebar-accent-foreground: oklch(0.98 0.01 92);
+  --sidebar-border: oklch(0.32 0.012 85);
+  --sidebar-ring: var(--primary);
+
+  /* Legacy aliases (kept so older markup keeps rendering correctly) */
+  --surface-glow: transparent;
+  --shadow-soft: 4px 4px 0 0 var(--shadow-ink);
+  --shadow-lift: 8px 8px 0 0 var(--shadow-ink);
 }
 
+/* ── Dark: "Night shift" ──────────────────────────────────────────── */
 .dark {
-  --background: oklch(0.155 0.015 250);
-  --foreground: oklch(0.95 0.008 220);
-  --card: oklch(0.195 0.018 250);
-  --card-foreground: oklch(0.95 0.008 220);
-  --popover: oklch(0.2 0.018 250);
-  --popover-foreground: oklch(0.95 0.008 220);
-  --primary: oklch(0.76 0.12 175);
-  --primary-foreground: oklch(0.16 0.03 200);
-  --secondary: oklch(0.24 0.018 250);
-  --secondary-foreground: oklch(0.92 0.008 220);
-  --muted: oklch(0.23 0.016 250);
-  --muted-foreground: oklch(0.68 0.02 230);
-  --accent: oklch(0.26 0.035 185);
-  --accent-foreground: oklch(0.88 0.05 175);
-  --destructive: oklch(0.62 0.19 25);
-  --destructive-foreground: oklch(0.98 0 0);
-  --border: oklch(1 0 0 / 8%);
-  --input: oklch(1 0 0 / 10%);
-  --ring: oklch(0.76 0.12 175);
-  --chart-1: oklch(0.76 0.12 175);
-  --chart-2: oklch(0.7 0.12 150);
-  --chart-3: oklch(0.76 0.1 80);
-  --chart-4: oklch(0.65 0.1 250);
-  --chart-5: oklch(0.68 0.14 30);
-  --sidebar: oklch(0.14 0.014 250);
-  --sidebar-foreground: oklch(0.9 0.008 220);
-  --sidebar-primary: oklch(0.76 0.12 175);
-  --sidebar-primary-foreground: oklch(0.16 0.03 200);
-  --sidebar-accent: oklch(0.24 0.04 185);
-  --sidebar-accent-foreground: oklch(0.9 0.05 175);
-  --sidebar-border: oklch(1 0 0 / 7%);
-  --sidebar-ring: oklch(0.76 0.12 175);
-  --surface-glow: oklch(0.7 0.1 175 / 10%);
-  --shadow-soft: 0 1px 0 oklch(1 0 0 / 4%), 0 10px 28px -14px oklch(0 0 0 / 55%);
-  --shadow-lift: 0 10px 30px -12px oklch(0.5 0.08 175 / 22%);
+  --ink: oklch(0.9 0.018 92);
+  --paper: oklch(0.17 0.01 85);
+  --shadow-ink: oklch(0.9 0.018 92 / 0.9);
+
+  --background: var(--paper);
+  --foreground: oklch(0.95 0.015 92);
+  --card: oklch(0.215 0.01 85);
+  --card-foreground: oklch(0.95 0.015 92);
+  --popover: oklch(0.215 0.01 85);
+  --popover-foreground: oklch(0.95 0.015 92);
+
+  --primary: oklch(0.88 0.17 96);
+  --primary-foreground: oklch(0.18 0.012 85);
+  --secondary: oklch(0.9 0.018 92);
+  --secondary-foreground: oklch(0.18 0.012 85);
+  --muted: oklch(0.26 0.01 85);
+  --muted-foreground: oklch(0.76 0.018 88);
+  --accent: oklch(0.33 0.06 96);
+  --accent-foreground: oklch(0.97 0.02 96);
+
+  --destructive: oklch(0.68 0.19 29);
+  --destructive-foreground: oklch(0.15 0.01 85);
+  --destructive-subtle: oklch(0.38 0.1 29);
+  --success: oklch(0.78 0.15 152);
+  --success-foreground: oklch(0.15 0.01 85);
+  --success-subtle: oklch(0.36 0.08 152);
+  --warning: oklch(0.83 0.13 78);
+  --warning-foreground: oklch(0.15 0.01 85);
+  --warning-subtle: oklch(0.38 0.07 78);
+  --info: oklch(0.74 0.13 266);
+  --info-foreground: oklch(0.15 0.01 85);
+  --info-subtle: oklch(0.34 0.1 266);
+  --highlight: oklch(0.76 0.15 350);
+  --highlight-subtle: oklch(0.36 0.1 350);
+
+  --border: oklch(0.9 0.018 92);
+  --input: oklch(0.9 0.018 92);
+  --ring: oklch(0.88 0.17 96);
+
+  --chart-1: oklch(0.74 0.13 266);
+  --chart-2: oklch(0.68 0.19 29);
+  --chart-3: oklch(0.88 0.17 96);
+  --chart-4: oklch(0.78 0.15 152);
+  --chart-5: oklch(0.76 0.15 350);
+
+  --sidebar: oklch(0.12 0.008 85);
+  --sidebar-foreground: oklch(0.93 0.02 92);
+  --sidebar-primary: oklch(0.88 0.17 96);
+  --sidebar-primary-foreground: oklch(0.18 0.012 85);
+  --sidebar-accent: oklch(0.22 0.01 85);
+  --sidebar-accent-foreground: oklch(0.98 0.01 92);
+  --sidebar-border: oklch(0.3 0.01 85);
+  --sidebar-ring: oklch(0.88 0.17 96);
+
+  --surface-glow: transparent;
+  --shadow-soft: 4px 4px 0 0 var(--shadow-ink);
+  --shadow-lift: 8px 8px 0 0 var(--shadow-ink);
 }
 
 @layer base {
@@ -141,6 +224,11 @@
   html {
     scroll-behavior: smooth;
     font-size: 16px;
+    color-scheme: light;
+  }
+
+  html.dark {
+    color-scheme: dark;
   }
 
   body {
@@ -151,84 +239,230 @@
     line-height: 1.55;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    letter-spacing: -0.011em;
   }
 
   h1,
   h2,
   h3 {
     font-family: var(--font-display);
-    letter-spacing: -0.025em;
-    font-weight: 600;
+    letter-spacing: -0.015em;
+    font-weight: 700;
+  }
+
+  /* One focus style for everything: a thick airmail-blue (yellow in dark) outline. */
+  :focus-visible {
+    outline: 3px solid var(--ring);
+    outline-offset: 2px;
   }
 
   ::selection {
-    background: color-mix(in oklab, var(--primary) 28%, transparent);
+    background: var(--primary);
+    color: var(--primary-foreground);
+  }
+
+  /* Sonner toasts (incl. richColors) — square, ink-bordered, hard shadow. */
+  [data-sonner-toaster] [data-sonner-toast] {
+    border-radius: 0 !important;
+    border-width: 2px !important;
+    border-color: var(--border) !important;
+    box-shadow: var(--shadow-brutal) !important;
+    font-family: var(--font-sans);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
 
 @layer utilities {
-  .orbit-mesh {
-    background-color: var(--background);
-    background-image:
-      radial-gradient(ellipse 70% 50% at 0% 0%, var(--surface-glow), transparent 55%),
-      radial-gradient(ellipse 50% 40% at 100% 0%, oklch(0.65 0.06 250 / 6%), transparent 50%);
+  /* ── Typography ─────────────────────────────────────────────────── */
+
+  /* Archivo at 125% width, black weight: the signature display face. */
+  .font-expanded {
+    font-family: var(--font-display);
+    font-stretch: 125%;
+    font-weight: 800;
+    letter-spacing: -0.02em;
   }
 
-  .glass-header {
-    background: color-mix(in oklab, var(--background) 78%, transparent);
-    backdrop-filter: blur(12px) saturate(1.1);
-    -webkit-backdrop-filter: blur(12px) saturate(1.1);
-  }
-
-  .surface-elevated {
-    box-shadow: var(--shadow-soft);
-  }
-
-  .surface-lift {
-    box-shadow: var(--shadow-lift);
-  }
-
-  .transition-orbit {
-    transition-property: color, background-color, border-color, box-shadow, transform, opacity;
-    transition-duration: 180ms;
-    transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
-  }
-
-  .pressable:active {
-    transform: scale(0.98);
+  .display-xl {
+    font-family: var(--font-display);
+    font-stretch: 125%;
+    font-weight: 900;
+    font-size: clamp(2.5rem, 7vw, 5.5rem);
+    line-height: 0.92;
+    letter-spacing: -0.03em;
   }
 
   .page-title {
-    font-size: clamp(1.25rem, 4vw, 1.625rem);
-    line-height: 1.25;
-    font-weight: 600;
+    font-family: var(--font-display);
+    font-stretch: 125%;
+    font-weight: 800;
+    font-size: clamp(1.5rem, 3.6vw, 2.25rem);
+    line-height: 0.98;
     letter-spacing: -0.025em;
     overflow-wrap: anywhere;
   }
 
   .page-subtitle {
-    margin-top: 0.3rem;
+    margin-top: 0.5rem;
     font-size: 0.9375rem;
+    line-height: 1.5;
     color: var(--muted-foreground);
+    max-width: 60ch;
+  }
+
+  /* Mono uppercase label — section labels, table headers, metadata. */
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    line-height: 1rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+
+  .tabular {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── Surfaces ───────────────────────────────────────────────────── */
+
+  /* A bordered, hard-shadowed block. The basic brutal "object". */
+  .brutal {
+    border: 2px solid var(--border);
+    box-shadow: var(--shadow-brutal);
+  }
+
+  .brutal-sm {
+    border: 2px solid var(--border);
+    box-shadow: var(--shadow-brutal-sm);
+  }
+
+  /* Interactive object: lifts on hover, presses flat on click. */
+  .brutal-press {
+    transition:
+      transform 140ms cubic-bezier(0.2, 0.9, 0.3, 1.2),
+      box-shadow 140ms cubic-bezier(0.2, 0.9, 0.3, 1.2),
+      background-color 140ms ease;
+  }
+  .brutal-press:hover:not(:disabled):not([aria-disabled="true"]) {
+    transform: translate(-2px, -2px);
+    box-shadow: 6px 6px 0 0 var(--shadow-ink);
+  }
+  .brutal-press:active:not(:disabled):not([aria-disabled="true"]) {
+    transform: translate(3px, 3px);
+    box-shadow: 0 0 0 0 var(--shadow-ink);
+  }
+
+  /* App canvas: paper with a faint graph-paper dot grid. (Legacy name kept.) */
+  .orbit-mesh {
+    background-color: var(--background);
+    background-image: radial-gradient(
+      color-mix(in oklab, var(--foreground) 11%, transparent) 1px,
+      transparent 1.2px
+    );
+    background-size: 20px 20px;
+  }
+
+  .orbit-dots {
+    background-image: radial-gradient(
+      color-mix(in oklab, var(--foreground) 16%, transparent) 1px,
+      transparent 1.2px
+    );
+    background-size: 20px 20px;
+  }
+
+  /* Solid bar — no glass. (Legacy name kept.) */
+  .glass-header {
+    background: var(--background);
+  }
+
+  .surface-elevated {
+    box-shadow: var(--shadow-brutal);
+  }
+
+  .surface-lift {
+    box-shadow: var(--shadow-brutal-lg);
+  }
+
+  /* Airmail stripe: the brand motif. Use as a thin band, never a background. */
+  .airmail {
+    background-image: repeating-linear-gradient(
+      -45deg,
+      var(--destructive) 0 10px,
+      var(--paper) 10px 20px,
+      var(--info) 20px 30px,
+      var(--paper) 30px 40px
+    );
+  }
+
+  /* Hazard stripes: loading skeletons ("under construction"). */
+  .hazard {
+    background-color: var(--muted);
+    background-image: repeating-linear-gradient(
+      -45deg,
+      color-mix(in oklab, var(--foreground) 7%, transparent) 0 8px,
+      transparent 8px 16px
+    );
+    background-size: 200% 100%;
+    animation: hazard-slide 1.6s linear infinite;
+  }
+
+  /* Rubber stamp: rotated, double-ruled mono label. */
+  .stamp {
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+    border: 2px solid currentColor;
+    outline: 1px solid currentColor;
+    outline-offset: 2px;
+    transform: rotate(-4deg);
+  }
+
+  /* Perforated postage-stamp edge (for brand marks). */
+  .perforated {
+    -webkit-mask:
+      radial-gradient(circle 3px at 3px 50%, transparent 98%, #000) -3px 0 / 100% 10px repeat-y,
+      radial-gradient(circle 3px at 50% 3px, transparent 98%, #000) 0 -3px / 10px 100% repeat-x;
+    -webkit-mask-composite: source-in;
+    mask:
+      radial-gradient(circle 3px at 3px 50%, transparent 98%, #000) -3px 0 / 100% 10px repeat-y,
+      radial-gradient(circle 3px at 50% 3px, transparent 98%, #000) 0 -3px / 10px 100% repeat-x;
+    mask-composite: intersect;
+  }
+
+  /* ── Motion helpers (legacy names kept) ─────────────────────────── */
+
+  .transition-orbit {
+    transition-property: color, background-color, border-color, box-shadow, transform, opacity;
+    transition-duration: 140ms;
+    transition-timing-function: cubic-bezier(0.2, 0.9, 0.3, 1.2);
+  }
+
+  .pressable:active {
+    transform: translate(2px, 2px);
   }
 
   .stat-tile {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
+    align-items: flex-start;
+    justify-content: space-between;
+    text-align: left;
     min-height: 6.25rem;
-    padding: 1rem 0.75rem;
-    gap: 0.4rem;
-  }
-
-  @media (min-width: 640px) {
-    .stat-tile {
-      min-height: 7rem;
-      padding: 1.15rem 0.85rem;
-    }
+    padding: 1rem;
+    gap: 0.5rem;
   }
 
   .safe-top {
@@ -237,6 +471,28 @@
 
   .safe-bottom {
     padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  @keyframes hazard-slide {
+    from {
+      background-position: 0 0;
+    }
+    to {
+      background-position: -45px 0;
+    }
+  }
+
+  @keyframes marquee {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
+  }
+
+  .marquee-track {
+    animation: marquee 32s linear infinite;
   }
 
   @keyframes landing-rise {
@@ -264,11 +520,9 @@
     0%,
     100% {
       opacity: 0.55;
-      transform: scale(1);
     }
     50% {
       opacity: 1;
-      transform: scale(1.08);
     }
   }
 
@@ -282,7 +536,7 @@
   }
 
   .landing-rise {
-    animation: landing-rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: landing-rise 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.1) both;
   }
 
   .landing-rise-delay-1 {
@@ -307,6 +561,161 @@
 
   .landing-bar {
     transform-origin: left;
-    animation: landing-bar 1s cubic-bezier(0.22, 1, 0.36, 1) 0.4s both;
+    animation: landing-bar 0.9s cubic-bezier(0.2, 0.9, 0.3, 1.1) 0.3s both;
+  }
+
+  /* ── Landing motion ─────────────────────────────────────────────── */
+
+  /* Scroll reveal. Content is only hidden once JS adds .js-reveal to <html>,
+     so the page stays fully readable without JavaScript. */
+  .js-reveal .reveal {
+    opacity: 0;
+    transform: translateY(32px);
+    transition:
+      opacity 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.1),
+      transform 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.1);
+    transition-delay: var(--reveal-delay, 0ms);
+  }
+  .js-reveal .reveal.is-visible {
+    opacity: 1;
+    transform: none;
+  }
+  .js-reveal .reveal .landing-bar {
+    animation-play-state: paused;
+  }
+  .js-reveal .reveal.is-visible .landing-bar {
+    animation-play-state: running;
+  }
+
+  @keyframes stamp-thunk {
+    0% {
+      opacity: 0;
+      transform: scale(2.4) rotate(-18deg);
+    }
+    60% {
+      opacity: 1;
+      transform: scale(0.92) rotate(-2deg);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1) rotate(-4deg);
+    }
+  }
+  .stamp-thunk {
+    animation: stamp-thunk 0.55s cubic-bezier(0.2, 0.9, 0.3, 1.3) 0.8s both;
+  }
+
+  @keyframes wipe-in {
+    from {
+      clip-path: inset(0 100% 0 0);
+    }
+    to {
+      clip-path: inset(-12px -12px -12px -12px);
+    }
+  }
+  .wipe-in {
+    animation: wipe-in 0.75s cubic-bezier(0.7, 0, 0.2, 1) 0.45s both;
+  }
+
+  /* One stripe period along the 45° axis = 40px * √2 horizontally. */
+  @keyframes airmail-slide {
+    to {
+      background-position: 56.57px 0;
+    }
+  }
+  .airmail-animated {
+    animation: airmail-slide 1.8s linear infinite;
+  }
+
+  @keyframes wiggle {
+    0%,
+    100% {
+      transform: rotate(0deg);
+    }
+    25% {
+      transform: rotate(-2.5deg);
+    }
+    75% {
+      transform: rotate(2.5deg);
+    }
+  }
+  .hover-wiggle:hover {
+    animation: wiggle 0.5s ease-in-out;
+  }
+
+  @keyframes nudge-x {
+    0%,
+    100% {
+      transform: translateX(0);
+    }
+    50% {
+      transform: translateX(4px);
+    }
+  }
+  .nudge-x {
+    animation: nudge-x 1.2s ease-in-out infinite;
+  }
+
+  @keyframes plane-fly {
+    0% {
+      transform: translate(-12vw, 60px) rotate(10deg);
+      opacity: 0;
+    }
+    8% {
+      opacity: 1;
+    }
+    50% {
+      transform: translate(45vw, -10px) rotate(-4deg);
+    }
+    92% {
+      opacity: 1;
+    }
+    100% {
+      transform: translate(110vw, 40px) rotate(8deg);
+      opacity: 0;
+    }
+  }
+  .plane-fly {
+    animation: plane-fly 11s linear 1.2s infinite both;
+  }
+
+  @keyframes merge-flip {
+    from {
+      opacity: 0;
+      transform: translateY(70%) rotateX(-60deg);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  .merge-flip {
+    animation: merge-flip 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+  }
+
+  /* Envelope travelling along the "route" line on the landing page. */
+  @keyframes route-travel {
+    0% {
+      left: 0;
+    }
+    100% {
+      left: calc(100% - 2.25rem);
+    }
+  }
+  .route-travel {
+    animation: route-travel 6s cubic-bezier(0.65, 0, 0.35, 1) infinite alternate;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .js-reveal .reveal {
+      opacity: 1;
+      transform: none;
+    }
+    .plane-fly {
+      display: none;
+    }
+    .route-travel {
+      animation: none;
+    }
   }
 }

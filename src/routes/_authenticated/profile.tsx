@@ -23,7 +23,6 @@ import {
   type ProfileEntry,
   type ProfileSection,
 } from "@/lib/user-profile";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,7 +33,14 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowDown, ArrowUp, Pencil, Plus, Save, Sparkles, Trash2, UserRound } from "lucide-react";
+import { ArrowDown, ArrowUp, ListPlus, Pencil, Plus, Save, Sparkles, Trash2, UserRound, X } from "lucide-react";
+import { Page, PageHeader } from "@/components/app/page";
+import { SectionCard } from "@/components/app/section-card";
+import { EmptyState } from "@/components/app/empty-state";
+import { ErrorState } from "@/components/app/error-state";
+import { IconButton } from "@/components/app/icon-button";
+import { Field } from "@/components/app/field";
+import { useConfirm } from "@/components/app/confirm-dialog";
 
 export const Route = createFileRoute("/_authenticated/profile")({
   head: () => ({
@@ -57,38 +63,67 @@ function ProfilePage() {
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["full-profile"] });
 
+  const tabs: { value: string; label: string; count?: number }[] = [
+    { value: "personal", label: "Personal" },
+    ...PROFILE_SECTIONS.map((s) => ({
+      value: s as string,
+      label: SECTION_META[s].label,
+      count: (q.data?.entries ?? []).filter((e) => e.section === s).length,
+    })),
+    { value: "import", label: "Import" },
+  ];
+
   return (
-    <div className="mx-auto max-w-5xl space-y-4">
-      <div>
-        <h1 className="page-title flex items-center gap-2">
-          <UserRound className="h-4 w-4 text-primary" /> Your Profile
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          The single source of truth for every AI-generated resume, cover letter and email. AI never invents anything that is not here.
-        </p>
-      </div>
+    <Page>
+      <PageHeader
+        eyebrow="04 · You"
+        title="Your Profile"
+        icon={UserRound}
+        description="The single source of truth for every AI-generated resume, cover letter and email. AI never invents anything that is not here."
+      />
 
       {q.isLoading ? (
-        <div className="space-y-3">
-          <Skeleton className="h-10 w-full" />
-          <Skeleton className="h-64 w-full" />
+        <div className="space-y-5" aria-busy="true" aria-label="Loading profile">
+          <div className="flex gap-1 border-b-2 border-border">
+            {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-11 w-28" />)}
+          </div>
+          <div className="border-2 border-border bg-card p-5 shadow-[var(--shadow-brutal)]">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="space-y-2"><Skeleton className="h-3 w-24" /><Skeleton className="h-10 w-full" /></div>
+              ))}
+            </div>
+          </div>
         </div>
+      ) : q.isError ? (
+        <ErrorState title="Couldn't load your profile" error={q.error} onRetry={() => q.refetch()} retrying={q.isFetching} />
       ) : (
         <Tabs defaultValue="personal">
-          <TabsList className="flex flex-wrap h-auto">
-            <TabsTrigger value="personal">Personal</TabsTrigger>
-            {PROFILE_SECTIONS.map((s) => (
-              <TabsTrigger key={s} value={s}>{SECTION_META[s].label}</TabsTrigger>
-            ))}
-            <TabsTrigger value="import">Import</TabsTrigger>
-          </TabsList>
+          {/* File-folder tabs: one strip that scrolls sideways on narrow screens. */}
+          <div className="-mx-1 overflow-x-auto px-1 pt-1">
+            <TabsList className="h-auto w-max items-end gap-1 border-0 border-b-2 bg-transparent p-0 shadow-none [&>*+*]:border-l-2">
+              {tabs.map((t, i) => (
+                <TabsTrigger
+                  key={t.value}
+                  value={t.value}
+                  className="h-11 border-2 border-b-0 border-border bg-muted px-3 data-[state=active]:h-12"
+                >
+                  <span className="font-mono text-xs opacity-70">{String(i + 1).padStart(2, "0")}</span>
+                  {t.label}
+                  {t.count !== undefined && t.count > 0 && (
+                    <span className="bg-card px-1 font-mono text-xs text-foreground">{t.count}</span>
+                  )}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </div>
 
-          <TabsContent value="personal" className="mt-4">
+          <TabsContent value="personal">
             <PersonalTab details={q.data?.details ?? EMPTY_DETAILS} onSaved={invalidate} />
           </TabsContent>
 
           {PROFILE_SECTIONS.map((s) => (
-            <TabsContent key={s} value={s} className="mt-4">
+            <TabsContent key={s} value={s}>
               <SectionTab
                 section={s}
                 entries={(q.data?.entries ?? []).filter((e) => e.section === s)}
@@ -97,12 +132,12 @@ function ProfilePage() {
             </TabsContent>
           ))}
 
-          <TabsContent value="import" className="mt-4">
+          <TabsContent value="import">
             <ImportTab onImported={invalidate} />
           </TabsContent>
         </Tabs>
       )}
-    </div>
+    </Page>
   );
 }
 
@@ -120,35 +155,38 @@ function PersonalTab({ details, onSaved }: { details: ProfileDetails; onSaved: (
   });
 
   const field = (key: keyof ProfileDetails, label: string, placeholder?: string) => (
-    <div>
-      <Label className="text-xs">{label}</Label>
-      <Input value={form[key]} placeholder={placeholder} onChange={(e) => setForm({ ...form, [key]: e.target.value })} />
-    </div>
+    <Field label={label} htmlFor={`profile-${key}`}>
+      <Input id={`profile-${key}`} value={form[key]} placeholder={placeholder} onChange={(e) => setForm({ ...form, [key]: e.target.value })} />
+    </Field>
   );
 
   return (
-    <Card>
-      <CardHeader className="pb-3"><CardTitle className="text-base">Personal information</CardTitle></CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          {field("first_name", "First name")}
-          {field("last_name", "Last name")}
-          {field("email", "Email")}
-          {field("phone", "Phone")}
-          {field("location", "Location")}
-          {field("linkedin", "LinkedIn")}
-          {field("github", "GitHub")}
-          {field("portfolio", "Portfolio")}
-        </div>
-        <div>
-          <Label className="text-xs">Summary</Label>
-          <Textarea rows={5} value={form.summary} onChange={(e) => setForm({ ...form, summary: e.target.value })} />
-        </div>
-        <Button onClick={() => save.mutate()} disabled={save.isPending}>
-          <Save className="h-4 w-4 mr-1" /> {save.isPending ? "Saving…" : "Save"}
+    <SectionCard
+      title="Personal information"
+      description="Name, contact details and links that head every generated resume."
+      icon={UserRound}
+    >
+      <div className="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2">
+        <p className="eyebrow border-b border-border/20 pb-1.5 md:col-span-2">Identity</p>
+        {field("first_name", "First name")}
+        {field("last_name", "Last name")}
+        {field("email", "Email")}
+        {field("phone", "Phone")}
+        {field("location", "Location")}
+        <p className="eyebrow mt-2 border-b border-border/20 pb-1.5 md:col-span-2">Links</p>
+        {field("linkedin", "LinkedIn")}
+        {field("github", "GitHub")}
+        {field("portfolio", "Portfolio")}
+      </div>
+      <Field label="Summary" htmlFor="profile-summary">
+        <Textarea id="profile-summary" rows={5} value={form.summary} onChange={(e) => setForm({ ...form, summary: e.target.value })} />
+      </Field>
+      <div className="flex justify-end border-t-2 border-border pt-4">
+        <Button onClick={() => save.mutate()} disabled={save.isPending} className="w-full sm:w-auto">
+          <Save aria-hidden /> {save.isPending ? "Saving…" : "Save"}
         </Button>
-      </CardContent>
-    </Card>
+      </div>
+    </SectionCard>
   );
 }
 
@@ -167,6 +205,7 @@ function SectionTab({
   const upsertFn = useServerFn(upsertProfileEntry);
   const delFn = useServerFn(deleteProfileEntry);
   const reorderFn = useServerFn(reorderProfileEntries);
+  const confirm = useConfirm();
   const [editing, setEditing] = useState<ProfileEntry | null>(null);
 
   const sorted = useMemo(() => [...entries].sort((a, b) => a.sort_order - b.sort_order), [entries]);
@@ -215,44 +254,68 @@ function SectionTab({
   };
 
   return (
-    <Card>
-      <CardHeader className="pb-3 flex flex-row items-center justify-between">
-        <CardTitle className="text-base">{meta.label}</CardTitle>
+    <SectionCard
+      title={meta.label}
+      description={`${sorted.length} ${sorted.length === 1 ? "entry" : "entries"} · order here is the order on your resume`}
+      actions={
         <Button size="sm" onClick={() => setEditing(emptyEntry(section))}>
-          <Plus className="h-3.5 w-3.5 mr-1" /> Add {meta.singular}
+          <Plus aria-hidden /> Add {meta.singular}
         </Button>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        {sorted.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-6 text-center">No {meta.label.toLowerCase()} yet.</p>
-        ) : (
-          sorted.map((e, i) => (
-            <div key={e.id} className="rounded-lg border border-border p-3 flex items-start justify-between gap-3">
-              <div className="min-w-0 space-y-1">
-                <div className="font-medium truncate">{e.title || "(untitled)"}</div>
-                {entrySummary(e) && <div className="text-xs text-muted-foreground truncate">{entrySummary(e)}</div>}
-                {e.description && <div className="text-xs text-muted-foreground line-clamp-2">{e.description}</div>}
+      }
+      contentClassName="p-0 sm:p-0"
+    >
+      {sorted.length === 0 ? (
+        <EmptyState
+          framed={false}
+          icon={ListPlus}
+          title={`No ${meta.label.toLowerCase()} yet`}
+          description="Add entries here, or extract them from an existing resume on the Import tab."
+          action={
+            <Button onClick={() => setEditing(emptyEntry(section))}>
+              <Plus aria-hidden /> Add {meta.singular}
+            </Button>
+          }
+        />
+      ) : (
+        <ol className="divide-y divide-border/20">
+          {sorted.map((e, i) => (
+            <li key={e.id} className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-start sm:gap-4 sm:px-5">
+              <span className="hidden w-8 shrink-0 pt-0.5 font-mono text-xs font-bold text-muted-foreground sm:block" aria-hidden>
+                {String(i + 1).padStart(2, "0")}
+              </span>
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <h3 className="font-expanded text-base leading-tight break-words">{e.title || "(untitled)"}</h3>
+                {entrySummary(e) && <p className="font-mono text-xs uppercase tracking-[0.06em] text-muted-foreground">{entrySummary(e)}</p>}
+                {e.description && <p className="text-sm text-muted-foreground line-clamp-2">{e.description}</p>}
                 {e.bullets.length > 0 && (
-                  <ul className="text-xs text-muted-foreground list-disc pl-4">
+                  <ul className="list-disc space-y-0.5 pl-4 text-sm text-muted-foreground marker:text-foreground">
                     {e.bullets.slice(0, 3).map((b, k) => <li key={k} className="truncate">{b}</li>)}
                   </ul>
                 )}
                 {e.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1 pt-1">
-                    {e.tags.slice(0, 12).map((t, k) => <Badge key={k} variant="outline" className="text-[10px]">{t}</Badge>)}
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {e.tags.slice(0, 12).map((t, k) => <Badge key={k} variant="outline">{t}</Badge>)}
                   </div>
                 )}
               </div>
-              <div className="flex shrink-0 gap-1">
-                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => move(i, -1)} disabled={i === 0}><ArrowUp className="h-3.5 w-3.5" /></Button>
-                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => move(i, 1)} disabled={i === sorted.length - 1}><ArrowDown className="h-3.5 w-3.5" /></Button>
-                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditing(e)}><Pencil className="h-3.5 w-3.5" /></Button>
-                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { if (confirm("Delete this entry?")) del.mutate(e.id); }}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
+              <div className="flex shrink-0 gap-1 self-end sm:self-start">
+                <IconButton label={`Move ${e.title || "entry"} up`} onClick={() => move(i, -1)} disabled={i === 0 || reorder.isPending}><ArrowUp aria-hidden /></IconButton>
+                <IconButton label={`Move ${e.title || "entry"} down`} onClick={() => move(i, 1)} disabled={i === sorted.length - 1 || reorder.isPending}><ArrowDown aria-hidden /></IconButton>
+                <IconButton label={`Edit ${e.title || "entry"}`} onClick={() => setEditing(e)}><Pencil aria-hidden /></IconButton>
+                <IconButton
+                  label={`Delete ${e.title || "entry"}`}
+                  className="text-destructive hover:bg-destructive-subtle hover:text-foreground"
+                  onClick={async () => {
+                    if (await confirm({ title: "Delete this entry?", description: e.title ? `"${e.title}" will be removed from your profile.` : undefined, confirmLabel: "Delete entry" })) del.mutate(e.id);
+                  }}
+                >
+                  <Trash2 aria-hidden />
+                </IconButton>
               </div>
-            </div>
-          ))
-        )}
-      </CardContent>
+            </li>
+          ))}
+        </ol>
+      )}
 
       <EntryDialog
         section={section}
@@ -261,7 +324,7 @@ function SectionTab({
         onSave={(e) => save.mutate(e)}
         saving={save.isPending}
       />
-    </Card>
+    </SectionCard>
   );
 }
 
@@ -285,79 +348,75 @@ function EntryDialog({
 
   return (
     <Dialog open={!!entry} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
-        <DialogHeader><DialogTitle>{form.id ? `Edit ${meta.singular}` : `Add ${meta.singular}`}</DialogTitle></DialogHeader>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <p className="eyebrow">{meta.label}</p>
+          <DialogTitle>{form.id ? `Edit ${meta.singular}` : `Add ${meta.singular}`}</DialogTitle>
+        </DialogHeader>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {has("title") && (
-            <div className="md:col-span-2">
-              <Label className="text-xs">{meta.titleLabel}</Label>
-              <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
-            </div>
+            <Field label={meta.titleLabel} htmlFor="entry-title" className="md:col-span-2">
+              <Input id="entry-title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+            </Field>
           )}
           {has("subtitle") && (
-            <div>
-              <Label className="text-xs">{meta.subtitleLabel ?? "Subtitle"}</Label>
-              <Input value={form.subtitle} onChange={(e) => setForm({ ...form, subtitle: e.target.value })} />
-            </div>
+            <Field label={meta.subtitleLabel ?? "Subtitle"} htmlFor="entry-subtitle">
+              <Input id="entry-subtitle" value={form.subtitle} onChange={(e) => setForm({ ...form, subtitle: e.target.value })} />
+            </Field>
           )}
           {has("location") && (
-            <div>
-              <Label className="text-xs">Location</Label>
-              <Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
-            </div>
+            <Field label="Location" htmlFor="entry-location">
+              <Input id="entry-location" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
+            </Field>
           )}
           {has("url") && (
-            <div>
-              <Label className="text-xs">Link</Label>
-              <Input value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} />
-            </div>
+            <Field label="Link" htmlFor="entry-url">
+              <Input id="entry-url" value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} />
+            </Field>
           )}
           {has("start_date") && (
-            <div>
-              <Label className="text-xs">Start</Label>
-              <Input placeholder="Jan 2023" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} />
-            </div>
+            <Field label="Start" htmlFor="entry-start">
+              <Input id="entry-start" placeholder="Jan 2023" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} />
+            </Field>
           )}
           {has("end_date") && (
-            <div>
-              <Label className="text-xs">End</Label>
-              <Input placeholder="Dec 2024" value={form.end_date} disabled={form.is_current} onChange={(e) => setForm({ ...form, end_date: e.target.value })} />
-            </div>
+            <Field label="End" htmlFor="entry-end">
+              <Input id="entry-end" placeholder="Dec 2024" value={form.end_date} disabled={form.is_current} onChange={(e) => setForm({ ...form, end_date: e.target.value })} />
+            </Field>
           )}
           {has("is_current") && (
-            <div className="flex items-center gap-2 pt-5">
-              <Switch checked={form.is_current} onCheckedChange={(v) => setForm({ ...form, is_current: v })} />
-              <Label className="text-xs">Currently here</Label>
+            <div className="flex items-center gap-3 self-end border-2 border-border bg-muted px-3 py-2.5">
+              <Switch id="entry-current" checked={form.is_current} onCheckedChange={(v) => setForm({ ...form, is_current: v })} />
+              <Label htmlFor="entry-current" className="cursor-pointer">Currently here</Label>
             </div>
           )}
           {has("description") && (
-            <div className="md:col-span-2">
-              <Label className="text-xs">Description</Label>
-              <Textarea rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-            </div>
+            <Field label="Description" htmlFor="entry-description" className="md:col-span-2">
+              <Textarea id="entry-description" rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+            </Field>
           )}
           {has("bullets") && (
-            <div className="md:col-span-2">
-              <Label className="text-xs">{meta.bulletsLabel ?? "Bullets (one per line)"}</Label>
+            <Field label={meta.bulletsLabel ?? "Bullets (one per line)"} htmlFor="entry-bullets" className="md:col-span-2">
               <Textarea
+                id="entry-bullets"
                 rows={5}
                 value={form.bullets.join("\n")}
                 onChange={(e) => setForm({ ...form, bullets: e.target.value.split("\n").map((x) => x.trim()).filter(Boolean) })}
               />
-            </div>
+            </Field>
           )}
           {has("tags") && (
-            <div className="md:col-span-2">
-              <Label className="text-xs">{meta.tagsLabel ?? "Tags (comma-separated)"}</Label>
+            <Field label={meta.tagsLabel ?? "Tags (comma-separated)"} htmlFor="entry-tags" className="md:col-span-2">
               <Textarea
+                id="entry-tags"
                 rows={2}
                 value={form.tags.join(", ")}
                 onChange={(e) => setForm({ ...form, tags: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) })}
               />
-            </div>
+            </Field>
           )}
         </div>
-        <DialogFooter>
+        <DialogFooter className="gap-2 sm:space-x-0">
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button onClick={() => onSave(form)} disabled={saving || !form.title.trim()}>
             {saving ? "Saving…" : "Save"}
@@ -412,85 +471,115 @@ function ImportTab({ onImported }: { onImported: () => void }) {
     }
   };
 
-  return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader className="pb-3"><CardTitle className="text-base">Import from an existing resume</CardTitle></CardHeader>
-        <CardContent className="space-y-3">
-          {projects.data && projects.data.length > 0 && (
-            <div>
-              <Label className="text-xs">Use a master resume from Resume Studio</Label>
-              <Select value={projectId} onValueChange={setProjectId}>
-                <SelectTrigger><SelectValue placeholder="Select a master resume (optional)" /></SelectTrigger>
-                <SelectContent>
-                  {projects.data.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-          <div>
-            <Label className="text-xs">…or paste your resume text / upload a .tex or .txt file</Label>
-            <Textarea rows={8} value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste your resume here…" />
-            <input
-              type="file"
-              accept=".tex,.txt,.md"
-              className="mt-2 text-xs"
-              onChange={(e) => onFile(e.target.files?.[0] ?? null)}
-            />
-          </div>
-          <Button onClick={() => parse.mutate()} disabled={parse.isPending || (!text.trim() && !projectId)}>
-            <Sparkles className="h-4 w-4 mr-1" /> {parse.isPending ? "Extracting…" : "Extract profile"}
-          </Button>
-          <p className="text-xs text-muted-foreground">Nothing is saved until you review and confirm below.</p>
-        </CardContent>
-      </Card>
+  const draftSections = draft ? Array.from(new Set(draft.entries.map((e) => e.section))) : [];
 
-      {draft && (
-        <Card>
-          <CardHeader className="pb-3"><CardTitle className="text-base">Review extracted profile</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
-            <div className="text-sm">
-              <span className="font-medium">
+  return (
+    <div className="space-y-6">
+      <SectionCard
+        index="01"
+        title="Pick a source"
+        description="A master resume from Resume Studio, pasted text, or a .tex / .txt / .md file."
+      >
+        {projects.isError ? (
+          <div className="flex flex-wrap items-center gap-3 border-2 border-dashed border-destructive px-3 py-2.5 text-sm" role="alert">
+            <span>Couldn't load your Resume Studio resumes.</span>
+            <Button size="sm" variant="outline" onClick={() => projects.refetch()}>Try again</Button>
+          </div>
+        ) : projects.isLoading ? (
+          <div className="space-y-2"><Skeleton className="h-3 w-56" /><Skeleton className="h-10 w-full" /></div>
+        ) : projects.data && projects.data.length > 0 && (
+          <Field label="Use a master resume from Resume Studio" htmlFor="import-project">
+            <Select value={projectId} onValueChange={setProjectId}>
+              <SelectTrigger id="import-project"><SelectValue placeholder="Select a master resume (optional)" /></SelectTrigger>
+              <SelectContent>
+                {projects.data.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </Field>
+        )}
+        <Field label="…or paste your resume text" htmlFor="import-text">
+          <Textarea id="import-text" rows={8} value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste your resume here…" />
+        </Field>
+        <Field label="…or upload a .tex, .txt or .md file" htmlFor="import-file">
+          <input
+            id="import-file"
+            type="file"
+            accept=".tex,.txt,.md"
+            className="block w-full cursor-pointer text-sm text-muted-foreground file:mr-3 file:h-10 file:cursor-pointer file:border-2 file:border-border file:bg-card file:px-4 file:text-sm file:font-semibold file:text-foreground file:shadow-[var(--shadow-brutal-sm)] hover:file:bg-accent"
+            onChange={(e) => onFile(e.target.files?.[0] ?? null)}
+          />
+        </Field>
+        <div className="flex flex-col gap-3 border-t-2 border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-muted-foreground">Nothing is saved until you review and confirm below.</p>
+          <Button onClick={() => parse.mutate()} disabled={parse.isPending || (!text.trim() && !projectId)} className="w-full sm:w-auto">
+            <Sparkles aria-hidden /> {parse.isPending ? "Extracting…" : "Extract profile"}
+          </Button>
+        </div>
+      </SectionCard>
+
+      <SectionCard
+        index="02"
+        title="Review the draft"
+        description={draft ? `${draft.entries.length} entries extracted — remove anything you don't want.` : "Your extracted profile appears here."}
+      >
+        {!draft ? (
+          <p className="border-2 border-dashed border-border/60 px-4 py-8 text-center text-sm text-muted-foreground">
+            {parse.isPending ? "Extracting your profile…" : "Run step 01 to see the extracted profile."}
+          </p>
+        ) : (
+          <>
+            <div className="border-b-2 border-border pb-3">
+              <p className="font-expanded text-lg leading-tight">
                 {[draft.details.first_name, draft.details.last_name].filter(Boolean).join(" ") || "(no name found)"}
-              </span>
-              <div className="text-xs text-muted-foreground">
+              </p>
+              <p className="mt-1 font-mono text-xs text-muted-foreground">
                 {[draft.details.email, draft.details.phone, draft.details.location].filter(Boolean).join(" · ")}
-              </div>
+              </p>
+              {draft.details.summary && <p className="mt-2 text-sm text-muted-foreground">{draft.details.summary}</p>}
             </div>
-            {draft.details.summary && <p className="text-xs text-muted-foreground">{draft.details.summary}</p>}
-            <div className="space-y-2 max-h-72 overflow-auto">
+            <ul className="max-h-96 divide-y divide-border/20 overflow-auto border-2 border-border">
               {draft.entries.map((e, i) => (
-                <div key={i} className="rounded-md border border-border p-2 text-xs">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary" className="text-[10px]">{SECTION_META[e.section].label}</Badge>
-                    <span className="font-medium truncate">{e.title}</span>
+                <li key={i} className="flex flex-col gap-2 px-3 py-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0 space-y-1 text-sm">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="secondary">{SECTION_META[e.section].label}</Badge>
+                      <span className="min-w-0 truncate font-semibold">{e.title}</span>
+                    </div>
+                    {e.subtitle && <div className="text-muted-foreground">{e.subtitle}</div>}
+                    {e.tags.length > 0 && <div className="text-xs text-muted-foreground">{e.tags.join(", ")}</div>}
                   </div>
-                  {e.subtitle && <div className="text-muted-foreground">{e.subtitle}</div>}
-                  {e.tags.length > 0 && <div className="text-muted-foreground">{e.tags.join(", ")}</div>}
                   <Button
                     size="sm"
-                    variant="ghost"
-                    className="h-6 mt-1 px-2 text-[11px]"
+                    variant="outline"
+                    className="self-start"
                     onClick={() => setDraft({ ...draft, entries: draft.entries.filter((_, k) => k !== i) })}
                   >
-                    Remove
+                    <X aria-hidden /> Remove<span className="sr-only"> {e.title}</span>
                   </Button>
-                </div>
+                </li>
               ))}
-            </div>
-            <div className="flex items-center gap-2">
-              <Switch checked={replace} onCheckedChange={setReplace} />
-              <Label className="text-xs">Replace existing entries in the imported sections</Label>
-            </div>
-            <div className="flex gap-2">
-              <Button onClick={() => commit.mutate()} disabled={commit.isPending}>
-                {commit.isPending ? "Saving…" : "Save to profile"}
-              </Button>
-              <Button variant="ghost" onClick={() => setDraft(null)}>Discard</Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+            </ul>
+          </>
+        )}
+      </SectionCard>
+
+      <SectionCard index="03" title="Save to profile" description="Write the reviewed draft into your profile.">
+        <div className="flex items-start gap-3 border-2 border-border bg-muted px-3 py-3">
+          <Switch id="import-replace" checked={replace} onCheckedChange={setReplace} disabled={!draft} />
+          <div className="space-y-1">
+            <Label htmlFor="import-replace" className="cursor-pointer">Replace existing entries in the imported sections</Label>
+            {draft && draftSections.length > 0 && (
+              <p className="text-xs text-muted-foreground">Sections: {draftSections.map((sec) => SECTION_META[sec].label).join(", ")}</p>
+            )}
+          </div>
+        </div>
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button variant="ghost" onClick={() => setDraft(null)} disabled={!draft}>Discard</Button>
+          <Button onClick={() => commit.mutate()} disabled={commit.isPending || !draft}>
+            <Save aria-hidden /> {commit.isPending ? "Saving…" : "Save to profile"}
+          </Button>
+        </div>
+      </SectionCard>
     </div>
   );
 }

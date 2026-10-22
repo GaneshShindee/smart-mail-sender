@@ -8,7 +8,7 @@ import { linkedInCompanySearchUrl } from "@/lib/linkedin";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sparkles, ExternalLink, FileText, Loader2 } from "lucide-react";
@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { Link } from "@tanstack/react-router";
 import { saveSendResumeHandoff } from "@/lib/send-resume-handoff";
 import { getLinkedResumeVersionId, setLinkedResumeVersionId } from "@/lib/job-resume-link";
+import { Field } from "@/components/app/field";
 
 /**
  * "Generate Body Using AI" — customises the SELECTED template (~10% changed,
@@ -175,69 +176,81 @@ export function AiBodyDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !busy && onOpenChange(o)}>
-      <DialogContent className="sm:max-w-2xl max-h-[min(92dvh,900px)] overflow-y-auto">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Sparkles className="h-4 w-4" /> Generate subject & body with AI</DialogTitle>
+          <p className="eyebrow flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5" aria-hidden /> AI writer</p>
+          <DialogTitle>Generate subject & body with AI</DialogTitle>
           <DialogDescription>
             {templateId
               ? "Your selected template keeps its structure, tone and variables — only about 10% is tailored to this role."
               : "Generate a subject and body from the role, company, and full job posting. You can edit before saving."}
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-3">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between gap-2">
-                <Label>Company</Label>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className="h-7 px-2 text-xs"
-                  onClick={openLinkedIn}
-                  disabled={!company.trim()}
-                >
-                  <ExternalLink className="h-3 w-3 mr-1" /> LinkedIn search
-                </Button>
-              </div>
-              <Input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Acme Corp" />
+        <div className="space-y-6">
+          <fieldset className="space-y-4">
+            <legend className="eyebrow mb-3 w-full border-b-2 border-border pb-1.5 text-foreground">01 · The role</legend>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field
+                label="Company"
+                htmlFor="ai-company"
+                action={
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 px-2 text-xs"
+                    onClick={openLinkedIn}
+                    disabled={!company.trim()}
+                  >
+                    <ExternalLink aria-hidden /> LinkedIn search
+                  </Button>
+                }
+              >
+                <Input id="ai-company" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Acme Corp" />
+              </Field>
+              <Field label="Role" htmlFor="ai-role">
+                <Input id="ai-role" value={role} onChange={(e) => setRole(e.target.value)} placeholder="Backend Engineer" />
+              </Field>
             </div>
-            <div>
-              <Label>Role</Label>
-              <Input value={role} onChange={(e) => setRole(e.target.value)} placeholder="Backend Engineer" />
-            </div>
-          </div>
-          <div>
-            <Label>Full job posting</Label>
-            <Textarea
-              rows={6}
-              value={jd}
-              onChange={(e) => setJd(e.target.value)}
-              placeholder="Paste the full posting (skills, location, salary, responsibilities…)…"
-              className="text-xs font-mono"
-            />
-          </div>
-          <div>
-            <Label>Extra instructions (optional)</Label>
-            <Textarea rows={2} value={instructions} onChange={(e) => setInstructions(e.target.value)} placeholder="e.g. Mention my Kubernetes experience in one line" />
-          </div>
+            <Field label="Full job posting" htmlFor="ai-jd">
+              <Textarea
+                id="ai-jd"
+                rows={6}
+                value={jd}
+                onChange={(e) => setJd(e.target.value)}
+                placeholder="Paste the full posting (skills, location, salary, responsibilities…)…"
+                className="text-sm"
+              />
+            </Field>
+            <Field label="Extra instructions (optional)" htmlFor="ai-instructions">
+              <Textarea id="ai-instructions" rows={2} value={instructions} onChange={(e) => setInstructions(e.target.value)} placeholder="e.g. Mention my Kubernetes experience in one line" />
+            </Field>
+          </fieldset>
 
-          <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-2">
-            <div className="text-sm font-medium flex items-center gap-1.5">
-              <FileText className="h-4 w-4" /> Tailor resume for this JD
-            </div>
-            {(projects.data?.length ?? 0) === 0 ? (
-              <p className="text-xs text-muted-foreground">
+          <fieldset className="space-y-3">
+            <legend className="eyebrow mb-3 flex w-full items-center gap-1.5 border-b-2 border-border pb-1.5 text-foreground">
+              <FileText className="h-3.5 w-3.5" aria-hidden /> 02 · Tailor resume for this JD
+            </legend>
+            {projects.isLoading ? (
+              <div className="flex flex-col gap-2 sm:flex-row"><Skeleton className="h-10 w-full sm:flex-1" /><Skeleton className="h-10 w-48" /></div>
+            ) : projects.isError ? (
+              <div className="flex flex-wrap items-center gap-3 border-2 border-dashed border-destructive px-3 py-2.5 text-sm" role="alert">
+                <span>Couldn't load your master resumes.</span>
+                <Button type="button" size="sm" variant="outline" onClick={() => projects.refetch()}>Try again</Button>
+              </div>
+            ) : (projects.data?.length ?? 0) === 0 ? (
+              <p className="text-sm text-muted-foreground">
                 No master resume yet.{" "}
-                <Link to="/resume-studio" className="underline text-foreground" onClick={() => onOpenChange(false)}>
+                <Link to="/resume-studio" className="font-semibold text-foreground underline decoration-2 underline-offset-4" onClick={() => onOpenChange(false)}>
                   Upload one in Resume Studio
                 </Link>
                 .
               </p>
             ) : (
-              <div className="flex flex-col sm:flex-row gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <label htmlFor="ai-master-resume" className="sr-only">Master resume</label>
                 <Select value={masterId} onValueChange={setMasterId}>
-                  <SelectTrigger className="w-full sm:flex-1">
+                  <SelectTrigger id="ai-master-resume" className="w-full sm:flex-1">
                     <SelectValue placeholder="Master resume…" />
                   </SelectTrigger>
                   <SelectContent>
@@ -288,7 +301,7 @@ export function AiBodyDialog({
                     genResume.mutate();
                   }}
                 >
-                  {genResume.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 mr-1" />}
+                  {genResume.isPending ? <Loader2 className="animate-spin" aria-hidden /> : <Sparkles aria-hidden />}
                   {genResume.isPending
                     ? "Generating…"
                     : resumeVersionId || getLinkedResumeVersionId({ jobId, company, role })
@@ -297,19 +310,33 @@ export function AiBodyDialog({
                 </Button>
               </div>
             )}
-          </div>
+          </fieldset>
 
-          {result && (
-            <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2 text-sm">
-              <div><span className="text-muted-foreground text-xs">Subject:</span> {result.subject || "—"}</div>
-              <div className="whitespace-pre-wrap max-h-56 overflow-auto border-t border-border pt-2">{result.body}</div>
-            </div>
+          {(result || run.isPending) && (
+            <section aria-labelledby="ai-result-title" aria-live="polite" className="border-2 border-border bg-card shadow-[var(--shadow-brutal-sm)]">
+              <h3 id="ai-result-title" className="border-b-2 border-border bg-primary px-3 py-1.5 font-mono text-xs font-semibold uppercase tracking-[0.08em] text-primary-foreground">
+                03 · Draft
+              </h3>
+              {run.isPending && !result ? (
+                <div className="space-y-2 p-3" aria-busy="true">
+                  <Skeleton className="h-4 w-2/3" />
+                  <Skeleton className="h-3 w-full" />
+                  <Skeleton className="h-3 w-5/6" />
+                  <Skeleton className="h-3 w-4/6" />
+                </div>
+              ) : result && (
+                <div className="space-y-2 p-3 text-sm">
+                  <p className="font-mono text-xs"><span className="font-semibold uppercase tracking-[0.08em]">Subj · </span>{result.subject || "—"}</p>
+                  <div className="max-h-56 overflow-auto whitespace-pre-wrap border-t border-border/20 pt-2 leading-6">{result.body}</div>
+                </div>
+              )}
+            </section>
           )}
         </div>
-        <DialogFooter className="gap-2 sm:gap-0">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>Cancel</Button>
+        <DialogFooter className="gap-2 sm:space-x-0">
+          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>Cancel</Button>
           <Button variant="outline" onClick={() => run.mutate()} disabled={busy}>
-            <Sparkles className="h-3.5 w-3.5 mr-1" />
+            {run.isPending ? <Loader2 className="animate-spin" aria-hidden /> : <Sparkles aria-hidden />}
             {run.isPending ? "Generating…" : result ? "Regenerate" : "Generate"}
           </Button>
           <Button

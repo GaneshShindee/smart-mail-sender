@@ -4,13 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
 const leftTabs = [
-  { url: "/dashboard", icon: LayoutDashboard },
-  { url: "/jobs", icon: Briefcase },
+  { url: "/dashboard", icon: LayoutDashboard, label: "Home" },
+  { url: "/jobs", icon: Briefcase, label: "Jobs" },
 ] as const;
 
 const rightTabs = [
-  { url: "/history", icon: History },
-  { url: "/resumes", icon: FileText },
+  { url: "/history", icon: History, label: "History" },
+  { url: "/resumes", icon: FileText, label: "Resumes" },
 ] as const;
 
 /** URLs already reachable from the mobile bottom nav — used to avoid duplicating them elsewhere. */
@@ -42,29 +42,36 @@ export function MobileBottomNav() {
   }, []);
 
   const isActive = (url: string) => pathname === url || pathname.startsWith(url + "/");
+  const sendActive = isActive("/send");
 
   return (
     <nav
+      aria-label="Quick navigation"
       className={cn(
-        "md:hidden fixed inset-x-0 bottom-0 z-40 border-t border-border/60 bg-card/95 backdrop-blur-xl safe-bottom transition-transform duration-300 ease-out",
+        "safe-bottom fixed inset-x-0 bottom-0 z-40 border-t-2 border-border bg-background transition-transform duration-300 ease-out md:hidden",
         hidden ? "translate-y-full" : "translate-y-0",
       )}
     >
-      <div className="mx-auto flex max-w-md items-center justify-around gap-1 px-2 py-2.5">
+      <div className="mx-auto grid max-w-md grid-cols-5 items-end px-2 pb-2 pt-1.5">
         {leftTabs.map((t) => (
           <TabLink key={t.url} {...t} active={isActive(t.url)} />
         ))}
 
-        <Link to="/send" aria-label="Send Mail" className="flex items-center justify-center">
+        <Link
+          to="/send"
+          aria-label="Send email"
+          aria-current={sendActive ? "page" : undefined}
+          className="-mt-6 flex flex-col items-center gap-1"
+        >
           <span
             className={cn(
-              "flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold shadow-sm transition-colors text-primary-foreground",
-              isActive("/send") ? "bg-primary" : "bg-primary/90",
+              "brutal-press grid size-14 place-items-center border-2 border-border bg-primary text-primary-foreground shadow-[var(--shadow-brutal)]",
+              sendActive && "bg-secondary text-secondary-foreground",
             )}
           >
-            <Send className="h-4 w-4" strokeWidth={2} />
-            Send Mail
+            <Send className="size-6" strokeWidth={2.4} aria-hidden />
           </span>
+          <span className="font-mono text-xs font-semibold uppercase tracking-wider">Send</span>
         </Link>
 
         {rightTabs.map((t) => (
@@ -78,22 +85,36 @@ export function MobileBottomNav() {
 function TabLink({
   url,
   icon: Icon,
+  label,
   active,
 }: {
   url: string;
   icon: typeof Briefcase;
+  label: string;
   active: boolean;
 }) {
   return (
     <Link
       to={url}
-      aria-label={url.slice(1)}
-      className="flex items-center justify-center px-2 py-2 rounded-lg"
+      aria-current={active ? "page" : undefined}
+      className="flex flex-col items-center gap-1 py-1"
     >
-      <Icon
-        className={cn("h-5 w-5", active ? "text-primary" : "text-muted-foreground")}
-        strokeWidth={active ? 2.1 : 1.85}
-      />
+      <span
+        className={cn(
+          "grid h-8 w-11 place-items-center border-2 transition-colors",
+          active ? "border-border bg-primary text-primary-foreground" : "border-transparent text-muted-foreground",
+        )}
+      >
+        <Icon className="size-5" strokeWidth={active ? 2.4 : 2} aria-hidden />
+      </span>
+      <span
+        className={cn(
+          "font-mono text-xs uppercase tracking-wider",
+          active ? "font-semibold text-foreground" : "text-muted-foreground",
+        )}
+      >
+        {label}
+      </span>
     </Link>
   );
 }

@@ -1,13 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { updateResumeWithInstructions, rewriteResumeSelection } from "@/lib/resume-studio.functions";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { Sparkles, Wand2, Plus, X } from "lucide-react";
+import { Check, Loader2, Sparkles, Wand2, Plus, X } from "lucide-react";
+import { Field } from "@/components/app/field";
+import { IconButton } from "@/components/app/icon-button";
+import { Kbd } from "@/components/app/kbd";
+import { useModKey } from "@/hooks/use-mod-key";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import type { EditorSelection } from "@/components/latex-editor";
 import { DEFAULT_RESUME_AI_PRESETS } from "@/lib/resume-ai-presets";
@@ -65,34 +69,41 @@ export function UpdateResumeDialog({
     <Dialog open={open} onOpenChange={(o) => !run.isPending && onOpenChange(o)}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Wand2 className="h-4 w-4" /> Update resume with AI</DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><Wand2 className="size-5" aria-hidden /> Update resume with AI</DialogTitle>
           <DialogDescription>
             The AI rewrites content only — layout, packages and macros stay untouched, and nothing is invented beyond your profile.
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-3">
-          <div>
-            <Label>What should change?</Label>
+        <div className="space-y-5">
+          <Field label="What should change?" htmlFor="update-resume-instructions">
             <Textarea
+              id="update-resume-instructions"
               rows={4}
               value={instructions}
               onChange={(e) => setInstructions(e.target.value)}
               placeholder="e.g. Emphasise backend and cloud work, drop the older internships…"
             />
-            <div className="mt-2 flex flex-wrap gap-1.5">
+          </Field>
+          <div className="space-y-2">
+            <p className="eyebrow" id="resume-ai-presets-label">Presets · tap to add</p>
+            <ul className="flex flex-wrap gap-2" aria-labelledby="resume-ai-presets-label">
               {presetList.map((p) => {
                 const already = instructions
                   .split(/\n/)
                   .map((l) => l.trim())
                   .includes(p);
                 return (
-                  <span
+                  <li
                     key={p}
-                    className="group inline-flex items-center gap-1 rounded-full border border-border bg-background pl-2.5 pr-1 py-1 hover:bg-accent transition-colors"
+                    className={cn(
+                      "flex max-w-full items-stretch border-2 border-border shadow-[var(--shadow-brutal-sm)]",
+                      already ? "bg-secondary text-secondary-foreground" : "bg-card",
+                    )}
                   >
                     <button
                       type="button"
                       disabled={already}
+                      aria-pressed={already}
                       onClick={() =>
                         setInstructions((cur) => {
                           const lines = cur
@@ -103,60 +114,77 @@ export function UpdateResumeDialog({
                           return lines.length ? `${lines.join("\n")}\n${p}` : p;
                         })
                       }
-                      className="text-[11px] text-left disabled:opacity-40 disabled:pointer-events-none"
+                      className="flex min-h-9 min-w-0 items-center gap-1.5 px-2.5 py-1.5 text-left text-xs font-medium transition-colors enabled:hover:bg-accent enabled:hover:text-accent-foreground disabled:cursor-default"
                     >
-                      + {p}
+                      {already ? (
+                        <Check className="size-3.5 shrink-0" aria-hidden />
+                      ) : (
+                        <Plus className="size-3.5 shrink-0" aria-hidden />
+                      )}
+                      <span className="min-w-0">{p}</span>
+                      {already && <span className="sr-only">(added)</span>}
                     </button>
                     {onPresetsChange && (
-                      <button
-                        type="button"
-                        onClick={() => removePreset(p)}
-                        className="opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity"
-                        aria-label={`Remove preset: ${p}`}
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
+                      <>
+                        <span aria-hidden className="w-0.5 shrink-0 self-stretch bg-border" />
+                        <IconButton
+                          label={`Remove preset: ${p}`}
+                          size="sm"
+                          onClick={() => removePreset(p)}
+                          className="h-auto w-9 shrink-0 self-stretch border-0 hover:bg-destructive-subtle hover:text-foreground"
+                        >
+                          <X aria-hidden />
+                        </IconButton>
+                      </>
                     )}
-                  </span>
+                  </li>
                 );
               })}
               {onPresetsChange && !addingPreset && (
-                <button
-                  type="button"
-                  onClick={() => setAddingPreset(true)}
-                  className="text-[11px] inline-flex items-center gap-0.5 rounded-full border border-dashed border-border bg-background px-2.5 py-1 hover:bg-accent transition-colors"
-                >
-                  <Plus className="h-3 w-3" /> Add preset
-                </button>
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => setAddingPreset(true)}
+                    className="inline-flex min-h-9 items-center gap-1.5 border-2 border-dashed border-border bg-background px-2.5 py-1.5 text-xs font-semibold transition-colors hover:bg-accent"
+                  >
+                    <Plus className="size-3.5" aria-hidden /> Add preset
+                  </button>
+                </li>
               )}
-            </div>
+            </ul>
             {onPresetsChange && addingPreset && (
-              <div className="mt-1.5 flex items-center gap-1.5">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <Input
                   autoFocus
+                  aria-label="New preset instruction"
                   value={newPreset}
                   onChange={(e) => setNewPreset(e.target.value)}
                   placeholder="New preset instruction…"
-                  className="h-7 text-[11px]"
+                  className="flex-1"
                   onKeyDown={(e) => {
                     if (e.key === "Enter") { e.preventDefault(); addPreset(); }
                     if (e.key === "Escape") { setAddingPreset(false); setNewPreset(""); }
                   }}
                 />
-                <Button size="sm" className="h-7" onClick={addPreset} disabled={!newPreset.trim()}>Save</Button>
-                <Button size="sm" variant="outline" className="h-7" onClick={() => { setAddingPreset(false); setNewPreset(""); }}>Cancel</Button>
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={addPreset} disabled={!newPreset.trim()}>Save</Button>
+                  <Button size="sm" variant="outline" onClick={() => { setAddingPreset(false); setNewPreset(""); }}>Cancel</Button>
+                </div>
               </div>
             )}
           </div>
-          <div>
-            <Label className="text-xs">Job description (optional — the saved one is used when empty)</Label>
-            <Textarea rows={4} value={jd} onChange={(e) => setJd(e.target.value)} placeholder="Paste the job description…" className="text-xs" />
-          </div>
+          <Field
+            label="Job description (optional)"
+            htmlFor="update-resume-jd"
+            hint="The saved job description is used when this is empty."
+          >
+            <Textarea id="update-resume-jd" rows={4} value={jd} onChange={(e) => setJd(e.target.value)} placeholder="Paste the job description…" />
+          </Field>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={run.isPending}>Cancel</Button>
           <Button onClick={() => run.mutate()} disabled={run.isPending || instructions.trim().length < 3}>
-            <Sparkles className="h-3.5 w-3.5 mr-1" />
+            {run.isPending ? <Loader2 className="animate-spin" aria-hidden /> : <Sparkles aria-hidden />}
             {run.isPending ? "Updating…" : "Update resume"}
           </Button>
         </DialogFooter>
@@ -184,6 +212,19 @@ export function InlineAskAi({
   const [instructions, setInstructions] = useState("");
   const [frozen, setFrozen] = useState<EditorSelection | null>(null);
   const fn = useServerFn(rewriteResumeSelection);
+  const anchorRef = useRef<HTMLDivElement | null>(null);
+  const mod = useModKey();
+
+  // Keep the floating "Ask AI" button inside the editor's bounds (UI-only clamp).
+  useLayoutEffect(() => {
+    const el = anchorRef.current;
+    const parent = el?.offsetParent as HTMLElement | null;
+    if (!el || !parent || !selection) return;
+    const maxLeft = Math.max(8, parent.clientWidth - el.offsetWidth - 8);
+    const maxTop = Math.max(4, parent.clientHeight - el.offsetHeight - 4);
+    el.style.left = `${Math.min(Math.max(8, selection.left - 20), maxLeft)}px`;
+    el.style.top = `${Math.min(Math.max(4, selection.top - 42), maxTop)}px`;
+  }, [selection, open]);
 
   useEffect(() => {
     if (!open) setFrozen(null);
@@ -216,31 +257,35 @@ export function InlineAskAi({
     <>
       {selection && !open && (
         <div
+          ref={anchorRef}
           className="absolute z-20"
-          style={{ top: Math.max(2, selection.top - 34), left: Math.max(8, selection.left - 20) }}
+          style={{ top: Math.max(4, selection.top - 42), left: Math.max(8, selection.left - 20) }}
         >
           <Button
             size="sm"
-            className="h-7 shadow-lg"
+            className="shadow-[var(--shadow-brutal)]"
             onClick={() => { setFrozen(selection); setOpen(true); }}
           >
-            <Sparkles className="h-3.5 w-3.5 mr-1" /> Ask AI
+            <Sparkles aria-hidden /> Ask AI
           </Button>
         </div>
       )}
       <Dialog open={open} onOpenChange={(o) => !run.isPending && setOpen(o)}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Sparkles className="h-4 w-4" /> Rewrite selection</DialogTitle>
+            <DialogTitle className="flex items-center gap-2"><Sparkles className="size-5" aria-hidden /> Rewrite selection</DialogTitle>
             <DialogDescription>Only the highlighted LaTeX is replaced — the rest of the file is untouched.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
-            <pre className="max-h-32 overflow-auto rounded-md border border-border bg-muted/40 p-2 text-[11px] whitespace-pre-wrap">
-              {target?.text ?? ""}
-            </pre>
+          <div className="space-y-4">
             <div>
-              <Label>Instruction</Label>
+              <p className="eyebrow mb-1.5">Selected LaTeX</p>
+              <pre className="max-h-32 overflow-auto whitespace-pre-wrap border-2 border-border bg-muted p-3 font-mono text-xs">
+                {target?.text ?? ""}
+              </pre>
+            </div>
+            <Field label="Instruction" htmlFor="inline-ask-ai-instruction" hint={<>Press <Kbd>{mod}</Kbd> <Kbd>↵</Kbd> to rewrite.</>}>
               <Textarea
+                id="inline-ask-ai-instruction"
                 rows={3}
                 autoFocus
                 value={instructions}
@@ -250,11 +295,12 @@ export function InlineAskAi({
                   if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && instructions.trim().length > 1) run.mutate();
                 }}
               />
-            </div>
+            </Field>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)} disabled={run.isPending}>Cancel</Button>
             <Button onClick={() => run.mutate()} disabled={run.isPending || instructions.trim().length < 2}>
+              {run.isPending ? <Loader2 className="animate-spin" aria-hidden /> : <Sparkles aria-hidden />}
               {run.isPending ? "Rewriting…" : "Rewrite"}
             </Button>
           </DialogFooter>

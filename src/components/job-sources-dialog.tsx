@@ -10,13 +10,33 @@ import {
   type JobSource,
   type JobSourceKind,
 } from "@/lib/job-sources.functions";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Copy, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Copy, Loader2, Plus, RefreshCw, Rss, Trash2 } from "lucide-react";
+import { Field } from "@/components/app/field";
+import { IconButton } from "@/components/app/icon-button";
+import { EmptyState } from "@/components/app/empty-state";
+import { ErrorState } from "@/components/app/error-state";
+import { useConfirm } from "@/components/app/confirm-dialog";
+
+const KIND_LABEL: Record<JobSourceKind, string> = {
+  rss: "RSS",
+  greenhouse: "Greenhouse",
+  lever: "Lever",
+  telegram: "Telegram",
+};
+
+/** Stamp colour per source type (small text on paper, so the saturated tokens are fine). */
+const KIND_TONE: Record<JobSourceKind, string> = {
+  rss: "text-warning",
+  greenhouse: "text-success",
+  lever: "text-info",
+  telegram: "text-highlight",
+};
 
 export function JobSourcesDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const qc = useQueryClient();
@@ -24,6 +44,7 @@ export function JobSourcesDialog({ open, onOpenChange }: { open: boolean; onOpen
   const upsertFn = useServerFn(upsertJobSource);
   const delFn = useServerFn(deleteJobSource);
   const syncFn = useServerFn(syncJobSource);
+  const confirm = useConfirm();
 
   const sources = useQuery({
     queryKey: ["job-sources"],
@@ -95,6 +116,7 @@ export function JobSourcesDialog({ open, onOpenChange }: { open: boolean; onOpen
       qc.invalidateQueries({ queryKey: ["job-sources"] });
       toast.success("Source removed");
     },
+    onError: (e) => toast.error("Could not remove source", { description: (e as Error).message }),
   });
 
   const copyWebhook = (s: JobSource) => {
@@ -106,23 +128,26 @@ export function JobSourcesDialog({ open, onOpenChange }: { open: boolean; onOpen
     );
   };
 
+  const rows = sources.data as JobSource[] | undefined;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[min(92dvh,900px)] overflow-y-auto">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
+          <p className="eyebrow">Wire service</p>
           <DialogTitle>Sync job sources</DialogTitle>
+          <DialogDescription>
+            Pull openings from RSS feeds, Greenhouse / Lever boards, or a Telegram channel. Duplicates are skipped by URL.
+            Run the <code className="font-mono text-xs text-foreground">job_sources</code> SQL migration in Supabase if this fails.
+          </DialogDescription>
         </DialogHeader>
-        <p className="text-xs text-muted-foreground">
-          Pull openings from RSS feeds, Greenhouse / Lever boards, or a Telegram channel. Duplicates are skipped by URL.
-          Run the <code className="text-[10px]">job_sources</code> SQL migration in Supabase if this fails.
-        </p>
 
-        <div className="rounded-lg border p-3 space-y-3 bg-muted/20">
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <div>
-              <Label className="text-xs">Type</Label>
+        <section aria-labelledby="add-source-title" className="space-y-4 border-2 border-border bg-muted p-4">
+          <h3 id="add-source-title" className="font-mono text-xs font-semibold uppercase tracking-[0.08em]">Add a source</h3>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label="Type" htmlFor="source-kind">
               <Select value={kind} onValueChange={(v) => setKind(v as JobSourceKind)}>
-                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectTrigger id="source-kind"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="rss">RSS / Atom feed</SelectItem>
                   <SelectItem value="greenhouse">Greenhouse board</SelectItem>
@@ -130,51 +155,47 @@ export function JobSourcesDialog({ open, onOpenChange }: { open: boolean; onOpen
                   <SelectItem value="telegram">Telegram channel</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
-            <div>
-              <Label className="text-xs">Name (optional)</Label>
-              <Input className="h-9" value={name} onChange={(e) => setName(e.target.value)} placeholder="Acme careers" />
-            </div>
+            </Field>
+            <Field label="Name (optional)" htmlFor="source-name">
+              <Input id="source-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Acme careers" />
+            </Field>
           </div>
 
           {kind === "rss" && (
-            <div>
-              <Label className="text-xs">Feed URL</Label>
-              <Input className="h-9" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://example.com/jobs.xml" />
-            </div>
+            <Field label="Feed URL" htmlFor="source-url">
+              <Input id="source-url" className="font-mono" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://example.com/jobs.xml" />
+            </Field>
           )}
           {kind === "greenhouse" && (
-            <div>
-              <Label className="text-xs">Board token</Label>
+            <Field label="Board token" htmlFor="source-board-token">
               <Input
-                className="h-9"
+                id="source-board-token"
+                className="font-mono"
                 value={boardToken}
                 onChange={(e) => setBoardToken(e.target.value)}
                 placeholder="from boards.greenhouse.io/TOKEN"
               />
-            </div>
+            </Field>
           )}
           {kind === "lever" && (
-            <div>
-              <Label className="text-xs">Site slug</Label>
-              <Input className="h-9" value={site} onChange={(e) => setSite(e.target.value)} placeholder="from jobs.lever.co/SITE" />
-            </div>
+            <Field label="Site slug" htmlFor="source-site">
+              <Input id="source-site" className="font-mono" value={site} onChange={(e) => setSite(e.target.value)} placeholder="from jobs.lever.co/SITE" />
+            </Field>
           )}
           {kind === "telegram" && (
-            <p className="text-xs text-muted-foreground">
+            <p className="border-l-4 border-border bg-card px-3 py-2 text-sm text-muted-foreground">
               Creates a webhook URL. Point your bot with{" "}
-              <code className="text-[10px]">setWebhook</code>, add the bot to the channel, then post JDs — they become jobs automatically.
+              <code className="font-mono text-xs text-foreground">setWebhook</code>, add the bot to the channel, then post JDs — they become jobs automatically.
             </p>
           )}
           {kind !== "telegram" && (
-            <div>
-              <Label className="text-xs">Company fallback (optional)</Label>
-              <Input className="h-9" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Used if AI cannot infer company" />
-            </div>
+            <Field label="Company fallback (optional)" htmlFor="source-company">
+              <Input id="source-company" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Used if AI cannot infer company" />
+            </Field>
           )}
 
           <Button
-            size="sm"
+            className="w-full sm:w-auto"
             onClick={() => create.mutate()}
             disabled={
               create.isPending ||
@@ -183,51 +204,83 @@ export function JobSourcesDialog({ open, onOpenChange }: { open: boolean; onOpen
               (kind === "lever" && !site.trim())
             }
           >
-            {create.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Plus className="h-3.5 w-3.5 mr-1" />}
+            {create.isPending ? <Loader2 className="animate-spin" aria-hidden /> : <Plus aria-hidden />}
             Add source
           </Button>
-        </div>
+        </section>
 
-        <div className="space-y-2">
-          {(sources.data as JobSource[] | undefined)?.length ? (
-            (sources.data as JobSource[]).map((s) => (
-              <div key={s.id} className="rounded-lg border px-3 py-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-medium text-sm truncate">{s.name}</span>
-                    <Badge variant="secondary" className="text-[10px]">{s.kind}</Badge>
-                    {!s.enabled && <Badge variant="outline">off</Badge>}
-                  </div>
-                  <div className="text-[11px] text-muted-foreground truncate">
-                    {s.kind === "rss" && String((s.config as { url?: string }).url ?? "")}
-                    {s.kind === "greenhouse" && `board: ${(s.config as { boardToken?: string }).boardToken ?? ""}`}
-                    {s.kind === "lever" && `site: ${(s.config as { site?: string }).site ?? ""}`}
-                    {s.kind === "telegram" && "Webhook-driven"}
-                    {s.last_synced_at ? ` · last sync ${new Date(s.last_synced_at).toLocaleString()}` : ""}
-                  </div>
-                  {s.last_error && <div className="text-[11px] text-destructive truncate">{s.last_error}</div>}
+        <section aria-labelledby="sources-list-title">
+          <h3 id="sources-list-title" className="mb-2 flex items-baseline justify-between border-b-2 border-border pb-1.5 font-mono text-xs font-semibold uppercase tracking-[0.08em]">
+            Your sources
+            {rows && <span className="text-muted-foreground">{rows.length}</span>}
+          </h3>
+          {sources.isLoading ? (
+            <div className="space-y-3 py-2" aria-busy="true" aria-label="Loading sources">
+              {Array.from({ length: 2 }).map((_, i) => (
+                <div key={i} className="flex items-center justify-between gap-3">
+                  <div className="flex-1 space-y-2"><Skeleton className="h-4 w-1/3" /><Skeleton className="h-3 w-2/3" /></div>
+                  <Skeleton className="h-9 w-20" />
                 </div>
-                <div className="flex gap-1 shrink-0">
-                  {s.kind === "telegram" ? (
-                    <Button size="sm" variant="outline" onClick={() => copyWebhook(s)}>
-                      <Copy className="h-3.5 w-3.5 mr-1" /> Webhook
-                    </Button>
-                  ) : (
-                    <Button size="sm" variant="outline" disabled={sync.isPending} onClick={() => sync.mutate(s.id)}>
-                      {sync.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1" />}
-                      Sync
-                    </Button>
-                  )}
-                  <Button size="sm" variant="ghost" onClick={() => { if (confirm("Remove this source?")) remove.mutate(s.id); }}>
-                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                  </Button>
-                </div>
-              </div>
-            ))
+              ))}
+            </div>
+          ) : sources.isError ? (
+            <ErrorState title="Couldn't load sources" error={sources.error} onRetry={() => sources.refetch()} retrying={sources.isFetching} className="py-8" />
+          ) : rows?.length ? (
+            <ul className="divide-y divide-border/20">
+              {rows.map((s) => {
+                const syncingThis = sync.isPending && sync.variables === s.id;
+                return (
+                  <li key={s.id} className="flex flex-col gap-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2.5">
+                        <span className={`stamp shrink-0 bg-card px-1.5 text-xs ${KIND_TONE[s.kind] ?? "text-foreground"}`}>{KIND_LABEL[s.kind] ?? s.kind}</span>
+                        <span className="min-w-0 truncate text-sm font-semibold">{s.name}</span>
+                        {!s.enabled && <Badge variant="muted">off</Badge>}
+                      </div>
+                      <p className="truncate font-mono text-xs text-muted-foreground">
+                        {s.kind === "rss" && String((s.config as { url?: string }).url ?? "")}
+                        {s.kind === "greenhouse" && `board: ${(s.config as { boardToken?: string }).boardToken ?? ""}`}
+                        {s.kind === "lever" && `site: ${(s.config as { site?: string }).site ?? ""}`}
+                        {s.kind === "telegram" && "Webhook-driven"}
+                        {s.last_synced_at ? ` · last sync ${new Date(s.last_synced_at).toLocaleString()}` : ""}
+                      </p>
+                      {s.last_error && <p className="truncate text-xs text-destructive" title={s.last_error}>{s.last_error}</p>}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
+                      {s.kind === "telegram" ? (
+                        <Button size="sm" variant="outline" onClick={() => copyWebhook(s)}>
+                          <Copy aria-hidden /> Webhook
+                        </Button>
+                      ) : (
+                        <Button size="sm" variant="outline" disabled={sync.isPending} onClick={() => sync.mutate(s.id)}>
+                          {syncingThis ? <Loader2 className="animate-spin" aria-hidden /> : <RefreshCw aria-hidden />}
+                          {syncingThis ? "Syncing…" : "Sync"}
+                        </Button>
+                      )}
+                      <IconButton
+                        label={`Remove ${s.name}`}
+                        className="text-destructive hover:bg-destructive-subtle hover:text-foreground"
+                        onClick={async () => {
+                          if (await confirm({ title: "Remove this source?", description: `"${s.name}" will stop syncing. Jobs already imported stay on the board.`, confirmLabel: "Remove source" })) remove.mutate(s.id);
+                        }}
+                      >
+                        <Trash2 aria-hidden />
+                      </IconButton>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
           ) : (
-            <p className="text-sm text-muted-foreground py-4 text-center">No sources yet.</p>
+            <EmptyState
+              framed={false}
+              icon={Rss}
+              title="No sources yet"
+              description="Add a feed, board or Telegram channel above, then hit Sync to pull its openings."
+              className="py-8"
+            />
           )}
-        </div>
+        </section>
 
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Close</Button>

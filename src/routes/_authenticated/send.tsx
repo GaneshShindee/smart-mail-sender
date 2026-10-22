@@ -6,20 +6,46 @@ import { sendEmail, listGmailAccounts } from "@/lib/gmail.functions";
 import { listResumes } from "@/lib/resumes.functions";
 import { getUserPreferences } from "@/lib/profile.functions";
 import { isAllowedResumeFile, fileToBase64, formatBytes } from "@/lib/resumes";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TemplateCombobox } from "@/components/template-combobox";
 import { ResumeCombobox } from "@/components/resume-combobox";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Page, PageHeader } from "@/components/app/page";
+import { SectionCard } from "@/components/app/section-card";
+import { Field } from "@/components/app/field";
+import { StatCard } from "@/components/app/stat-card";
+import { EmptyState } from "@/components/app/empty-state";
+import { ErrorState } from "@/components/app/error-state";
+import { IconButton } from "@/components/app/icon-button";
+import { Kbd } from "@/components/app/kbd";
+import { useModKey } from "@/hooks/use-mod-key";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { extractVariables, applyTemplate } from "@/lib/templating";
 import { parseRecipients } from "@/lib/recipients";
 import { toast } from "sonner";
-import { Send, Sparkles, Paperclip, X, FileText, Upload, Flame, Pencil, Eye, Wand2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import {
+  Send,
+  Sparkles,
+  X,
+  Upload,
+  Flame,
+  Eye,
+  Pencil,
+  Wand2,
+  Mail,
+  Loader2,
+  CheckCircle2,
+  Check,
+  AlertCircle,
+  Download,
+} from "lucide-react";
 import { EmailGeneratorDialog } from "@/components/email-generator-dialog";
 import { AiBodyDialog } from "@/components/ai-body-dialog";
 import { GenerateResumeDialog, openLinkedOrGenerateResume } from "@/components/generate-resume-dialog";
@@ -27,7 +53,7 @@ import { getLinkedResumeVersionId } from "@/lib/job-resume-link";
 import { DraftManager, filesFromDraftAttachments, type DraftState, type LoadedDraft } from "@/components/draft-manager";
 import { getAutosaveDraft, saveEmailDraft, deleteEmailDraft } from "@/lib/drafts.functions";
 import { z } from "zod";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { getResumeVersion } from "@/lib/resume-studio.functions";
 import { getJob } from "@/lib/jobs.functions";
 import { jobToContextFields, jobToTemplateVars } from "@/lib/job-context";
@@ -107,6 +133,7 @@ function SendPage() {
   }>(null);
   const [editingPreview, setEditingPreview] = useState(false);
   const [aiFilling, setAiFilling] = useState(false);
+  const mod = useModKey();
 
   const autosaveFn = useServerFn(saveEmailDraft);
   const getAutosaveFn = useServerFn(getAutosaveDraft);
@@ -589,75 +616,148 @@ function SendPage() {
     return () => { cancelled = true; };
   }, [search.resumeVersionId, getVersionFn, prefs.data]);
 
+  const altKey = mod === "⌘" ? "⌥" : "Alt";
+  const linkedResumeVersionId =
+    search.resumeVersionId ||
+    getLinkedResumeVersionId({
+      jobId: search.jobId,
+      company: jobMeta.company || (vars.company ?? ""),
+      role: jobMeta.role,
+    });
+
+  const canSend =
+    !send.isPending &&
+    parsed.valid.length > 0 &&
+    !!subject.trim() &&
+    !!body.trim() &&
+    !!senderId &&
+    !overLimit;
+  const firstRecipient = parsed.valid[0];
+
+  if (accounts.isError) {
+    return (
+      <Page size="narrow">
+        <Card>
+          <ErrorState
+            title="Couldn't load your Gmail accounts"
+            error={accounts.error}
+            onRetry={() => accounts.refetch()}
+            retrying={accounts.isFetching}
+          />
+        </Card>
+      </Page>
+    );
+  }
+
+  if (accounts.isLoading) {
+    return (
+      <Page size="wide">
+        <div className="space-y-2">
+          <Skeleton className="h-7 w-48" />
+          <Skeleton className="h-4 w-72" />
+        </div>
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px] xl:grid-cols-[minmax(0,1fr)_420px]">
+          <div className="space-y-6">
+            <Skeleton className="h-44" />
+            <Skeleton className="h-40" />
+            <Skeleton className="h-96" />
+          </div>
+          <Skeleton className="h-96" />
+        </div>
+        <span className="sr-only">Loading composer…</span>
+      </Page>
+    );
+  }
+
   if (accounts.data && accounts.data.length === 0) {
     return (
-      <div className="mx-auto max-w-2xl">
+      <Page size="narrow">
         <Card>
-          <CardContent className="py-10 text-center space-y-3">
-            <h2 className="text-lg font-semibold">Connect Gmail first</h2>
-            <p className="text-sm text-muted-foreground">You need to grant Gmail send permission before you can send emails.</p>
-            <Button asChild><Link to="/settings">Go to Settings</Link></Button>
-          </CardContent>
+          <EmptyState
+            icon={Mail}
+            title="Connect Gmail first"
+            description="You need to grant Gmail send permission before you can send emails."
+            action={
+              <Button asChild>
+                <Link to="/settings">Go to Settings</Link>
+              </Button>
+            }
+          />
         </Card>
-      </div>
+      </Page>
     );
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="page-title flex items-center gap-2">
-            {isFollowUp && <Flame className="h-4 w-4 text-primary shrink-0" />}
-            {isFollowUp ? "Follow-up Email" : "Send Email"}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {isFollowUp ? "Review the pre-filled details and hit send." : "Pick a template, drop in recipients, and send."}
-          </p>
-        </div>
-        <div className="flex items-stretch sm:items-center gap-2 flex-wrap w-full sm:w-auto">
-          <DraftManager
-            draftId={draftId}
-            onDraftIdChange={setDraftId}
-            getState={collectDraftState}
-            onLoad={applyLoadedDraft}
-          />
-          <Select value={senderId} onValueChange={setSenderId}>
-            <SelectTrigger className="w-full sm:w-[220px] h-10 min-w-0">
-              <SelectValue placeholder="Gmail account" />
-            </SelectTrigger>
-            <SelectContent>
-              {accounts.data?.map((a) => (
-                <SelectItem key={a.id} value={a.id}>
-                  {(a.label ?? a.full_name ?? a.gmail_email)}{a.is_default ? " · Default" : ""} — {a.gmail_email}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button
-            onClick={() => send.mutate()}
-            disabled={
-              send.isPending ||
-              parsed.valid.length === 0 ||
-              !subject.trim() ||
-              !body.trim() ||
-              !senderId ||
-              overLimit
-            }
-            className="shrink-0 h-10 w-full sm:w-auto"
-          >
-            <Send className="h-4 w-4 mr-2" />
-            {send.isPending ? "Sending…" : "Send"}
-          </Button>
-        </div>
-      </div>
+    <Page size="wide">
+      <PageHeader
+        eyebrow="02 · Outreach · Compose"
+        icon={isFollowUp ? Flame : Send}
+        title={
+          <>
+            {isFollowUp ? "Follow-up" : "Send"}{" "}
+            <span className="inline-block -rotate-1 bg-primary px-2 text-primary-foreground">email</span>
+          </>
+        }
+        description={
+          isFollowUp
+            ? "Review the pre-filled details and hit send."
+            : "Pick a template, add recipients, and send from your Gmail."
+        }
+        actions={
+          <>
+            <DraftManager
+              draftId={draftId}
+              onDraftIdChange={setDraftId}
+              getState={collectDraftState}
+              onLoad={applyLoadedDraft}
+            />
+            <Button onClick={() => send.mutate()} disabled={!canSend} className="w-full sm:w-auto">
+              {send.isPending ? <Loader2 className="animate-spin" aria-hidden /> : <Send aria-hidden />}
+              {send.isPending ? "Sending…" : "Send"}
+            </Button>
+          </>
+        }
+      />
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <div className="space-y-4">
-          <Card>
-            <CardContent className="py-4 space-y-4">
-              <div>
-                <Label>Template</Label>
+      <div className="grid items-start gap-6 lg:grid-cols-2">
+        {/* ── Compose column ─────────────────────────────────────────── */}
+        <div className="min-w-0 space-y-6">
+          <SectionCard
+            id="send-setup"
+            index="01"
+            title="Sender & template"
+            description="Who the email comes from and where it starts."
+          >
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="From" htmlFor="send-from">
+                <Select value={senderId} onValueChange={setSenderId}>
+                  <SelectTrigger id="send-from" className="h-10 w-full min-w-0">
+                    <SelectValue placeholder="Choose a Gmail account" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {accounts.data?.map((a) => (
+                      <SelectItem key={a.id} value={a.id}>
+                        <span className="truncate">
+                          {a.label ?? a.full_name ?? a.gmail_email}
+                          {a.is_default ? " · Default" : ""}
+                          <span className="text-muted-foreground"> — {a.gmail_email}</span>
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field
+                label="Template"
+                action={
+                  <span className="hidden items-center gap-0.5 sm:flex" aria-hidden>
+                    <Kbd>{mod}</Kbd>
+                    <Kbd>{altKey}</Kbd>
+                    <Kbd>T</Kbd>
+                  </span>
+                }
+              >
                 <TemplateCombobox
                   templates={(templates.data ?? []).map((t) => ({
                     id: t.id,
@@ -666,216 +766,307 @@ function SendPage() {
                   }))}
                   value={tplId}
                   onValueChange={selectTemplate}
-                  placeholder="Choose a template (optional)"
+                  placeholder={templates.isLoading ? "Loading templates…" : "Choose a template (optional)"}
                   searchPlaceholder="Search templates by name…"
                   allowClear
                   clearLabel="No template"
                   open={tplPickerOpen}
                   onOpenChange={setTplPickerOpen}
                 />
-              </div>
+              </Field>
+            </div>
 
-              {variables.length > 0 && (
-                <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
-                  <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Variables</div>
-                  {variables.map((v) => (
-                    <div key={v} className="grid grid-cols-1 sm:grid-cols-[120px_1fr] items-start sm:items-center gap-1.5 sm:gap-2">
-                      <Label className="text-xs">{`{{${v}}}`}</Label>
-                      <Input value={vars[v] ?? ""} onChange={(e) => setVars({ ...vars, [v]: e.target.value })} />
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <div>
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <Label>Recipients</Label>
-                  <Button type="button" variant="outline" size="sm" className="w-full sm:w-auto" onClick={() => setGenOpen(true)}>
-                    <Sparkles className="h-3.5 w-3.5 mr-1" /> Generate Emails
-                  </Button>
-                </div>
-                <Textarea
-                  rows={3}
-                  value={recipientText}
-                  onChange={(e) => setRecipientText(e.target.value)}
-                  placeholder="Paste recipient emails…"
-                  className="font-mono text-sm"
-                />
-                {parsed.total > 0 && (
-                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                    <Badge variant="secondary">{parsed.valid.length} Recipient{parsed.valid.length === 1 ? "" : "s"}</Badge>
-                    {parsed.invalid.length > 0 && <Badge variant="destructive">{parsed.invalid.length} Invalid</Badge>}
-                    {parsed.duplicates > 0 && <Badge variant="outline">{parsed.duplicates} Duplicate</Badge>}
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-2">
+            {variables.length > 0 && (
+              <div className="space-y-3 border-2 border-dashed border-border/50 bg-muted/40 p-3 sm:p-4">
                 <div className="flex items-center justify-between gap-2">
-                  <Label className="flex items-center gap-1.5"><Paperclip className="h-3.5 w-3.5" /> Attachments</Label>
-                  <div>
-                    <input
-                      ref={uploadRef}
-                      type="file"
-                      multiple
-                      accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                      className="hidden"
-                      onChange={(e) => onUpload(e.target.files)}
-                    />
-                    <Button type="button" size="sm" variant="outline" onClick={() => uploadRef.current?.click()}>
-                      <Upload className="h-3.5 w-3.5 mr-1" /> Add file
-                    </Button>
-                  </div>
+                  <span className="eyebrow">Variables</span>
+                  <span className="text-xs text-muted-foreground">
+                    {variables.filter((v) => vars[v]?.trim()).length}/{variables.length} filled
+                  </span>
                 </div>
-
-                {resumes.data && resumes.data.length > 0 && (
-                  <ResumeCombobox
-                    resumes={resumes.data.map((r) => ({
-                      id: r.id,
-                      name: r.name,
-                      is_default: !!r.is_default,
-                    }))}
-                    value={resumeIds}
-                    onToggle={toggleResume}
-                    placeholder="Attach from Resume Library…"
-                    searchPlaceholder="Search resumes by name…"
-                    open={resumePickerOpen}
-                    onOpenChange={setResumePickerOpen}
-                  />
-                )}
-
-                {(selectedResumes.length > 0 || uploads.length > 0) && (
-                  <div className="space-y-1">
-                    {selectedResumes.map((r) => (
-                      <div key={r.id} className="flex items-center justify-between text-xs rounded-md bg-muted/40 border border-border px-2 py-1.5">
-                        <span className="truncate flex items-center gap-1.5"><FileText className="h-3 w-3 shrink-0" /> {r.original_filename} <span className="text-muted-foreground">· {formatBytes(r.size_bytes)}</span></span>
-                        <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={() => toggleResume(r.id)}><X className="h-3 w-3" /></Button>
-                      </div>
-                    ))}
-                    {uploads.map((f, i) => (
-                      <div key={`u-${i}`} className="flex items-center justify-between text-xs rounded-md bg-muted/40 border border-border px-2 py-1.5">
-                        <span className="truncate flex items-center gap-1.5"><FileText className="h-3 w-3 shrink-0" /> {f.name} <span className="text-muted-foreground">· {formatBytes(f.size)} · temp</span></span>
-                        <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={() => setUploads((u) => u.filter((_, j) => j !== i))}><X className="h-3 w-3" /></Button>
-                      </div>
-                    ))}
-                    <div className={`text-xs ${overLimit ? "text-destructive" : "text-muted-foreground"}`}>
-                      Total: {formatBytes(totalAttachBytes)} / 25 MB
-                    </div>
-                  </div>
-                )}
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {variables.map((v) => {
+                    const id = `send-var-${v.replace(/\W/g, "_")}`;
+                    return (
+                      <Field key={v} label={<span className="normal-case tracking-normal">{`{{${v}}}`}</span>} htmlFor={id}>
+                        <Input
+                          id={id}
+                          value={vars[v] ?? ""}
+                          onChange={(e) => setVars({ ...vars, [v]: e.target.value })}
+                          placeholder={v}
+                        />
+                      </Field>
+                    );
+                  })}
+                </div>
               </div>
-            </CardContent>
-          </Card>
+            )}
+          </SectionCard>
 
-          <Button
-            onClick={() => send.mutate()}
-            disabled={send.isPending || parsed.valid.length === 0 || !subject.trim() || !body.trim() || !senderId || overLimit}
-            className="w-full"
-            size="lg"
+          <SectionCard
+            id="send-recipients"
+            index="02"
+            title="Recipients"
+            description="Separate with commas or new lines. “Name <email>” works too."
+            actions={
+              <Button type="button" variant="outline" size="sm" onClick={() => setGenOpen(true)}>
+                <Sparkles aria-hidden /> Generate emails
+              </Button>
+            }
           >
-            <Send className="h-4 w-4 mr-2" />
+            <Textarea
+              id="send-recipients-input"
+              aria-label="Recipient email addresses"
+              rows={4}
+              value={recipientText}
+              onChange={(e) => setRecipientText(e.target.value)}
+              placeholder="jane@company.com, John Doe <john@company.com>"
+              className="font-mono"
+            />
+            <div className="flex flex-wrap items-center gap-2" aria-live="polite">
+              {parsed.total > 0 ? (
+                <>
+                  <Badge variant={parsed.valid.length ? "success" : "muted"}>
+                    <CheckCircle2 aria-hidden />
+                    {parsed.valid.length} valid
+                  </Badge>
+                  {parsed.invalid.length > 0 && (
+                    <Badge variant="danger">
+                      <AlertCircle aria-hidden />
+                      {parsed.invalid.length} invalid
+                    </Badge>
+                  )}
+                  {parsed.duplicates > 0 && (
+                    <Badge variant="muted">{parsed.duplicates} duplicate{parsed.duplicates === 1 ? "" : "s"} removed</Badge>
+                  )}
+                </>
+              ) : (
+                <span className="text-xs text-muted-foreground">No recipients yet.</span>
+              )}
+            </div>
+          </SectionCard>
+
+          <SectionCard
+            id="send-attachments"
+            index="03"
+            title="Attachments"
+            description="PDF or Word files, up to 25 MB in total."
+            actions={
+              <>
+                <input
+                  ref={uploadRef}
+                  type="file"
+                  multiple
+                  accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  className="hidden"
+                  onChange={(e) => onUpload(e.target.files)}
+                />
+                <Button type="button" size="sm" variant="outline" onClick={() => uploadRef.current?.click()}>
+                  <Upload aria-hidden /> Add file
+                </Button>
+              </>
+            }
+          >
+            {resumes.data && resumes.data.length > 0 ? (
+              <Field
+                label="From your resume library"
+                action={
+                  <span className="hidden items-center gap-0.5 sm:flex" aria-hidden>
+                    <Kbd>{mod}</Kbd>
+                    <Kbd>{altKey}</Kbd>
+                    <Kbd>R</Kbd>
+                  </span>
+                }
+              >
+                <ResumeCombobox
+                  resumes={resumes.data.map((r) => ({
+                    id: r.id,
+                    name: r.name,
+                    is_default: !!r.is_default,
+                  }))}
+                  value={resumeIds}
+                  onToggle={toggleResume}
+                  placeholder="Attach from Resume Library…"
+                  searchPlaceholder="Search resumes by name…"
+                  open={resumePickerOpen}
+                  onOpenChange={setResumePickerOpen}
+                />
+              </Field>
+            ) : resumes.isLoading ? (
+              <Skeleton className="h-10 w-full" />
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Your resume library is empty.{" "}
+                <Link to="/resumes" className="font-medium text-primary underline-offset-4 hover:underline">
+                  Upload a resume
+                </Link>{" "}
+                to attach it in one click.
+              </p>
+            )}
+
+            {selectedResumes.length > 0 || uploads.length > 0 ? (
+              <div className="space-y-3">
+                <ul className="divide-y-2 divide-border border-2 border-border">
+                  {selectedResumes.map((r) => (
+                    <AttachmentRow
+                      key={r.id}
+                      name={r.original_filename}
+                      meta={`${formatBytes(r.size_bytes)} · Library`}
+                      onRemove={() => toggleResume(r.id)}
+                    />
+                  ))}
+                  {uploads.map((f, i) => (
+                    <AttachmentRow
+                      key={`u-${i}-${f.name}`}
+                      name={f.name}
+                      meta={`${formatBytes(f.size)} · This email only`}
+                      onRemove={() => setUploads((u) => u.filter((_, j) => j !== i))}
+                    />
+                  ))}
+                </ul>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className={overLimit ? "font-medium text-destructive" : "text-muted-foreground"}>
+                      {overLimit ? "Over the 25 MB Gmail limit" : "Total size"}
+                    </span>
+                    <span className={cn("tabular-nums", overLimit ? "text-destructive" : "text-muted-foreground")}>
+                      {formatBytes(totalAttachBytes)} / 25 MB
+                    </span>
+                  </div>
+                  <Progress
+                    value={Math.min(100, (totalAttachBytes / (25 * 1024 * 1024)) * 100)}
+                    aria-label="Attachment size used"
+                    className={cn("h-1.5 bg-muted", overLimit && "[&>div]:bg-destructive")}
+                  />
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">No attachments yet.</p>
+            )}
+          </SectionCard>
+          <Button onClick={() => send.mutate()} disabled={!canSend} className="w-full" size="lg">
+            {send.isPending ? <Loader2 className="animate-spin" aria-hidden /> : <Send aria-hidden />}
             {send.isPending ? "Sending…" : "Send"}
           </Button>
         </div>
 
-        <div className="lg:sticky lg:top-4 h-fit">
-          <Card>
-            <CardHeader className="pb-3 flex-row items-center justify-between space-y-0 gap-2 flex-wrap">
-              <CardTitle className="text-base">Preview</CardTitle>
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={editingPreview ? "default" : "outline"}
-                  onClick={() => setEditingPreview((v) => !v)}
-                >
-                  {editingPreview ? (
-                    <><Eye className="h-3.5 w-3.5 mr-1" /> Preview</>
-                  ) : (
-                    <><Pencil className="h-3.5 w-3.5 mr-1" /> Edit</>
-                  )}
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    const company = jobMeta.company || (vars.company ?? "");
-                    const role = jobMeta.role || (vars.name ?? "");
-                    openLinkedOrGenerateResume({
-                      navigate,
-                      jobId: search.jobId,
-                      company,
-                      role,
-                      jobContext: jobMeta.jobContext || jobMeta.jobDescription,
-                      instructions: jobMeta.instructions,
-                      existingResumeVersionId:
-                        search.resumeVersionId ||
-                        getLinkedResumeVersionId({ jobId: search.jobId, company, role }),
-                      preserveEmail: { subject, body, recipientText, vars },
-                      openDialog: () => setResumeGenOpen(true),
-                    });
-                  }}
-                  disabled={aiFilling}
-                >
-                  <Wand2 className="h-3.5 w-3.5 mr-1" />
-                  {search.resumeVersionId ||
-                  getLinkedResumeVersionId({
-                    jobId: search.jobId,
-                    company: jobMeta.company || (vars.company ?? ""),
-                    role: jobMeta.role,
-                  })
-                    ? "Open Resume"
-                    : "Generate Resume"}
-                </Button>
-                <Button type="button" size="sm" variant="outline" onClick={() => setAiOpen(true)} disabled={aiFilling}>
-                  <Sparkles className="h-3.5 w-3.5 mr-1" />
-                  {aiFilling ? "Filling from job…" : "Generate Body Using AI"}
-                </Button>
+        {/* ── Preview (toggle to Edit) ───────────────────────────────── */}
+        <aside className="min-w-0 lg:sticky lg:top-24" aria-label="Email preview">
+          <section aria-labelledby="send-preview-title" className="airmail p-2 shadow-[var(--shadow-brutal)]">
+            <div className="relative border-2 border-border bg-card">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-border px-3 py-2.5 sm:px-4">
+                <h2 id="send-preview-title" className="font-expanded flex items-center gap-2 text-base">
+                  {editingPreview ? <Pencil className="size-4" aria-hidden /> : <Eye className="size-4" aria-hidden />}
+                  {editingPreview ? "Edit" : "Preview"}
+                </h2>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={editingPreview ? "secondary" : "outline"}
+                    onClick={() => setEditingPreview((v) => !v)}
+                    aria-pressed={editingPreview}
+                  >
+                    {editingPreview ? (
+                      <><Eye aria-hidden /> Preview</>
+                    ) : (
+                      <><Pencil aria-hidden /> Edit</>
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      const company = jobMeta.company || (vars.company ?? "");
+                      const role = jobMeta.role || (vars.name ?? "");
+                      openLinkedOrGenerateResume({
+                        navigate,
+                        jobId: search.jobId,
+                        company,
+                        role,
+                        jobContext: jobMeta.jobContext || jobMeta.jobDescription,
+                        instructions: jobMeta.instructions,
+                        existingResumeVersionId:
+                          search.resumeVersionId ||
+                          getLinkedResumeVersionId({ jobId: search.jobId, company, role }),
+                        preserveEmail: { subject, body, recipientText, vars },
+                        openDialog: () => setResumeGenOpen(true),
+                      });
+                    }}
+                    disabled={aiFilling}
+                  >
+                    <Wand2 aria-hidden />
+                    {linkedResumeVersionId ? "Open Resume" : "Generate Resume"}
+                  </Button>
+                  <Button type="button" size="sm" variant="outline" onClick={() => setAiOpen(true)} disabled={aiFilling}>
+                    {aiFilling ? <Loader2 className="animate-spin" aria-hidden /> : <Sparkles aria-hidden />}
+                    {aiFilling ? "Filling from job…" : "Generate Body Using AI"}
+                  </Button>
+                </div>
               </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
+
               {aiFilling && (
-                <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                <div
+                  role="status"
+                  className="flex items-center gap-2 border-b-2 border-border bg-info-subtle px-4 py-2 text-sm font-medium"
+                >
+                  <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden />
                   Tailoring subject & body from the full job posting…
                 </div>
               )}
+
               {editingPreview ? (
-                <>
-                  <div>
-                    <Label>Subject</Label>
+                <div className="space-y-4 p-4">
+                  <Field label="Subject" htmlFor="send-subject">
                     <Input
+                      id="send-subject"
                       value={subject}
                       onChange={(e) => setSubject(e.target.value)}
                       placeholder="Email subject…"
                     />
-                  </div>
-                  <div>
-                    <Label>Body</Label>
+                  </Field>
+                  <Field label="Body" htmlFor="send-body">
                     <Textarea
+                      id="send-body"
                       rows={16}
                       value={body}
                       onChange={(e) => setBody(e.target.value)}
                       placeholder="Write your email body…"
-                      className="min-h-[280px]"
+                      className="min-h-72 leading-relaxed"
                     />
+                  </Field>
+                </div>
+              ) : (
+                <>
+                  <dl className="space-y-1 border-b-2 border-dashed border-border/50 px-4 py-3 font-mono text-xs">
+                    <div className="flex gap-2">
+                      <dt className="w-16 shrink-0 uppercase tracking-wider text-muted-foreground">From</dt>
+                      <dd className="min-w-0 truncate">{selectedSender?.gmail_email ?? "—"}</dd>
+                    </div>
+                    <div className="flex gap-2">
+                      <dt className="w-16 shrink-0 uppercase tracking-wider text-muted-foreground">To</dt>
+                      <dd className="min-w-0 truncate">
+                        {firstRecipient ?? "—"}
+                        {parsed.valid.length > 1 && (
+                          <span className="text-muted-foreground"> +{parsed.valid.length - 1} more</span>
+                        )}
+                      </dd>
+                    </div>
+                  </dl>
+                  <div className="max-h-[70vh] overflow-auto px-4 py-4">
+                    <p className="eyebrow mb-1">Subject</p>
+                    <p className="font-expanded break-words text-base leading-snug">{previewSubject || subject || "—"}</p>
+                    <div className="mt-4 border-t-2 border-border pt-4">
+                      <p className="eyebrow mb-1">Body</p>
+                      <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">{previewBody || body || "—"}</div>
+                    </div>
                   </div>
                 </>
-              ) : (
-                <div className="rounded-lg border border-border bg-background p-4 text-sm space-y-3 max-h-[70vh] overflow-auto">
-                  <div>
-                    <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">Subject</div>
-                    <div className="font-medium break-words">{previewSubject || subject || "—"}</div>
-                  </div>
-                  <div className="border-t border-border pt-3">
-                    <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">Body</div>
-                    <div className="whitespace-pre-wrap leading-relaxed">{previewBody || body || "—"}</div>
-                  </div>
-                </div>
               )}
-            </CardContent>
-          </Card>
-        </div>
+            </div>
+          </section>
+        </aside>
       </div>
 
       <EmailGeneratorDialog
@@ -938,9 +1129,35 @@ function SendPage() {
           vars,
         }}
       />
-    </div>
+    </Page>
   );
 }
+
+function AttachmentRow({ name, meta, onRemove }: { name: string; meta: string; onRemove: () => void }) {
+  const ext = name.split(".").pop()?.slice(0, 4).toUpperCase() || "FILE";
+  return (
+    <li className="flex items-center gap-3 bg-card px-3 py-2.5">
+      <span className="grid h-10 w-12 shrink-0 place-items-center border-2 border-border bg-primary font-mono text-xs font-bold text-primary-foreground">
+        {ext}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm font-semibold">{name}</div>
+        <div className="font-mono text-xs text-muted-foreground">{meta}</div>
+      </div>
+      <IconButton label={`Remove ${name}`} size="sm" onClick={onRemove}>
+        <X aria-hidden />
+      </IconButton>
+    </li>
+  );
+}
+
+/** Human-readable labels for server skip reasons (CSV export keeps the raw codes). */
+const SKIP_REASON_LABELS: Record<string, string> = {
+  invalid_syntax: "Invalid address",
+  duplicate: "Duplicate",
+  unroutable_domain: "Domain can't receive mail",
+  blank: "Blank entry",
+};
 
 function SendReportDialog({
   report,
@@ -966,46 +1183,59 @@ function SendReportDialog({
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-lg">
-        <DialogHeader><DialogTitle>Campaign summary</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle>Campaign summary</DialogTitle>
+          {report && (
+            <DialogDescription>
+              {report.failed
+                ? `${report.sent} sent, ${report.failed} failed.`
+                : `All ${report.sent} email${report.sent === 1 ? "" : "s"} sent successfully.`}
+            </DialogDescription>
+          )}
+        </DialogHeader>
         {report && (
-          <div className="space-y-3 text-sm">
-            <div className="grid grid-cols-3 gap-2">
-              <Stat label="Total" value={report.total} />
-              <Stat label="Sent" value={report.sent} tone="ok" />
-              <Stat label="Failed" value={report.failed} tone={report.failed ? "err" : undefined} />
+          <div className="space-y-4">
+            <div className="grid grid-cols-3 gap-3">
+              <StatCard label="Total" value={report.total} flat />
+              <StatCard label="Sent" value={report.sent} tone="success" flat />
+              <StatCard
+                label="Failed"
+                value={report.failed}
+                tone={report.failed ? "danger" : "default"}
+                flat
+              />
             </div>
-            <div className="grid grid-cols-3 gap-2">
-              <Stat label="Invalid" value={report.skipped.filter((s) => s.reason === "invalid_syntax").length} />
-              <Stat label="Duplicate" value={report.skipped.filter((s) => s.reason === "duplicate").length} />
-              <Stat label="Domain errors" value={report.skipped.filter((s) => s.reason === "unroutable_domain").length} />
+            <div className="grid grid-cols-3 gap-3">
+              <StatCard label="Invalid" value={report.skipped.filter((s) => s.reason === "invalid_syntax").length} flat />
+              <StatCard label="Duplicate" value={report.skipped.filter((s) => s.reason === "duplicate").length} flat />
+              <StatCard label="Domain errors" value={report.skipped.filter((s) => s.reason === "unroutable_domain").length} flat />
             </div>
             {report.skipped.length > 0 && (
-              <div className="rounded-md border border-border bg-muted/30 p-2 max-h-40 overflow-auto text-xs space-y-1">
-                {report.skipped.map((s, i) => (
-                  <div key={i} className="flex items-center justify-between gap-2">
-                    <span className="truncate">{s.email || "(blank)"}</span>
-                    <span className="text-muted-foreground">{s.reason}{s.note ? ` · ${s.note}` : ""}</span>
-                  </div>
-                ))}
+              <div className="space-y-2">
+                <div className="eyebrow">Skipped ({report.skipped.length})</div>
+                <ul className="max-h-48 divide-y divide-border/20 overflow-auto border-2 border-border text-sm">
+                  {report.skipped.map((s, i) => (
+                    <li key={i} className="flex items-center justify-between gap-3 px-3 py-2">
+                      <span className="min-w-0 truncate font-mono text-xs">{s.email || "(blank)"}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {SKIP_REASON_LABELS[s.reason] ?? s.reason}
+                        {s.note ? ` · ${s.note}` : ""}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
           </div>
         )}
-        <DialogFooter>
-          <Button variant="outline" onClick={download}>Download report</Button>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={download}>
+            <Download aria-hidden /> Download report
+          </Button>
           <Button onClick={onClose}>Done</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-function Stat({ label, value, tone }: { label: string; value: number; tone?: "ok" | "err" }) {
-  const color = tone === "ok" ? "text-emerald-600 dark:text-emerald-400" : tone === "err" ? "text-destructive" : "";
-  return (
-    <div className="rounded-xl border border-border bg-card px-3 py-3 flex flex-col items-center justify-center text-center min-h-[4rem] gap-1">
-      <div className="text-xs font-medium uppercase tracking-[0.06em] text-muted-foreground">{label}</div>
-      <div className={`text-xl font-semibold leading-none ${color}`}>{value}</div>
-    </div>
   );
 }
 function csv(s: string) {

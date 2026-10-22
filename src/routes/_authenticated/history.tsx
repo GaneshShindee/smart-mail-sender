@@ -1,13 +1,12 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { deleteCampaign, listCampaignsPage, setCampaignFollowupEnabled, type CampaignSummary } from "@/lib/history.functions";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
   AlertDialog,
@@ -19,12 +18,35 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { StatusBadge, EmptyState } from "./dashboard";
-import { History as HistoryIcon, Search, Eye, FileText, Reply, Users, ChevronRight, Paperclip, BellRing, BellOff, MoreVertical, Trash2, CalendarRange, X } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { StatusBadge } from "@/components/app/status-badge";
+import { EmptyState } from "@/components/app/empty-state";
+import { ErrorState } from "@/components/app/error-state";
+import { IconButton } from "@/components/app/icon-button";
+import { Page, PageHeader } from "@/components/app/page";
+import { Pager } from "@/components/app/pager";
+import { SegmentedControl } from "@/components/app/segmented-control";
+import {
+  History as HistoryIcon,
+  Search,
+  Eye,
+  FileText,
+  Reply,
+  Users,
+  Paperclip,
+  BellRing,
+  BellOff,
+  MoreVertical,
+  Trash2,
+  CalendarRange,
+  X,
+  PenLine,
+  SearchX,
+} from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { DateRange } from "react-day-picker";
 
@@ -32,6 +54,13 @@ const PAGE_SIZE = 25;
 
 type CampaignFilters = { search: string; status: string; dateFrom: string; dateTo: string };
 const defaultCampaignFilters: CampaignFilters = { search: "", status: "all", dateFrom: "", dateTo: "" };
+
+const STATUS_OPTIONS = [
+  { value: "all", label: "All" },
+  { value: "sent", label: "Sent" },
+  { value: "partial", label: "Partial" },
+  { value: "failed", label: "Failed" },
+];
 
 /** Parses a "YYYY-MM-DD" filter value as a local date (not UTC, so the picker shows the right day). */
 function parseDateKey(key: string): Date | undefined {
@@ -53,10 +82,12 @@ function formatDateLabel(key: string): string {
 
 /** A "Sent date" filter button that opens a custom (themed) calendar popover instead of the native date picker. */
 function DateRangeFilter({
+  id,
   dateFrom,
   dateTo,
   onChange,
 }: {
+  id?: string;
   dateFrom: string;
   dateTo: string;
   onChange: (patch: Partial<CampaignFilters>) => void;
@@ -71,18 +102,22 @@ function DateRangeFilter({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
+          id={id}
           type="button"
           variant="outline"
           className={cn(
-            "w-full justify-start gap-2 font-normal sm:w-auto",
-            hasFilter ? "border-primary/40 text-foreground" : "text-muted-foreground",
+            "w-full justify-start font-mono text-xs uppercase tracking-[0.06em] sm:w-auto",
+            hasFilter ? "bg-accent text-foreground" : "text-muted-foreground",
           )}
         >
-          <CalendarRange className="h-4 w-4 shrink-0" />
-          {hasFilter ? `${formatDateLabel(dateFrom) || "…"} – ${formatDateLabel(dateTo) || "…"}` : "Sent date"}
+          <CalendarRange aria-hidden />
+          {hasFilter ? `${formatDateLabel(dateFrom) || "…"} – ${formatDateLabel(dateTo) || "…"}` : "Any date"}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">
+        <div className="border-b-2 border-border bg-secondary px-3 py-2 font-mono text-xs uppercase tracking-[0.08em] text-secondary-foreground">
+          Sent between
+        </div>
         <Calendar
           mode="range"
           numberOfMonths={1}
@@ -96,7 +131,7 @@ function DateRangeFilter({
           }
         />
         {hasFilter && (
-          <div className="flex justify-end border-t border-border p-2">
+          <div className="flex justify-end border-t-2 border-border p-2">
             <Button
               type="button"
               variant="ghost"
@@ -106,7 +141,8 @@ function DateRangeFilter({
                 setOpen(false);
               }}
             >
-              <X className="h-3.5 w-3.5 mr-1" />Clear
+              <X aria-hidden />
+              Clear dates
             </Button>
           </div>
         )}
@@ -130,7 +166,6 @@ export const Route = createFileRoute("/_authenticated/history")({
 });
 
 function HistoryPage() {
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [filters, setFilters] = useState<CampaignFilters>(defaultCampaignFilters);
   const [page, setPage] = useState(1);
@@ -139,7 +174,7 @@ function HistoryPage() {
   const setFollowupEnabledFn = useServerFn(setCampaignFollowupEnabled);
   const deleteCampaignFn = useServerFn(deleteCampaign);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ["campaign-history", filters, page],
     queryFn: () =>
       listFn({
@@ -156,6 +191,8 @@ function HistoryPage() {
   const rows = data?.rows ?? [];
   const total = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const filtering =
+    !!filters.search || filters.status !== "all" || !!filters.dateFrom || !!filters.dateTo;
 
   // Any filter change jumps back to page 1, since the current page may no longer exist.
   const updateFilter = (patch: Partial<CampaignFilters>) => {
@@ -167,6 +204,7 @@ function HistoryPage() {
     mutationFn: (vars: { campaignId: string; enabled: boolean }) =>
       setFollowupEnabledFn({ data: vars }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["campaign-history"] }),
+    onError: (e) => toast.error("Couldn't update follow-up tracking", { description: (e as Error).message }),
   });
 
   const deleteMutation = useMutation({
@@ -175,163 +213,264 @@ function HistoryPage() {
       queryClient.invalidateQueries({ queryKey: ["campaign-history"] });
       setDeleteTarget(null);
     },
+    onError: (e) => toast.error("Couldn't delete campaign", { description: (e as Error).message }),
   });
 
+  const rowActions = (c: CampaignSummary) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <IconButton label={`Options for ${campaignTitle(c)}`} size="sm">
+          <MoreVertical aria-hidden />
+        </IconButton>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem
+          onClick={() => toggleFollowup.mutate({ campaignId: c.id, enabled: !c.followupEnabled })}
+        >
+          {c.followupEnabled ? (
+            <><BellOff aria-hidden />Turn off follow-up tracking</>
+          ) : (
+            <><BellRing aria-hidden />Turn on follow-up tracking</>
+          )}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          className="text-destructive focus:text-destructive"
+          onClick={() => setDeleteTarget(c)}
+        >
+          <Trash2 aria-hidden />Delete campaign
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      <div>
-        <h1 className="page-title">Email History</h1>
-        <p className="text-sm text-muted-foreground">
-          One row per campaign. Open a campaign to see its recipients, filters and bulk reply tools.
-        </p>
-      </div>
+    <Page size="wide">
+      <PageHeader
+        eyebrow="02 · Outreach"
+        title="History"
+        description="The ledger book: one row per campaign. Open a campaign to see its recipients, filters and bulk reply tools."
+        actions={
+          <Button asChild>
+            <Link to="/send">
+              <PenLine aria-hidden /> New campaign
+            </Link>
+          </Button>
+        }
+      />
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-        <div className="relative w-full sm:flex-1 sm:min-w-[220px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            value={filters.search}
-            onChange={(e) => updateFilter({ search: e.target.value })}
-            placeholder="Search subject, recipient, role or company…"
-            className="pl-9"
-          />
+      <div className="space-y-0">
+        <div
+          role="search"
+          aria-label="Filter campaigns"
+          className="flex flex-col gap-3 border-2 border-border bg-card p-3 shadow-[var(--shadow-brutal)] sm:p-4 lg:flex-row lg:items-end"
+        >
+          <div className="w-full space-y-1.5 lg:flex-1">
+            <Label htmlFor="history-search" className="eyebrow">
+              Search
+            </Label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+              <Input
+                id="history-search"
+                value={filters.search}
+                onChange={(e) => updateFilter({ search: e.target.value })}
+                placeholder="Search subject, recipient, role or company…"
+                className="pl-9"
+              />
+            </div>
+          </div>
+          <div className="min-w-0 space-y-1.5">
+            <span className="eyebrow block" aria-hidden>
+              Status
+            </span>
+            <SegmentedControl
+              value={filters.status}
+              onValueChange={(status) => updateFilter({ status })}
+              options={STATUS_OPTIONS}
+              ariaLabel="Campaign status"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="history-date" className="eyebrow">
+              Sent date
+            </Label>
+            <DateRangeFilter
+              id="history-date"
+              dateFrom={filters.dateFrom}
+              dateTo={filters.dateTo}
+              onChange={updateFilter}
+            />
+          </div>
         </div>
-        <Select value={filters.status} onValueChange={(status) => updateFilter({ status })}>
-          <SelectTrigger className="w-full sm:w-40"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            <SelectItem value="sent">Sent</SelectItem>
-            <SelectItem value="partial">Partial</SelectItem>
-            <SelectItem value="failed">Failed</SelectItem>
-          </SelectContent>
-        </Select>
-        <DateRangeFilter dateFrom={filters.dateFrom} dateTo={filters.dateTo} onChange={updateFilter} />
-      </div>
 
-      <Card>
-        <CardContent className="py-2">
-          {isLoading ? (
-            <div className="space-y-2 py-4">
-              {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}
+        <div className="border-2 border-t-0 border-border bg-card shadow-[var(--shadow-brutal)]">
+          <div className="flex items-center justify-between gap-3 border-b-2 border-border px-4 py-2">
+            <p className="font-mono text-xs uppercase tracking-[0.08em]" aria-live="polite">
+              {isLoading ? "Loading…" : `${total} campaign${total === 1 ? "" : "s"}`}
+            </p>
+            {filtering && (
+              <Button variant="ghost" size="sm" onClick={() => updateFilter(defaultCampaignFilters)}>
+                <X aria-hidden /> Clear filters
+              </Button>
+            )}
+          </div>
+
+          {isError ? (
+            <div className="p-4">
+              <ErrorState
+                title="Couldn't load your history"
+                error={error}
+                onRetry={() => refetch()}
+                retrying={isFetching}
+              />
+            </div>
+          ) : isLoading ? (
+            <div className="space-y-2 p-4">
+              {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
             </div>
           ) : rows.length ? (
-            <ul className="divide-y divide-border">
-              {rows.map((c) => (
-                <li
-                  key={c.id}
-                  className={`flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3 py-3 px-2 -mx-2 rounded-md cursor-pointer hover:bg-accent/40 transition-colors ${
-                    c.followupPending ? "border-l-2 border-l-destructive bg-destructive/5" : ""
-                  }`}
-                  onClick={() => navigate({ to: "/campaigns/$id", params: { id: c.id } })}
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="font-medium truncate">
-                      {c.role && c.company
-                        ? `${c.role} · ${c.company}`
-                        : c.role || c.company || c.subject}
-                    </div>
-                    <div className="text-xs text-muted-foreground truncate">
-                      {c.role || c.company ? `${c.subject} · ` : ""}
-                      {new Date(c.sent_at).toLocaleString()}
-                      {c.sender_email ? ` · from ${c.sender_email}` : ""}
-                      {c.template_name ? ` · ${c.template_name}` : ""}
-                    </div>
-                    {c.status === "failed" && c.error && (
-                      <div className="text-xs text-destructive truncate">{c.error}</div>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1.5 flex-wrap sm:justify-end sm:shrink-0">
-                    {c.followupPending && (
-                      <Badge variant="destructive" className="gap-1">
-                        <BellRing className="h-3 w-3" />Day {c.followupDueDay} follow-up
-                      </Badge>
-                    )}
-                    <Badge variant="outline" className="gap-1">
-                      <Users className="h-3 w-3" />{c.recipients}
-                    </Badge>
-                    {c.opened > 0 && (
-                      <Badge variant="secondary" className="gap-1">
-                        <Eye className="h-3 w-3" />{c.opened}/{c.recipients}
-                      </Badge>
-                    )}
-                    {c.resume_views > 0 && (
-                      <Badge variant="secondary" className="gap-1"><FileText className="h-3 w-3" />{c.resume_views}</Badge>
-                    )}
-                    {c.replied > 0 && (
-                      <Badge className="gap-1"><Reply className="h-3 w-3" />{c.replied}</Badge>
-                    )}
-                    {c.attachment_count > 0 && (
-                      <Badge variant="outline" className="gap-1"><Paperclip className="h-3 w-3" />{c.attachment_count}</Badge>
-                    )}
-                    <StatusBadge status={c.status} />
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={(e) => e.stopPropagation()}
-                          aria-label="Campaign options"
-                        >
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                        <DropdownMenuItem
-                          onClick={() => toggleFollowup.mutate({ campaignId: c.id, enabled: !c.followupEnabled })}
-                        >
-                          {c.followupEnabled ? (
-                            <><BellOff className="h-4 w-4 mr-2" />Turn off follow-up tracking</>
-                          ) : (
-                            <><BellRing className="h-4 w-4 mr-2" />Turn on follow-up tracking</>
-                          )}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="text-destructive focus:text-destructive"
-                          onClick={() => setDeleteTarget(c)}
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />Delete campaign
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground hidden sm:block" />
-                  </div>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <EmptyState icon={HistoryIcon} title="No campaigns match" desc="Try changing the search or status filter." />
-          )}
-        </CardContent>
-      </Card>
+            <>
+              <ul className="divide-y divide-border/20 md:hidden">
+                {rows.map((c) => (
+                  <li
+                    key={c.id}
+                    className={cn("flex items-start gap-2 pr-2", c.followupPending && "bg-destructive-subtle")}
+                  >
+                    <Link
+                      to="/campaigns/$id"
+                      params={{ id: c.id }}
+                      className="block min-w-0 flex-1 space-y-2 py-3 pl-4"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="min-w-0 truncate font-semibold">{campaignTitle(c)}</span>
+                        <StatusBadge status={c.status} className="shrink-0" />
+                      </div>
+                      <div className="font-mono text-xs text-muted-foreground">
+                        {formatSentAt(c.sent_at)}
+                        {c.sender_email ? ` · ${c.sender_email}` : ""}
+                      </div>
+                      {(c.role || c.company) && (
+                        <div className="truncate text-xs text-muted-foreground">{c.subject}</div>
+                      )}
+                      {c.status === "failed" && c.error && (
+                        <div className="truncate text-xs text-destructive">{c.error}</div>
+                      )}
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {c.followupPending && <FollowupStamp day={c.followupDueDay} />}
+                        <Badge variant="outline">
+                          <Users aria-hidden />
+                          {c.recipients}
+                          <span className="sr-only"> recipients</span>
+                        </Badge>
+                        <EngagementChips c={c} />
+                      </div>
+                    </Link>
+                    <div className="pt-2.5">{rowActions(c)}</div>
+                  </li>
+                ))}
+              </ul>
 
-      {total > 0 && (
-        <div className="flex flex-col items-center gap-2 sm:flex-row sm:justify-between">
-          <p className="text-xs text-muted-foreground">
-            Page {page} of {totalPages} · {total} campaign{total === 1 ? "" : "s"}
-          </p>
-          <Pagination className="mx-0 w-auto">
-            <PaginationContent>
-              <PaginationItem>
-                <PaginationPrevious
-                  href="#"
-                  aria-disabled={page <= 1}
-                  className={page <= 1 ? "pointer-events-none opacity-50" : undefined}
-                  onClick={(e) => { e.preventDefault(); setPage((p) => Math.max(1, p - 1)); }}
-                />
-              </PaginationItem>
-              <PaginationItem>
-                <PaginationNext
-                  href="#"
-                  aria-disabled={page >= totalPages}
-                  className={page >= totalPages ? "pointer-events-none opacity-50" : undefined}
-                  onClick={(e) => { e.preventDefault(); setPage((p) => Math.min(totalPages, p + 1)); }}
-                />
-              </PaginationItem>
-            </PaginationContent>
-          </Pagination>
+              <div className="hidden md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Sent</TableHead>
+                      <TableHead>Campaign</TableHead>
+                      <TableHead className="text-right">Rcpts</TableHead>
+                      <TableHead>Engagement</TableHead>
+                      <TableHead>Follow-up</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="w-12">
+                        <span className="sr-only">Actions</span>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {rows.map((c) => (
+                      <TableRow
+                        key={c.id}
+                        className={cn("relative", c.followupPending && "bg-destructive-subtle")}
+                      >
+                        <TableCell className="whitespace-nowrap py-2 font-mono text-xs">
+                          {formatSentAt(c.sent_at)}
+                        </TableCell>
+                        <TableCell className="max-w-80 py-2">
+                          <Link
+                            to="/campaigns/$id"
+                            params={{ id: c.id }}
+                            className="block truncate font-semibold after:absolute after:inset-0 after:content-['']"
+                          >
+                            {campaignTitle(c)}
+                          </Link>
+                          <span className="block truncate text-xs text-muted-foreground">
+                            {c.role || c.company ? `${c.subject} · ` : ""}
+                            {c.sender_email ? `from ${c.sender_email}` : ""}
+                            {c.template_name ? ` · ${c.template_name}` : ""}
+                          </span>
+                          {c.status === "failed" && c.error && (
+                            <span className="block truncate text-xs text-destructive">{c.error}</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="py-2 text-right font-mono text-sm tabular-nums">
+                          {c.recipients}
+                        </TableCell>
+                        <TableCell className="py-2">
+                          <EngagementChips c={c} />
+                        </TableCell>
+                        <TableCell className="py-2">
+                          {c.followupPending ? (
+                            <FollowupStamp day={c.followupDueDay} />
+                          ) : (
+                            <span className="inline-flex items-center gap-1 font-mono text-xs text-muted-foreground">
+                              {c.followupEnabled ? (
+                                <><BellRing className="size-3.5" aria-hidden />On track</>
+                              ) : (
+                                <><BellOff className="size-3.5" aria-hidden />Off</>
+                              )}
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="py-2">
+                          <StatusBadge status={c.status} />
+                        </TableCell>
+                        <TableCell className="relative z-10 py-1 text-right">{rowActions(c)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
+          ) : filtering ? (
+            <div className="p-4">
+              <EmptyState
+                icon={SearchX}
+                title="No matches"
+                description="No campaigns match these filters. Try a different search, status or date range."
+                action={
+                  <Button variant="outline" onClick={() => updateFilter(defaultCampaignFilters)}>
+                    <X aria-hidden /> Clear filters
+                  </Button>
+                }
+              />
+            </div>
+          ) : (
+            <div className="p-4">
+              <EmptyState
+                icon={HistoryIcon}
+                title="No campaigns yet"
+                description="Every campaign you send is logged here with its opens, resume views and replies."
+                action={
+                  <Button asChild>
+                    <Link to="/send">Send your first email</Link>
+                  </Button>
+                }
+              />
+            </div>
+          )}
         </div>
-      )}
+      </div>
+
+      <Pager page={page} totalPages={totalPages} onPageChange={setPage} totalItems={total} />
 
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => { if (!o) setDeleteTarget(null); }}>
         <AlertDialogContent>
@@ -345,18 +484,74 @@ function HistoryPage() {
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deleteMutation.isPending}>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className={buttonVariants({ variant: "destructive" })}
               disabled={deleteMutation.isPending}
               onClick={(e) => {
                 e.preventDefault();
                 if (deleteTarget) deleteMutation.mutate(deleteTarget.id);
               }}
             >
-              Delete
+              {deleteMutation.isPending ? "Deleting…" : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </Page>
+  );
+}
+
+function campaignTitle(c: CampaignSummary) {
+  return c.role && c.company ? `${c.role} · ${c.company}` : c.role || c.company || c.subject;
+}
+
+function formatSentAt(iso: string) {
+  return new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
+/** "Follow-up due" rubber stamp — icon + text, so it never relies on the row tint alone. */
+function FollowupStamp({ day }: { day: number | null }) {
+  return (
+    <span className="stamp inline-flex items-center gap-1 bg-card px-1.5 py-0.5 text-xs text-destructive">
+      <BellRing className="size-3.5" aria-hidden />
+      Day {day} follow-up due
+    </span>
+  );
+}
+
+function EngagementChips({ c }: { c: CampaignSummary }) {
+  if (c.opened === 0 && c.resume_views === 0 && c.replied === 0 && c.attachment_count === 0) {
+    return <span className="font-mono text-xs text-muted-foreground">—</span>;
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {c.opened > 0 && (
+        <Badge variant="info" title="Recipients who opened">
+          <Eye aria-hidden />
+          {c.opened}/{c.recipients}
+          <span className="sr-only"> opened</span>
+        </Badge>
+      )}
+      {c.resume_views > 0 && (
+        <Badge variant="highlight" title="Resume views">
+          <FileText aria-hidden />
+          {c.resume_views}
+          <span className="sr-only"> resume views</span>
+        </Badge>
+      )}
+      {c.replied > 0 && (
+        <Badge variant="default" title="Replies">
+          <Reply aria-hidden />
+          {c.replied}
+          <span className="sr-only"> replies</span>
+        </Badge>
+      )}
+      {c.attachment_count > 0 && (
+        <Badge variant="outline" title="Attachments">
+          <Paperclip aria-hidden />
+          {c.attachment_count}
+          <span className="sr-only"> attachments</span>
+        </Badge>
+      )}
     </div>
   );
 }
