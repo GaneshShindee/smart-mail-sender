@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { verifyGeminiApiKey, verifyGrokApiKey } from "@/lib/ai-gateway.server";
+import { verifyGeminiApiKey, verifyGrokApiKey, verifyClaudeApiKey } from "@/lib/ai-gateway.server";
 import { AI_PROVIDERS, type AiProvider } from "@/lib/ai-provider";
 
 function maskKey(key: string): string {
@@ -17,23 +17,25 @@ export const getAiKeyStatus = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { data } = await context.supabase
       .from("profiles")
-      .select("gemini_api_key, grok_api_key, active_ai_provider")
+      .select("gemini_api_key, grok_api_key, claude_api_key, active_ai_provider")
       .eq("id", context.userId)
       .maybeSingle();
     const geminiKey = data?.gemini_api_key ?? null;
     const grokKey = data?.grok_api_key ?? null;
+    const claudeKey = data?.claude_api_key ?? null;
     const activeProvider = (data?.active_ai_provider as AiProvider | undefined) ?? "lovable";
     return {
       activeProvider: AI_PROVIDERS.includes(activeProvider) ? activeProvider : "lovable",
       gemini: { hasKey: !!geminiKey, maskedKey: geminiKey ? maskKey(geminiKey) : null },
       grok: { hasKey: !!grokKey, maskedKey: grokKey ? maskKey(grokKey) : null },
+      claude: { hasKey: !!claudeKey, maskedKey: claudeKey ? maskKey(claudeKey) : null },
     };
   });
 
 /** Picks which saved key (if any) AI features should use. */
 export const setActiveAiProvider = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => z.object({ provider: z.enum(["lovable", "gemini", "grok"]) }).parse(d))
+  .inputValidator((d: unknown) => z.object({ provider: z.enum(["lovable", "gemini", "grok", "claude"]) }).parse(d))
   .handler(async ({ data, context }) => {
     const { error } = await context.supabase
       .from("profiles")
@@ -96,6 +98,35 @@ export const clearGrokApiKey = createServerFn({ method: "POST" })
     const { error } = await context.supabase
       .from("profiles")
       .update({ grok_api_key: null })
+      .eq("id", context.userId);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+/** Validates a Claude (Anthropic) API key against the live API without saving it. */
+export const testClaudeApiKey = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ apiKey: z.string().trim().min(10).max(200) }).parse(d))
+  .handler(async ({ data }) => verifyClaudeApiKey(data.apiKey));
+
+export const setClaudeApiKey = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ apiKey: z.string().trim().min(10).max(200) }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase
+      .from("profiles")
+      .update({ claude_api_key: data.apiKey })
+      .eq("id", context.userId);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const clearClaudeApiKey = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { error } = await context.supabase
+      .from("profiles")
+      .update({ claude_api_key: null })
       .eq("id", context.userId);
     if (error) throw new Error(error.message);
     return { ok: true };
