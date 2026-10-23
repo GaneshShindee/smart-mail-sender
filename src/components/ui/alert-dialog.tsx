@@ -2,9 +2,10 @@ import * as React from "react";
 import * as AlertDialogPrimitive from "@radix-ui/react-alert-dialog";
 
 import { cn } from "@/lib/utils";
+import { withBackToClose } from "@/hooks/use-back-to-close";
 import { buttonVariants } from "@/components/ui/button";
 
-const AlertDialog = AlertDialogPrimitive.Root;
+const AlertDialog = withBackToClose(AlertDialogPrimitive.Root);
 
 const AlertDialogTrigger = AlertDialogPrimitive.Trigger;
 

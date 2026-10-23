@@ -6,8 +6,9 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { withBackToClose } from "@/hooks/use-back-to-close";
 
-const Sheet = SheetPrimitive.Root;
+const Sheet = withBackToClose(SheetPrimitive.Root);
 
 const SheetTrigger = SheetPrimitive.Trigger;
 

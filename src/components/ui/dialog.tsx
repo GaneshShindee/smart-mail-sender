@@ -5,8 +5,9 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { withBackToClose } from "@/hooks/use-back-to-close";
 
-const Dialog = DialogPrimitive.Root;
+const Dialog = withBackToClose(DialogPrimitive.Root);
 
 const DialogTrigger = DialogPrimitive.Trigger;
 
