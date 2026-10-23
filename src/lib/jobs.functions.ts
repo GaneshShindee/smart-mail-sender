@@ -20,6 +20,7 @@ export type Job = {
   technologies: string[];
   tags: string[];
   recruiter_email: string;
+  recruiter_phone: string | null;
   apply_url: string;
   company_website: string;
   source_url: string;
@@ -43,6 +44,7 @@ const jobShape = z.object({
   technologies: z.array(z.string().max(80)).max(80).default([]),
   tags: z.array(z.string().max(60)).max(40).default([]),
   recruiter_email: z.string().max(200).default(""),
+  recruiter_phone: z.string().trim().max(40).default(""),
   apply_url: z.string().max(500).default(""),
   company_website: z.string().max(500).default(""),
   source_url: z.string().max(500).default(""),
@@ -191,25 +193,17 @@ export const upsertJob = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => jobShape.parse(d))
   .handler(async ({ data, context }) => {
-    const { id: _omit, ...rest } = data;
+    const { id: _omit, recruiter_phone, ...rest } = data;
     void _omit;
-    const payload = { ...rest, user_id: context.userId };
-    if (data.id) {
-      const { data: row, error } = await context.supabase
-        .from("jobs")
-        .update(payload)
-        .eq("id", data.id)
-        .eq("user_id", context.userId)
-        .select()
-        .single();
-      if (error) throw new Error(error.message);
-      return row as Job;
-    }
-    const { data: row, error } = await context.supabase
-      .from("jobs")
-      .insert(payload)
-      .select()
-      .single();
+    const base = { ...rest, user_id: context.userId };
+    const write = (payload: typeof base & { recruiter_phone?: string | null }) =>
+      data.id
+        ? context.supabase.from("jobs").update(payload).eq("id", data.id).eq("user_id", context.userId).select().single()
+        : context.supabase.from("jobs").insert(payload).select().single();
+
+    let { data: row, error } = await write({ ...base, recruiter_phone: recruiter_phone || null });
+    // Until the recruiter_phone migration is applied, keep saving jobs without it.
+    if (error && /recruiter_phone/.test(error.message)) ({ data: row, error } = await write(base));
     if (error) throw new Error(error.message);
     return row as Job;
   });

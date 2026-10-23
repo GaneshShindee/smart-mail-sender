@@ -8,6 +8,7 @@ import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 import { IconButton } from "@/components/app/icon-button";
 import { NAV_GROUPS, findNavItem } from "@/lib/nav-items";
 import { useTheme } from "@/hooks/use-theme";
+import { useModEnterSubmit } from "@/hooks/use-mod-enter-submit";
 
 const DETAIL_ROUTES = [
   { prefix: "/campaigns/", parent: "/history", label: "Campaign" },
@@ -36,6 +37,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const group = item ? NAV_GROUPS.find((g) => g.id === item.group) : undefined;
   const nested = item && pathname !== item.url;
   const detailLabel = alias?.label ?? "Detail";
+  useModEnterSubmit();
 
   return (
     <SidebarProvider>

@@ -24,12 +24,13 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Bookmark, BookmarkCheck, Briefcase, Building2, MapPin, Plus, Search, Send, Share2, Sparkles, Trash2, Wand2, ExternalLink, Pencil, CalendarDays, Link2, RefreshCw, MoreHorizontal, SearchX, X } from "lucide-react";
+import { Bookmark, BookmarkCheck, Briefcase, Building2, MapPin, Plus, Search, Send, Share2, Sparkles, Trash2, Wand2, ExternalLink, PhoneCall, Pencil, CalendarDays, Link2, RefreshCw, MoreHorizontal, SearchX, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { relativeTime } from "@/lib/user-agent";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { JobSourcesDialog } from "@/components/job-sources-dialog";
+import { CallFollowupDialog, type CallFollowupTarget } from "@/components/call-followup-dialog";
 import { getLinkedResumeVersionId } from "@/lib/job-resume-link";
 import { Page, PageHeader } from "@/components/app/page";
 import { EmptyState } from "@/components/app/empty-state";
@@ -60,6 +61,7 @@ type EditForm = {
   technologies: string;
   tags: string;
   recruiter_email: string;
+  recruiter_phone: string;
   apply_url: string;
   company_website: string;
   source_url: string;
@@ -69,7 +71,7 @@ type EditForm = {
 const blankForm = (): EditForm => ({
   id: null, title: "", company: "", location: "", work_mode: "", employment_type: "",
   experience: "", salary: "", description: "", responsibilities: "", skills: "",
-  technologies: "", tags: "", recruiter_email: "", apply_url: "", company_website: "",
+  technologies: "", tags: "", recruiter_email: "", recruiter_phone: "", apply_url: "", company_website: "",
   source_url: "", is_public: true,
 });
 
@@ -104,6 +106,7 @@ function JobsPage() {
   const [parseText, setParseText] = useState("");
   const [importUrl, setImportUrl] = useState("");
   const [form, setForm] = useState<EditForm>(blankForm());
+  const [callTarget, setCallTarget] = useState<CallFollowupTarget | null>(null);
 
   // Every filter/search setter resets back to page 1, since the current page may no longer exist.
   const setSearchAndReset = (v: string) => { setSearch(v); setPage(1); };
@@ -156,7 +159,7 @@ function JobsPage() {
         experience: f.experience, salary: f.salary, description: f.description,
         responsibilities: toArr(f.responsibilities), skills: toArr(f.skills),
         technologies: toArr(f.technologies), tags: toArr(f.tags),
-        recruiter_email: f.recruiter_email, apply_url: f.apply_url,
+        recruiter_email: f.recruiter_email, recruiter_phone: f.recruiter_phone, apply_url: f.apply_url,
         company_website: f.company_website, source_url: f.source_url,
         is_public: f.is_public,
       },
@@ -182,7 +185,7 @@ function JobsPage() {
         skills: p.skills.join(", "),
         technologies: p.technologies.join(", "),
         tags: p.tags.join(", "),
-        recruiter_email: p.recruiter_email, apply_url: p.apply_url,
+        recruiter_email: p.recruiter_email, recruiter_phone: p.recruiter_phone, apply_url: p.apply_url,
         company_website: p.company_website, source_url: "",
         is_public: true,
       });
@@ -205,6 +208,7 @@ function JobsPage() {
         technologies: p.technologies.join(", "),
         tags: p.tags.join(", "),
         recruiter_email: p.recruiter_email,
+        recruiter_phone: p.recruiter_phone,
         apply_url: p.apply_url,
         company_website: p.company_website,
         source_url: p.source_url,
@@ -256,7 +260,7 @@ function JobsPage() {
       skills: j.skills.join(", "),
       technologies: j.technologies.join(", "),
       tags: j.tags.join(", "),
-      recruiter_email: j.recruiter_email, apply_url: j.apply_url,
+      recruiter_email: j.recruiter_email, recruiter_phone: j.recruiter_phone ?? "", apply_url: j.apply_url,
       company_website: j.company_website, source_url: j.source_url,
       is_public: j.is_public,
     });
@@ -503,6 +507,13 @@ function JobsPage() {
                   <div className="flex flex-wrap items-center gap-2 border-t-2 border-border bg-muted px-3 py-2.5">
                     <Button size="sm" onClick={() => generateResume(j)}><Wand2 aria-hidden /> Generate Resume</Button>
                     <Button size="sm" variant="outline" onClick={() => generateEmail(j)}><Send aria-hidden /> Generate Email</Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setCallTarget({ jobId: j.id, phone: j.recruiter_phone, company: j.company, role: j.title, canSavePhone: isMine })}
+                    >
+                      <PhoneCall aria-hidden /> Call follow-up
+                    </Button>
                     {j.apply_url && (
                       <Button size="sm" asChild variant="outline">
                         <a href={j.apply_url} target="_blank" rel="noreferrer"><ExternalLink aria-hidden /> Apply<span className="sr-only"> (opens in new tab)</span></a>
@@ -627,6 +638,9 @@ function JobsPage() {
             </FormSection>
             <FormSection index="04" title="How to apply">
               <Field label="Recruiter email" htmlFor="job-recruiter-email"><Input id="job-recruiter-email" value={form.recruiter_email} onChange={(e) => setForm({ ...form, recruiter_email: e.target.value })} /></Field>
+              <Field label="Recruiter phone (optional)" htmlFor="job-recruiter-phone" hint="Used for call follow-ups.">
+                <Input id="job-recruiter-phone" type="tel" inputMode="tel" className="font-mono" placeholder="+91 98765 43210" value={form.recruiter_phone} onChange={(e) => setForm({ ...form, recruiter_phone: e.target.value })} />
+              </Field>
               <Field label="Apply URL" htmlFor="job-apply-url"><Input id="job-apply-url" value={form.apply_url} onChange={(e) => setForm({ ...form, apply_url: e.target.value })} /></Field>
               <Field label="Source URL" htmlFor="job-source-url" className="md:col-span-2"><Input id="job-source-url" value={form.source_url} onChange={(e) => setForm({ ...form, source_url: e.target.value })} placeholder="Original posting link" /></Field>
               <div className="flex items-center justify-between gap-4 border-2 border-border bg-muted px-4 py-3 md:col-span-2">
@@ -645,6 +659,7 @@ function JobsPage() {
       </Dialog>
 
       <JobSourcesDialog open={sourcesOpen} onOpenChange={setSourcesOpen} />
+      <CallFollowupDialog open={!!callTarget} onOpenChange={(o) => { if (!o) setCallTarget(null); }} target={callTarget} />
     </Page>
   );
 }

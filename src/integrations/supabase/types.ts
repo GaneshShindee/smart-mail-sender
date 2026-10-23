@@ -14,6 +14,62 @@ export type Database = {
   }
   public: {
     Tables: {
+      call_followups: {
+        Row: {
+          company: string
+          completed_at: string | null
+          contact_name: string
+          created_at: string
+          due_at: string
+          id: string
+          job_id: string | null
+          notes: string
+          phone: string
+          role: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          company?: string
+          completed_at?: string | null
+          contact_name?: string
+          created_at?: string
+          due_at: string
+          id?: string
+          job_id?: string | null
+          notes?: string
+          phone: string
+          role?: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          company?: string
+          completed_at?: string | null
+          contact_name?: string
+          created_at?: string
+          due_at?: string
+          id?: string
+          job_id?: string | null
+          notes?: string
+          phone?: string
+          role?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "call_followups_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       campaign_followup_days: {
         Row: {
           day_number: number
@@ -840,6 +896,7 @@ export type Database = {
           is_public: boolean
           location: string | null
           recruiter_email: string | null
+          recruiter_phone: string | null
           responsibilities: string[]
           salary: string | null
           skills: string[]
@@ -864,6 +921,7 @@ export type Database = {
           is_public?: boolean
           location?: string | null
           recruiter_email?: string | null
+          recruiter_phone?: string | null
           responsibilities?: string[]
           salary?: string | null
           skills?: string[]
@@ -888,6 +946,7 @@ export type Database = {
           is_public?: boolean
           location?: string | null
           recruiter_email?: string | null
+          recruiter_phone?: string | null
           responsibilities?: string[]
           salary?: string | null
           skills?: string[]

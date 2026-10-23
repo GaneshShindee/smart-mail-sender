@@ -205,6 +205,8 @@ async function insertParsedJob(
     technologies: fields.technologies || [],
     tags: fields.tags || [],
     recruiter_email: fields.recruiter_email || "",
+    // Only sent when found, so syncing keeps working before the recruiter_phone migration lands.
+    ...(fields.recruiter_phone ? { recruiter_phone: fields.recruiter_phone } : {}),
     apply_url: fields.apply_url || meta.applyUrl || meta.sourceUrl || "",
     company_website: fields.company_website || "",
     source_url: meta.sourceUrl || "",

@@ -182,7 +182,7 @@ function PersonalTab({ details, onSaved }: { details: ProfileDetails; onSaved: (
         <Textarea id="profile-summary" rows={5} value={form.summary} onChange={(e) => setForm({ ...form, summary: e.target.value })} />
       </Field>
       <div className="flex justify-end border-t-2 border-border pt-4">
-        <Button onClick={() => save.mutate()} disabled={save.isPending} className="w-full sm:w-auto">
+        <Button data-mod-enter onClick={() => save.mutate()} disabled={save.isPending} className="w-full sm:w-auto">
           <Save aria-hidden /> {save.isPending ? "Saving…" : "Save"}
         </Button>
       </div>

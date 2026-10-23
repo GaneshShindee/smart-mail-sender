@@ -61,6 +61,7 @@ DialogHeader.displayName = "DialogHeader";
 
 const DialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
+    data-slot="dialog-footer"
     // Actions live at the TOP of every dialog: CSS order places the footer right under the header.
     className={cn(
       "sticky top-0 z-10 order-[-1] flex flex-row flex-wrap items-center justify-end gap-2 border-b-2 border-border bg-card pb-4 pt-1",

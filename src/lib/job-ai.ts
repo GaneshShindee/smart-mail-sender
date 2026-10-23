@@ -9,7 +9,7 @@ export async function aiExtractJobFields(
   ai: { supabase: SupabaseClient<Database>; userId: string },
 ) {
   const sys =
-    "You extract job information from arbitrary text (LinkedIn, Greenhouse, Lever, careers pages, emails, PDFs, Telegram posts). Return STRICT JSON with keys: title, company, location, work_mode (remote|hybrid|onsite|''), employment_type (full-time|intern|contract|part-time|''), experience, salary, description, responsibilities (string[]), skills (string[]), technologies (string[]), tags (string[]), recruiter_email, apply_url, company_website. If a field is unknown, use an empty string or empty array. Do not invent facts. No markdown, no prose.";
+    "You extract job information from arbitrary text (LinkedIn, Greenhouse, Lever, careers pages, emails, PDFs, Telegram posts). Return STRICT JSON with keys: title, company, location, work_mode (remote|hybrid|onsite|''), employment_type (full-time|intern|contract|part-time|''), experience, salary, description, responsibilities (string[]), skills (string[]), technologies (string[]), tags (string[]), recruiter_email, recruiter_phone (phone number exactly as written, or ''), apply_url, company_website. If a field is unknown, use an empty string or empty array. Do not invent facts. No markdown, no prose.";
   const content = await aiChatJson({
     supabase: ai.supabase,
     userId: ai.userId,
@@ -34,6 +34,7 @@ export async function aiExtractJobFields(
     technologies: asArr("technologies"),
     tags: asArr("tags"),
     recruiter_email: asStr("recruiter_email"),
+    recruiter_phone: asStr("recruiter_phone"),
     apply_url: asStr("apply_url"),
     company_website: asStr("company_website"),
   };

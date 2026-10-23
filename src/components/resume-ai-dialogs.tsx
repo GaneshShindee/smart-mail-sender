@@ -292,7 +292,10 @@ export function InlineAskAi({
                 onChange={(e) => setInstructions(e.target.value)}
                 placeholder="e.g. Make this bullet quantified and ATS-friendly"
                 onKeyDown={(e) => {
-                  if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && instructions.trim().length > 1) run.mutate();
+                  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                    e.preventDefault();
+                    if (instructions.trim().length > 1) run.mutate();
+                  }
                 }}
               />
             </Field>

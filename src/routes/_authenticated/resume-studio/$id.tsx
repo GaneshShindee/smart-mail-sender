@@ -369,7 +369,7 @@ function WorkspacePage() {
               </Button>
             )}
             <span className="mx-0.5 hidden h-6 w-0.5 bg-border sm:block" aria-hidden />
-            <Button size="sm" variant="outline" className="h-8" onClick={() => save.mutate()} disabled={!dirty || save.isPending}>
+            <Button data-mod-enter size="sm" variant="outline" className="h-8" onClick={() => save.mutate()} disabled={!dirty || save.isPending}>
               <Save aria-hidden /> {save.isPending ? "Saving…" : dirty ? "Save" : "Saved"}
             </Button>
             <Button
