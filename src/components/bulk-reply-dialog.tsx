@@ -208,9 +208,6 @@ export function BulkReplyDialog({
         <DialogContent className="left-0 top-0 flex h-dvh max-h-dvh w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden border-0 p-0 shadow-none pt-[env(safe-area-inset-top)] sm:left-[50%] sm:top-[50%] sm:h-auto sm:max-h-[90dvh] sm:max-w-2xl sm:translate-x-[-50%] sm:translate-y-[-50%] sm:border-2 sm:p-0 sm:pt-0 sm:shadow-[var(--shadow-brutal-lg)]">
           <div className="airmail order-first h-2 shrink-0 border-b-2 border-border" aria-hidden />
           <DialogHeader className="shrink-0 border-b-2 border-border p-4 pr-14 text-left sm:p-5 sm:pr-14">
-        <DialogContent className="flex max-h-[90dvh] w-[calc(100%-1rem)] max-w-2xl flex-col gap-0 overflow-hidden p-0 sm:w-full sm:p-0">
-          <div className="airmail order-first h-2 shrink-0 border-b-2 border-border" aria-hidden />
-          <DialogHeader className="shrink-0 border-b-2 border-border p-5 pr-14 text-left">
             <p className="eyebrow">
               Outbox · {active.length} letter{active.length === 1 ? "" : "s"}
             </p>
@@ -223,7 +220,6 @@ export function BulkReplyDialog({
 
           <ScrollArea className="min-h-0 flex-1">
             <div className="space-y-5 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:space-y-6 sm:p-5">
-            <div className="space-y-6 p-5">
               {!finished && (
                 <>
                   <div className="space-y-2">
@@ -237,7 +233,6 @@ export function BulkReplyDialog({
                         { value: "free", label: "Free-form", icon: PenLine },
                         { value: "template", label: "Template", icon: LayoutTemplate },
                         { value: "followup", label: "Follow-up", icon: Reply },
-                        { value: "followup", label: "Follow-up template", icon: Reply },
                       ]}
                     />
                   </div>
@@ -284,8 +279,6 @@ export function BulkReplyDialog({
                       onChange={(e) => setBody(e.target.value)}
                       placeholder="Write your reply. Use {{first_name}} for the recipient's name — each reply is personalized individually."
                       className="min-h-40 text-base sm:text-sm"
-                      className="min-h-40"
-                      autoFocus
                     />
                     <p className="text-xs text-muted-foreground">
                       Subject uses each original email with a <span className="font-mono">Re:</span> prefix. Each person gets this body in their own thread.
@@ -328,7 +321,6 @@ export function BulkReplyDialog({
                       <li
                         key={r.id}
                         className={`flex items-start gap-2 px-2.5 py-2.5 sm:gap-3 sm:px-3 text-sm transition-colors ${st === "sending" ? "bg-accent" : ""}`}
-                        className={`flex items-start gap-3 px-3 py-2.5 text-sm transition-colors ${st === "sending" ? "bg-accent" : ""}`}
                       >
                         <span className="tabular w-6 shrink-0 pt-0.5 text-xs text-muted-foreground" aria-hidden>
                           {String(i + 1).padStart(2, "0")}
@@ -366,7 +358,6 @@ export function BulkReplyDialog({
           </ScrollArea>
 
           <DialogFooter className="shrink-0 flex-nowrap gap-2 border-b-2 border-border bg-muted p-3 sm:flex-wrap sm:p-4 sm:px-5 [&>button]:flex-1 sm:[&>button]:flex-none">
-          <DialogFooter className="shrink-0 gap-2 border-b-2 border-border bg-muted p-4 sm:px-5">
             {finished ? (
               <>
                 {failed.length > 0 && (

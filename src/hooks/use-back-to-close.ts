@@ -8,20 +8,31 @@ import * as React from "react";
  * While open, a same-URL history entry tagged with an overlay id is pushed. Back pops it
  * and closes only the top-most overlay (nested dialogs close one at a time). Closing via
  * the UI removes the entry again with history.back().
+ *
+ * On every popstate the entry we land on decides what stays open: overlays stacked above
+ * that entry's overlay are closed. No "ignore the next N pops" bookkeeping, which could
+ * swallow a real back press when browsers coalesce several history.back() calls.
  */
 const STATE_KEY = "__overlay";
 const stack: string[] = [];
-let ignorePops = 0;
 let listening = false;
 const closers = new Map<string, () => void>();
 
+const currentOverlay = (): string | undefined => window.history.state?.[STATE_KEY];
+
 function onPopState() {
-  if (ignorePops > 0) {
-    ignorePops--;
+  const here = currentOverlay();
+  const keep = here ? stack.indexOf(here) : -1;
+  if (here && keep === -1) {
+    // Landed on a leftover entry of an overlay that's already closed — step over it.
+    window.history.back();
     return;
   }
-  const top = stack.pop();
-  if (top) closers.get(top)?.();
+  // Close everything above the overlay this entry belongs to (all of them on a plain page entry).
+  while (stack.length > keep + 1) {
+    const top = stack.pop()!;
+    closers.get(top)?.();
+  }
 }
 
 export function useBackToClose(open: boolean, onClose: () => void) {
@@ -50,10 +61,11 @@ export function useBackToClose(open: boolean, onClose: () => void) {
       // if we're still on it — if a link navigated away meanwhile, going back would undo that.
       if (idx !== -1) {
         stack.splice(idx, 1);
-        if (window.history.state?.[STATE_KEY] === id) {
-          ignorePops++;
-          window.history.back();
-        }
+        // Deferred so a router navigation fired in the same tick (it flushes in a microtask)
+        // lands first; then we're no longer on our entry and must not go back.
+        window.setTimeout(() => {
+          if (currentOverlay() === id) window.history.back();
+        }, 0);
       }
     };
   }, [open, id]);
