@@ -28,6 +28,7 @@
       "Bash(cd \"/Users/ganesh.shinde/Desktop/Ganesh Data/Ztech/smart-mail-sender\" && sed -n 40,80p \"src/routes/api/public/track/pdf/\\\\$token.ts\"; echo ----; sed -n 440,520p src/lib/resume-studio.functions.ts; echo ----; git log origin/main --oneline -3 2>/dev/null; git branch -a)",
       "Read(//Users/ganesh.shinde/Desktop/Ganesh Data/Ztech/smart-mail-sender/src/routes/api/public/track/pdf/**)",
       "Bash(grep -rnE '\\\\.or\\\\\\(`' src/lib src/routes)"
+      "Read(//Users/ganesh.shinde/Desktop/Ganesh Data/Ztech/smart-mail-sender/src/routes/_authenticated/resume-studio/**)"
     ]
   }
 }
