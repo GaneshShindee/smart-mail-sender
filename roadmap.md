@@ -1,6 +1,6 @@
 # Roadmap
 
-- [x] Add Claude as an AI provider (Settings → AI, routing, key storage) — code done; verify in preview once build is green
+- [x] Add Claude as an AI provider — verified in preview: dropdown lists Claude, key field renders, Lovable AI generation works signed-in
 - [x] Fix build errors blocking publish (router-core 1.171.34 installed)
 - [x] Security findings: all 13 listed internal_ids already ignored/resolved; no active findings remain.
   lov_finding_099a79d89167fcd6, lov_finding_3f7f7829b1a04182, lov_finding_42bc9095230d16a8,
