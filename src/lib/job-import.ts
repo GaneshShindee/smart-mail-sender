@@ -56,13 +56,86 @@ function walkJsonLd(node: unknown, out: string[]) {
   }
 }
 
+function isPrivateIpv4(host: string): boolean {
+  const m = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (!m) return false;
+  const [a, b] = [Number(m[1]), Number(m[2])];
+  return (
+    a === 0 ||
+    a === 10 ||
+    a === 127 ||
+    (a === 100 && b >= 64 && b <= 127) ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    (a === 192 && b === 0) ||
+    (a === 198 && (b === 18 || b === 19)) ||
+    a >= 224
+  );
+}
+
+function isPrivateIpv6(host: string): boolean {
+  const h = host.replace(/^\[|\]$/g, "").toLowerCase();
+  if (!h.includes(":")) return false;
+  if (h === "::" || h === "::1") return true;
+  if (/^f[cd]/.test(h) || /^fe[89ab]/.test(h)) return true; // unique-local, link-local
+  const mapped = h.match(/^::ffff:(.+)$/);
+  if (mapped) {
+    const v4 = mapped[1];
+    if (v4.includes(".")) return isPrivateIpv4(v4);
+    // URL normalizes ::ffff:a.b.c.d to hex groups, e.g. ::ffff:7f00:1
+    const [hi, lo] = v4.split(":").map((g) => parseInt(g, 16));
+    return isPrivateIpv4(`${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`);
+  }
+  return false;
+}
+
+/**
+ * Reject URLs that point at loopback, private, link-local or internal hosts so
+ * user-supplied import/feed URLs can't be used to reach internal services.
+ */
+export function assertPublicHttpUrl(raw: string): URL {
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    throw new Error("Invalid URL");
+  }
+  if (u.protocol !== "http:" && u.protocol !== "https:") throw new Error("Only http(s) URLs are allowed");
+  if (u.username || u.password) throw new Error("URLs with credentials are not allowed");
+  if (u.port && u.port !== "80" && u.port !== "443") throw new Error("Only standard ports are allowed");
+  // WHATWG URL already canonicalizes decimal/hex/octal IPv4 forms to dotted quads.
+  const host = u.hostname.toLowerCase().replace(/\.$/, "");
+  if (
+    !host.includes(".") ||
+    host === "localhost" ||
+    /\.(localhost|local|internal|intranet|lan|home|corp)$/.test(host) ||
+    isPrivateIpv4(host) ||
+    isPrivateIpv6(host)
+  ) {
+    throw new Error("That URL points to a private or internal address");
+  }
+  return u;
+}
+
+/** fetch() that re-validates every redirect hop with assertPublicHttpUrl. */
+export async function fetchPublicUrl(url: string, init: RequestInit = {}, maxRedirects = 5): Promise<Response> {
+  let current = assertPublicHttpUrl(url).toString();
+  for (let hop = 0; hop <= maxRedirects; hop++) {
+    const res = await fetch(current, { ...init, redirect: "manual" });
+    const location = res.status >= 300 && res.status < 400 ? res.headers.get("location") : null;
+    if (!location) return res;
+    current = assertPublicHttpUrl(new URL(location, current).toString()).toString();
+  }
+  throw new Error("Too many redirects");
+}
+
 export async function fetchPageHtml(url: string): Promise<{ html: string; finalUrl: string }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 20_000);
   try {
-    const res = await fetch(url, {
+    const res = await fetchPublicUrl(url, {
       signal: controller.signal,
-      redirect: "follow",
       headers: {
         "User-Agent":
           "Mozilla/5.0 (compatible; SmartMailSenderBot/1.0; +https://smart-mail-sender.local)",

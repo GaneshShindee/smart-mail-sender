@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { ilikeAnyClause } from "@/lib/postgrest";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { TablesUpdate } from "@/integrations/supabase/types";
@@ -139,7 +140,7 @@ export const setTemplatePublic = createServerFn({ method: "POST" })
 export const listPublicTemplates = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
-    z.object({ search: z.string().optional(), category: z.string().optional(), limit: z.number().int().min(1).max(200).default(60) }).parse(d ?? {}),
+    z.object({ search: z.string().max(200).optional(), category: z.string().max(100).optional(), limit: z.number().int().min(1).max(200).default(60) }).parse(d ?? {}),
   )
   .handler(async ({ data, context }) => {
     let q = context.supabase
@@ -149,7 +150,7 @@ export const listPublicTemplates = createServerFn({ method: "GET" })
       .order("saves_count", { ascending: false })
       .limit(data.limit);
     if (data.category && data.category !== "all") q = q.eq("category", data.category);
-    if (data.search) q = q.or(`name.ilike.%${data.search}%,subject.ilike.%${data.search}%`);
+    if (data.search) q = q.or(ilikeAnyClause(["name", "subject"], data.search));
     const { data: rows, error } = await q;
     if (error) throw new Error(error.message);
     const list = rows ?? [];

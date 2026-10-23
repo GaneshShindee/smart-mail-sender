@@ -63,7 +63,7 @@ export const Route = createFileRoute("/api/public/track/pdf/$token")({
             .eq("user_id", rec.user_id)
             .eq("original_filename", pdfName ?? "");
           const row = resumes?.[0];
-          if (row) {
+          if (row && row.storage_path.startsWith(`${rec.user_id}/`) && !row.storage_path.includes("..")) {
             const signed = await supabaseAdmin.storage.from("resumes").createSignedUrl(row.storage_path, 60 * 30);
             if (signed.data?.signedUrl) {
               return new Response(null, { status: 302, headers: { Location: signed.data.signedUrl } });

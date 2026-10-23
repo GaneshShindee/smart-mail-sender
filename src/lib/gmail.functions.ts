@@ -176,7 +176,8 @@ const sendSchema = z.object({
   uploads: z.array(z.object({
     filename: z.string().min(1).max(255),
     mimeType: z.string().min(1).max(128),
-    base64: z.string().min(1),
+    // base64 inflates by 4/3, so this caps the decoded file at ~25 MB.
+    base64: z.string().min(1).max(Math.ceil((25 * 1024 * 1024 * 4) / 3) + 4),
     size: z.number().int().positive().max(25 * 1024 * 1024),
   })).max(10).optional(),
 });
@@ -259,6 +260,10 @@ export const sendEmail = createServerFn({ method: "POST" })
         .eq("user_id", userId);
       if (rErr) throw new Error(rErr.message);
       for (const r of rows ?? []) {
+        // storage_path is a client-writable column; never let the admin client read outside the caller's folder.
+        if (!r.storage_path.startsWith(`${userId}/`) || r.storage_path.includes("..")) {
+          throw new Error(`Resume "${r.original_filename}" has an invalid storage path.`);
+        }
         const { data: blob, error: dErr } = await supabaseAdmin.storage.from("resumes").download(r.storage_path);
         if (dErr || !blob) throw new Error(`Failed to read resume: ${dErr?.message ?? "missing"}`);
         const ab = await blob.arrayBuffer();
@@ -274,8 +279,9 @@ export const sendEmail = createServerFn({ method: "POST" })
     }
     for (const u of data.uploads ?? []) {
       const buf = Buffer.from(u.base64, "base64");
-      attachments.push({ filename: u.filename, mimeType: u.mimeType, data: buf, size: u.size, source: "upload" });
-      attachmentMeta.push({ name: u.filename, size: u.size, source: "upload" });
+      // Trust the decoded byte count, not the client-reported size.
+      attachments.push({ filename: u.filename, mimeType: u.mimeType, data: buf, size: buf.length, source: "upload" });
+      attachmentMeta.push({ name: u.filename, size: buf.length, source: "upload" });
     }
     const totalAttachSize = attachments.reduce((n, a) => n + a.size, 0);
     if (totalAttachSize > 25 * 1024 * 1024) {

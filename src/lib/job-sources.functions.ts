@@ -3,6 +3,8 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { aiExtractJobFields } from "@/lib/job-ai";
 import {
+  assertPublicHttpUrl,
+  fetchPublicUrl,
   fetchGreenhouseJobs,
   fetchLeverJobs,
   greenhouseToParseText,
@@ -82,6 +84,7 @@ export const upsertJobSource = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     if (data.kind === "rss" && !data.config.url) throw new Error("RSS feed URL is required");
+    if (data.kind === "rss" && data.config.url) assertPublicHttpUrl(data.config.url);
     if (data.kind === "greenhouse" && !data.config.boardToken) {
       throw new Error("Greenhouse board token is required (e.g. from boards.greenhouse.io/TOKEN)");
     }
@@ -248,8 +251,9 @@ export const syncJobSource = createServerFn({ method: "POST" })
 
       if (src.kind === "rss") {
         if (!cfg.url) throw new Error("Missing RSS URL");
-        const res = await fetch(cfg.url, {
+        const res = await fetchPublicUrl(cfg.url, {
           headers: { Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, */*" },
+          signal: AbortSignal.timeout(20_000),
         });
         if (!res.ok) throw new Error(`RSS fetch failed (${res.status})`);
         const xml = await res.text();

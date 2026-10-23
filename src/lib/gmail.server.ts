@@ -234,7 +234,13 @@ function wrapBase64(b64: string, width = 76) {
   return out.join("\r\n");
 }
 
-function encodeHeader(value: string) {
+/** Collapse CR/LF so caller- or sender-supplied text can't inject extra MIME headers. */
+function stripLineBreaks(value: string) {
+  return value.replace(/[\r\n]+/g, " ");
+}
+
+function encodeHeader(raw: string) {
+  const value = stripLineBreaks(raw);
   // RFC 2047 encoded-word for non-ASCII filenames/subjects.
   // eslint-disable-next-line no-control-regex
   return /[^\x00-\x7F]/.test(value)
@@ -243,8 +249,9 @@ function encodeHeader(value: string) {
 }
 
 /** Build an RFC 5322 From header value: `"Display Name" <email@x>`. */
-export function formatFromHeader(email: string, displayName?: string | null) {
-  const name = (displayName ?? "").trim();
+export function formatFromHeader(rawEmail: string, displayName?: string | null) {
+  const email = stripLineBreaks(rawEmail).trim();
+  const name = stripLineBreaks(displayName ?? "").trim();
   if (!name) return email;
   const encoded = encodeHeader(name);
   // Quote if it has special chars and isn't already RFC 2047 encoded.

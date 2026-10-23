@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { aiExtractJobFields, normalizeHttpUrl } from "@/lib/job-ai";
+import { ilikeAnyClause } from "@/lib/postgrest";
 
 export type Job = {
   id: string;
@@ -62,8 +63,7 @@ function dateFilterCutoffIso(filter: z.infer<typeof jobDateFilter>): string | nu
 
 /** `.or()` clause matching title/company/description/location by free-text search. */
 function jobSearchClause(search: string): string {
-  const s = `%${search}%`;
-  return `title.ilike.${s},company.ilike.${s},description.ilike.${s},location.ilike.${s}`;
+  return ilikeAnyClause(["title", "company", "description", "location"], search);
 }
 
 const jobListFilters = z.object({

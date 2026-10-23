@@ -30,6 +30,10 @@ export type EmailDraft = {
   updated_at: string;
 };
 
+// Mirrors the Gmail send limit: 25 MB per file and across all of a draft's attachments.
+const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+const MAX_ATTACHMENT_BASE64_CHARS = Math.ceil((MAX_ATTACHMENT_BYTES * 4) / 3) + 4;
+
 const draftSchema = z.object({
   id: z.string().uuid().optional().nullable(),
   name: z.string().max(200).default("Untitled draft"),
@@ -46,12 +50,12 @@ const draftSchema = z.object({
       z.object({
         filename: z.string().max(255),
         mimeType: z.string().max(128),
-        size: z.number().int().nonnegative(),
+        size: z.number().int().nonnegative().max(MAX_ATTACHMENT_BYTES),
         storagePath: z.string().max(1024).optional(),
-        base64: z.string().optional(),
+        base64: z.string().max(MAX_ATTACHMENT_BASE64_CHARS).optional(),
       }),
     )
-    .max(20)
+    .max(10)
     .default([]),
   company: z.string().max(300).default(""),
   role: z.string().max(300).default(""),
@@ -135,23 +139,35 @@ export const saveEmailDraft = createServerFn({ method: "POST" })
     const db = untyped(context.supabase);
     const draftId = data.id ?? crypto.randomUUID();
 
+    // Decode new uploads first so size limits use real byte counts, not client-reported sizes.
+    const decoded = data.attachments.map((a) => (a.base64 && !a.storagePath ? Buffer.from(a.base64, "base64") : null));
+    let totalBytes = 0;
+    for (const [i, a] of data.attachments.entries()) {
+      if (a.storagePath && (!a.storagePath.startsWith(`${context.userId}/`) || a.storagePath.includes(".."))) {
+        throw new Error(`${a.filename}: invalid storage path`);
+      }
+      totalBytes += decoded[i]?.length ?? a.size;
+    }
+    if (totalBytes > MAX_ATTACHMENT_BYTES) throw new Error("Attachments exceed 25 MB total.");
+
     // Persist any newly-added inline attachments to storage.
     const attachments: DraftAttachment[] = [];
-    for (const a of data.attachments) {
+    for (const [i, a] of data.attachments.entries()) {
       if (a.storagePath) {
         attachments.push({ filename: a.filename, mimeType: a.mimeType, size: a.size, storagePath: a.storagePath });
         continue;
       }
-      if (!a.base64) continue;
+      const buf = decoded[i];
+      if (!buf) continue;
       const path = `${context.userId}/${draftId}/${crypto.randomUUID()}-${a.filename.replace(/[^A-Za-z0-9._-]+/g, "_")}`;
       const up = await context.supabase.storage
         .from("draft-attachments")
-        .upload(path, Buffer.from(a.base64, "base64"), {
+        .upload(path, buf, {
           contentType: a.mimeType || "application/octet-stream",
           upsert: true,
         });
       if (up.error) throw new Error(`${a.filename}: ${up.error.message}`);
-      attachments.push({ filename: a.filename, mimeType: a.mimeType, size: a.size, storagePath: path });
+      attachments.push({ filename: a.filename, mimeType: a.mimeType, size: buf.length, storagePath: path });
     }
 
     const row = {
